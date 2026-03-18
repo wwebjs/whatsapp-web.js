@@ -41,7 +41,7 @@ yarn add whatsapp-web.js
 pnpm add whatsapp-web.js
 ```
 
-Having trouble installing? Take a peak at the [Guide][guide] for more detailed instructions.
+Having trouble installing? Take a peek at the [Guide][guide] for more detailed instructions.
 
 ## Example usage
 
