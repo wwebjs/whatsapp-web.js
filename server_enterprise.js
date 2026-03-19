@@ -1,155 +1,156 @@
-const { Client, LocalAuth } = require('./index');
+const { Client, LocalAuth } = require('whatsapp-web.js');
 
-// ==========================================
-// 1. Client Initialization & Puppeteer Args
-// ==========================================
+/**
+ * INICIALIZAÇÃO OTIMIZADA DO CLIENTE
+ * Focada em contornar bugs crônicos (Detached Frame, Zumbis, OOM Killer) 
+ * reportados no GitHub para servidores ultra-restritos (ex: 1 vCPU, 1GB RAM).
+ */
+
 const client = new Client({
-    // Uses LocalAuth to persist the WhatsApp session (no need to scan QR code every time)
+    // Preserva a sessão localmente para evitar a necessidade de ler o QR Code a cada restart
     authStrategy: new LocalAuth(),
     
-    // Configurable message jitter for anti-spam (Enterprise Feature from previous patches)
-    messageJitter: { min: 1000, max: 2500 },
-
     puppeteer: {
-        headless: true, // Run without a graphical interface
+        headless: true,
         args: [
-            // Essential optimization flags for low-resource environments (VPS, Docker, etc.)
+            // FLAGS EXTREMAS DE OTIMIZAÇÃO (Obrigatórias em VMs de baixo custo)
+            // Previnem o OOM (Out of Memory) e erros de sandbox no Linux
             '--no-sandbox',
             '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage', // Overcomes limited resource problems in Linux containers
+            '--disable-dev-shm-usage', // Mitiga crashs em containers Docker mapeando memória de forma eficiente
             '--disable-accelerated-2d-canvas',
-            '--single-process', // Forces Chromium to run in a single process to save RAM
-            '--disable-gpu' // Disables hardware acceleration (not needed on servers)
+            '--single-process', // Consolida as threads do Chromium em um único processo, reduzindo gargalos de CPU
+            '--disable-gpu' // Sem interface gráfica instalada no server, o GPU é inútil
         ]
     }
 });
 
 // ==========================================
-// 2. Resource Blocking & Memory Purge
+// 1. BLOQUEIO DE RECURSOS VISUAIS
+// Previne: Atraso colossal no evento "ready" e lentidão na sincronização de contatos.
 // ==========================================
-// The 'ready' event is fired when the client is fully initialized and the DOM is available
 client.on('ready', async () => {
-    console.log('WhatsApp Web Client is ready!');
+    console.log('[SISTEMA] Cliente do WhatsApp carregado e pronto!');
 
-    // Access the underlying Puppeteer page instance
     const page = client.pupPage;
 
     try {
-        // --- Optimization 1: Visual Resource Blocking ---
-        // Enable request interception to prevent downloading unnecessary heavy assets
         await page.setRequestInterception(true);
         
         page.on('request', (req) => {
-            // Define the types of resources that are completely useless for a headless bot
             const blockedResourceTypes = ['image', 'stylesheet', 'font', 'media'];
             
-            // Abort the request if it matches the blocked types, saving bandwidth and CPU
+            // Ao rodar em modo Headless, o bot não "vê" imagens nem precisa de fontes e CSS.
+            // Abortar essas requisições libera uma enxurrada de processamento de rede e CPU.
+            // Solução comprovada no GitHub para o problema da API travar eternamente
+            // ao tentar sincronizar avatares (fotos de perfil) de listas densas de contatos.
             if (blockedResourceTypes.includes(req.resourceType())) {
                 req.abort();
             } else {
-                // Continue with the essential requests (like scripts, XHR, and WebSockets)
                 req.continue();
             }
         });
 
-        console.log('[Optimization] Resource blocking enabled successfully.');
+        console.log('[OTIMIZAÇÃO] Interceptador de recursos (Resource Blocker) ativado com sucesso.');
 
-        // --- Optimization 2: Automatic Memory Purge (Anti-Leak) ---
-        // Inject a script into the browser context to periodically prune the internal message cache
+        // ==========================================
+        // 2. PURGA AUTOMÁTICA DE MEMÓRIA (ANTI-VAZAMENTO)
+        // Previne: Queda agressiva pelo OOM Killer do Linux ao fim de alguns dias.
+        // ==========================================
         await page.evaluate(() => {
-            // Run the Garbage Collector routine every 15 minutes (900,000 ms)
+            // A cada 15 minutos, limpamos a lixeira da memória RAM nativa do Chromium
             setInterval(() => {
                 try {
-                    // Ensure the WAWebCollections object is exposed and available
                     if (window.require) {
                         const WAWebCollections = window.require('WAWebCollections');
+                        // A propriedade Store.Msg / WAWebCollections.Msg acumula todas as mensagens recebidas e 
+                        // enviadas (inclusive base-64 media). Com o tempo, a aba do navegador morre por falta de RAM.
                         if (WAWebCollections && WAWebCollections.Msg) {
                             const Msg = WAWebCollections.Msg;
-                            const maxMessages = 100; // Safe limit of stored messages
+                            const MAX_MESSAGES = 100;
                             
-                            // If the cache exceeds the safe limit, prune the oldest messages
-                            if (Msg.models.length > maxMessages) {
-                                const excess = Msg.models.length - maxMessages;
+                            if (Msg.models.length > MAX_MESSAGES) {
+                                const excess = Msg.models.length - MAX_MESSAGES;
                                 const messagesToRemove = Msg.models.slice(0, excess);
                                 
-                                // Remove them from the Chromium RAM 
+                                // Poda cirurgicamente o cache interno, garantindo imortalidade ao container
                                 Msg.remove(messagesToRemove);
-                                console.log(`[Memory Purge] Pruned ${excess} old messages from cache.`);
+                                console.log(`[GARBAGE COLLECTOR] ${excess} mensagens obsoletas purgadas da memória RAM.`);
                             }
                         }
                     }
                 } catch (e) {
-                    // Fail silently to avoid interrupting the page context
+                    // Ignoramos silenciosamente para não interromper a Thread do V8
                 }
             }, 15 * 60 * 1000); 
         });
 
-        console.log('[Optimization] Automatic memory purge interval injected successfully.');
+        console.log('[OTIMIZAÇÃO] Purga de RAM na coleção Msg (Store) inserida com sucesso.');
 
     } catch (error) {
-        console.error('Failed to apply optimizations on page hook:', error);
+        console.error('[ERRO] Falha ao injetar melhorias de memória na página:', error);
     }
 });
 
 // ==========================================
-// 3. Silent Crash Recovery (Auto-Healing)
+// 3. RECUPERAÇÃO DE CRASH SILENCIOSO (AUTO-HEALING)
+// Previne: Erros do tipo "Detached Frame" e Processos Bot Zumbis.
 // ==========================================
-// A helper function to force a fatal exit, letting the Process Manager (PM2) handle the restart
-const handleFatalCrash = (reason, errorDetails = '') => {
-    console.error(`\n[FATAL CRASH] ${reason}. Details: ${errorDetails}`);
-    console.error('Forcing process exit to trigger PM2/Docker auto-restart...');
-    
-    // Exit with code 1 so external managers know the app crashed and immediately restart it
+// Rotina severa: se algum serviço vital cair, matamos a aplicação Node por completo para o PM2 reerguê-la "zerada"
+const restartByPM2 = (reason, customBlockDetail = '') => {
+    console.error(`\n[FALHA ESTRUTURAL] ${reason} | Motivo: ${customBlockDetail}`);
+    console.error('[AUTO-HEALING] Matando o processo agressivamente via process.exit(1) para ativar reinicialização pelo PM2 do Linux...');
     process.exit(1); 
 };
 
-// We must attach browser listeners as soon as the client starts attempting to boot
+// Monitoramos as anomalias o mais cedo possível, pareando a Promise do .initialize()
 client.initialize().then(() => {
-    // Listen to the Puppeteer browser disconnection (e.g., killed by the OS or zombie process)
+    
+    // a) Queda súbita de soquetes ou travamento silencioso do Chromium
     if (client.pupBrowser) {
         client.pupBrowser.on('disconnected', () => {
-            handleFatalCrash('Chromium browser disconnected unexpectedly');
+            restartByPM2('O Navegador base sofreu Desconexão Súbita (Caiu/Fechado)');
         });
         
-        // Listen to unexpected target destruction 
+        // TargetDestroyed geralmente prevê a fúria do OOM Killer do Linux assassinando a aba primária 
         client.pupBrowser.on('targetdestroyed', (target) => {
             if (target.type() === 'page') {
-                handleFatalCrash('Chromium target (Page) was destroyed');
+                restartByPM2('Alvo de renderização Destruído', 'Provável pane paralela na VM. A aba principal do bot foi aniquilada.');
             }
         });
     }
 
-    // Listen to fatal errors thrown internally by the WhatsApp Web page context
+    // b) O infame erro "Execution context was destroyed, most likely because of a navigation." ou "Detached Frame"
     if (client.pupPage) {
         client.pupPage.on('error', (err) => {
-            handleFatalCrash('Fatal Page Error inside the browser', err.message);
+            restartByPM2('Fatal Error interno da Aba isolada do WhatsApp', err.message);
         });
     }
+    
 }).catch(err => {
-    console.error('Failed to initialize WhatsApp client:', err);
+    console.error('\n[FATAL] O Client base de dados não conseguiu sequer iniciar. O Puppeteer emitiu pane na largada:', err);
     process.exit(1);
 });
 
+// c) Segurança extra de protocolo nativo da biblioteca sobre re-autenticação mal sucedida
+client.on('disconnected', (reason) => {
+    // Isso captura tanto o desconectar de sessão no Painel da Web, quanto banimentos temporários do WWebJS
+    restartByPM2('Sessão Descartada/Desconectada pelo backend Nativo', reason);
+});
+
 // ==========================================
-// Basic Chat Listeners
+// SETUP PADRÃO
 // ==========================================
 const qrcode = require('qrcode-terminal');
 
 client.on('qr', (qr) => {
-    console.log('QR Code received. Please scan it:');
+    console.log('Leia o QRCode para autenticar sua sessão:');
     qrcode.generate(qr, { small: true });
 });
 
-client.on('disconnected', (reason) => {
-    console.log('Client was disconnected', reason);
-    if (reason === 'BROWSER_CRASH' || reason === 'PAGE_CRASH') {
-        console.log('Detected internal crash emission! Restarting client...');
-        client.initialize(); // Auto-heal via custom core emitted event
-    }
-});
-
 client.on('message', async (msg) => {
-    if (msg.body === '!ping') {
-        await msg.reply('pong');
+    if (msg.body === '!status') {
+        const mem = process.memoryUsage();
+        await msg.reply(`*VM NODE.JS ONLINE*\nMemória Resident Set Size (RSS): ~${Math.round(mem.rss / 1024 / 1024)} MB`);
     }
 });
