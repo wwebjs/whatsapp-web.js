@@ -20,4 +20,29 @@ async function exposeFunctionIfAbsent(page, name, fn) {
     await page.exposeFunction(name, fn);
 }
 
-module.exports = { exposeFunctionIfAbsent };
+/**
+ * Retorna os argumentos otimizados para redução de consumo de RAM
+ * e evasão de bloqueios na inicialização do Chromium.
+ */
+function getOptimizedPuppeteerArgs(customArgs = []) {
+    const defaultArgs = [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-accelerated-2d-canvas',
+        '--no-first-run',
+        '--no-zygote',
+        '--single-process',
+        '--disable-gpu',
+        '--disable-software-rasterizer',
+        '--disable-infobars',
+        '--disable-breakpad',
+        '--disable-extensions',
+        '--mute-audio',
+        '--disable-blink-features=AutomationControlled'
+    ];
+
+    return [...new Set([...defaultArgs, ...customArgs])];
+}
+
+module.exports = { exposeFunctionIfAbsent, getOptimizedPuppeteerArgs };

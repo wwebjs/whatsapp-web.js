@@ -35,7 +35,7 @@ const {
     ScheduledEvent,
 } = require('./structures');
 const NoAuth = require('./authStrategies/NoAuth');
-const { exposeFunctionIfAbsent } = require('./util/Puppeteer');
+const { exposeFunctionIfAbsent, getOptimizedPuppeteerArgs } = require('./util/Puppeteer');
 
 /**
  * Starting point for interacting with the WhatsApp Web API
@@ -84,6 +84,11 @@ class Client extends EventEmitter {
         super();
 
         this.options = Util.mergeDefault(DefaultOptions, options);
+
+        // Inicializa a fila de promessas para garantir os envios sequenciais
+        this._messageQueue = Promise.resolve();
+        // Configuração de Jitter em milissegundos
+        this._messageJitter = this.options.messageJitter || { min: 1000, max: 3000 };
 
         if (!this.options.authStrategy) {
             this.authStrategy = new NoAuth();
@@ -323,23 +328,39 @@ class Client extends EventEmitter {
                         await webCache.persist(this.currentIndexHtml, version);
                     }
 
-                    //Load util functions (serializers, helper functions)
-                    await this.pupPage.evaluate(LoadUtils);
+                    //Load util functions (serializers, helper functions) com retry
+                    const maxRetries = 3;
+                    const retryDelayMs = 2500;
+                    let injectionSuccess = false;
 
-                    let start = Date.now();
-                    let res = false;
-                    while (start > Date.now() - 30000) {
-                        // Check window.WWebJS Injection
-                        res = await this.pupPage.evaluate(
-                            'window.WWebJS != undefined',
-                        );
-                        if (res) {
+                    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+                        try {
+                            await this.pupPage.waitForFunction('window.require !== undefined', { timeout: 10000 });
+                            await this.pupPage.evaluate(LoadUtils);
+                            
+                            let start = Date.now();
+                            let res = false;
+                            while (start > Date.now() - 30000) {
+                                res = await this.pupPage.evaluate('window.WWebJS != undefined');
+                                if (res) break;
+                                await new Promise((r) => setTimeout(r, 200));
+                            }
+                            if (!res) throw new Error('ready timeout');
+                            
+                            injectionSuccess = true;
                             break;
+                        } catch (error) {
+                            console.warn(`[WWebJS-Core] Aviso: Injeção de seletores falhou na tentativa ${attempt}/${maxRetries}. (Log: ${error.message})`);
+                            if (attempt === maxRetries) {
+                                console.error('[WWebJS-Core] Erro Crítico: Limite de tentativas alcançado.');
+                                throw error;
+                            }
+                            await new Promise(resolve => setTimeout(resolve, retryDelayMs));
                         }
-                        await new Promise((r) => setTimeout(r, 200));
                     }
-                    if (!res) {
-                        throw 'ready timeout';
+
+                    if (!injectionSuccess) {
+                        throw new Error('Falha catastrófica ao injetar utilitários');
                     }
 
                     /**
@@ -449,15 +470,15 @@ class Client extends EventEmitter {
             browser = await puppeteer.connect(puppeteerOpts);
             page = await browser.newPage();
         } else {
-            const browserArgs = [...(puppeteerOpts.args || [])];
+            // Utilizando array robusto para mitigar vazamentos e consumo alto de RAM
+            const browserArgs = getOptimizedPuppeteerArgs(puppeteerOpts.args || []);
+            
             if (
                 this.options.userAgent !== false &&
                 !browserArgs.find((arg) => arg.includes('--user-agent'))
             ) {
                 browserArgs.push(`--user-agent=${this.options.userAgent}`);
             }
-            // navigator.webdriver fix
-            browserArgs.push('--disable-blink-features=AutomationControlled');
 
             browser = await puppeteer.launch({
                 ...puppeteerOpts,
@@ -491,6 +512,40 @@ class Client extends EventEmitter {
         });
 
         await this.inject();
+
+        // 2. Memory Purge (Garbage Collection WWebJS)
+        if (this._gcInterval) clearInterval(this._gcInterval);
+        this._gcInterval = setInterval(async () => {
+            if (this.pupPage && !this.pupPage.isClosed()) {
+                try {
+                    await this.pupPage.evaluate(() => {
+                        if (window.require) {
+                            const Msg = window.require('WAWebCollections')?.Msg;
+                            if (Msg && Msg.models.length > 500) {
+                                const excess = Msg.models.length - 500;
+                                const msgsToRemove = Msg.models.slice(0, excess);
+                                Msg.remove(msgsToRemove);
+                            }
+                        }
+                    });
+                } catch (e) {
+                    // Ignora erros caso a página esteja ocupada ou fechando
+                }
+            }
+        }, 300000); // Roda a cada 5 min
+
+        // 3. Crash Recovery (Auto-Healing Listeners)
+        this.pupBrowser.on('disconnected', () => {
+            console.error('[WWebJS-Core] O Chromium foi fechado (disconnected). Iniciando rotina de emergência...');
+            if (this._gcInterval) clearInterval(this._gcInterval);
+            this.emit(Events.DISCONNECTED, 'BROWSER_CRASH');
+        });
+
+        this.pupPage.on('error', (err) => {
+            console.error('[WWebJS-Core] Fatal Error na página:', err.message);
+            if (this._gcInterval) clearInterval(this._gcInterval);
+            this.emit(Events.DISCONNECTED, 'PAGE_CRASH');
+        });
 
         this.pupPage.on('framenavigated', async (frame) => {
             if (frame.url().includes('post_logout=1') || this.lastLoggedOut) {
@@ -1151,20 +1206,30 @@ class Client extends EventEmitter {
         const requestedVersion = this.options.webVersion;
         const versionContent = await webCache.resolve(requestedVersion);
 
-        if (versionContent) {
-            await this.pupPage.setRequestInterception(true);
-            this.pupPage.on('request', async (req) => {
-                if (req.url() === WhatsWebURL) {
-                    req.respond({
-                        status: 200,
-                        contentType: 'text/html',
-                        body: versionContent,
-                    });
-                } else {
-                    req.continue();
-                }
-            });
-        } else {
+        // 1. Resource Blocker Integrado (Imagens, CSS, Fonts, etc)
+        await this.pupPage.setRequestInterception(true);
+        this.pupPage.on('request', async (req) => {
+            if (req.isInterceptResolutionHandled && req.isInterceptResolutionHandled()) return;
+
+            // Cache Control do índice do Whatsapp
+            if (versionContent && req.url() === WhatsWebURL) {
+                return req.respond({
+                    status: 200,
+                    contentType: 'text/html',
+                    body: versionContent,
+                });
+            }
+
+            // Resource Blocking
+            const blockedTypes = ['image', 'stylesheet', 'font', 'media'];
+            if (blockedTypes.includes(req.resourceType())) {
+                return req.abort();
+            }
+
+            req.continue();
+        });
+
+        if (!versionContent) {
             this.pupPage.on('response', async (res) => {
                 if (res.ok() && res.url() === WhatsWebURL) {
                     const indexHtml = await res.text();
@@ -1178,6 +1243,7 @@ class Client extends EventEmitter {
      * Closes the client
      */
     async destroy() {
+        if (this._gcInterval) clearInterval(this._gcInterval);
         const browser = this.pupBrowser;
         const isConnected = browser?.isConnected?.();
         if (isConnected) {
@@ -1433,32 +1499,49 @@ class Client extends EventEmitter {
             );
         }
 
-        const sentMsg = await this.pupPage.evaluate(
-            async (chatId, content, options, sendSeen) => {
-                const chat = await window.WWebJS.getChat(chatId, {
-                    getAsModel: false,
-                });
+        const delay = (ms) => new Promise(res => setTimeout(res, ms));
+        const getRandomDelay = (min, max) => Math.floor(Math.random() * (max - min + 1) + min);
 
-                if (!chat) return null;
+        // Retorna uma Promise que entrará na fila de processamento sequencial
+        return new Promise((resolve, reject) => {
+            if (!this._messageQueue) this._messageQueue = Promise.resolve();
+            this._messageQueue = this._messageQueue.then(async () => {
+                try {
+                    // Aplica o delay aleatório (jitter) antes do envio para contornar flags de spam
+                    const waitTime = getRandomDelay(this._messageJitter?.min || 1000, this._messageJitter?.max || 3000);
+                    await delay(waitTime);
 
-                if (sendSeen) {
-                    await window.WWebJS.sendSeen(chatId);
+                    const sentMsg = await this.pupPage.evaluate(
+                        async (chatId, content, options, sendSeen) => {
+                            const chat = await window.WWebJS.getChat(chatId, {
+                                getAsModel: false,
+                            });
+
+                            if (!chat) return null;
+
+                            if (sendSeen) {
+                                await window.WWebJS.sendSeen(chatId);
+                            }
+
+                            const msg = await window.WWebJS.sendMessage(
+                                chat,
+                                content,
+                                options,
+                            );
+                            return msg ? window.WWebJS.getMessageModel(msg) : undefined;
+                        },
+                        chatId,
+                        content,
+                        internalOptions,
+                        sendSeen,
+                    );
+
+                    resolve(sentMsg ? new Message(this, sentMsg) : undefined);
+                } catch (err) {
+                    reject(err);
                 }
-
-                const msg = await window.WWebJS.sendMessage(
-                    chat,
-                    content,
-                    options,
-                );
-                return msg ? window.WWebJS.getMessageModel(msg) : undefined;
-            },
-            chatId,
-            content,
-            internalOptions,
-            sendSeen,
-        );
-
-        return sentMsg ? new Message(this, sentMsg) : undefined;
+            }).catch(reject); // Propaga as falhas corretamente
+        });
     }
 
     /**

@@ -19,9 +19,15 @@
     </p>
 </div>
 
-## About
+## About (Enterprise Optimized Edition)
 
-whatsapp‑web.js is a powerful [Node.js][nodejs] library that lets you interact with WhatsApp Web, making it easy to build a dynamic WhatsApp API with nearly all features of the web client. It uses [Puppeteer][puppeteer] to access WhatsApp Web’s internal functions and runs them in a managed browser instance to reduce the risk of being blocked.
+whatsapp‑web.js is a powerful [Node.js][nodejs] library that lets you interact with WhatsApp Web, making it easy to build a dynamic WhatsApp API with nearly all features of the web client.
+
+🌟 **This version has been heavily optimized for Enterprise Production environments.** It includes structural modifications such as:
+- **Built-in Message Queue & Jitter:** Random delays between automated messages to prevent spam-detection bans.
+- **Resource Blocker:** Hard blocks images, CSS, and media during Puppeteer initialization to drastically reduce RAM and CPU overhead.
+- **Auto-Garbage Collection (GC):** Periodically purges old messages from `window.WAWebCollections` memory, preventing `Out of Memory` (OOM) crashes in long-running processes.
+- **Crash Recovery & Resilience:** Safe retry injections on boot and listeners for silent Chromium disconnects or Page/Target crashes.
 
 ## Links
 
@@ -35,10 +41,21 @@ whatsapp‑web.js is a powerful [Node.js][nodejs] library that lets you interact
 
 **Node.js `v18.0.0` or higher, is required.**
 
+Since this is a custom, enterprise-ready fork of the library, you should install it locally from this repository folder into your project:
+
 ```sh
-npm install whatsapp-web.js
-yarn add whatsapp-web.js
-pnpm add whatsapp-web.js
+# Path to your project
+cd /path/to/your/bot-project
+
+# Install directly from the local folder where this code resides
+npm install /path/to/whatsapp-web.js
+```
+
+Alternatively, you can pack it:
+```sh
+npm pack
+# then in your project:
+npm install /path/to/whatsapp-web.js-X.X.X.tgz
 ```
 
 Having trouble installing? Take a peak at the [Guide][guide] for more detailed instructions.
@@ -46,21 +63,42 @@ Having trouble installing? Take a peak at the [Guide][guide] for more detailed i
 ## Example usage
 
 ```js
-const { Client } = require('whatsapp-web.js');
+const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 
-const client = new Client();
+const client = new Client({
+    // Optional: Utilize LocalAuth for session persistence
+    authStrategy: new LocalAuth(),
+    
+    // Configurable message jitter for anti-spam (Enterprise Feature)
+    messageJitter: { min: 1000, max: 2500 },
+    
+    // The optimized Puppeteer args are injected automatically by the library!
+    puppeteer: {
+        headless: true, // Run in background automatically
+    }
+});
 
 client.on('qr', (qr) => {
     qrcode.generate(qr, { small: true });
 });
 
 client.on('ready', () => {
-    console.log('Client is ready!');
+    console.log('Enterprise Client is ready and consuming minimal RAM!');
+});
+
+// Automatic Crash Recovery event (Enterprise Feature)
+client.on('disconnected', (reason) => {
+    console.log('Client was disconnected', reason);
+    if (reason === 'BROWSER_CRASH' || reason === 'PAGE_CRASH') {
+        console.log('Restaring client due to Chromium crash...');
+        client.initialize(); // Auto-heal
+    }
 });
 
 client.on('message', (msg) => {
     if (msg.body == '!ping') {
+        // Enters the automatic message queue with jitter
         msg.reply('pong');
     }
 });
