@@ -255,8 +255,6 @@ class Client extends EventEmitter {
                         window.AuthStore.Base64Tools.encodeB64(
                             registrationInfo.identityKeyPair.pubKey,
                         );
-                    const advSecretKey =
-                        await window.AuthStore.RegistrationUtils.getADVSecretKey();
                     const platform =
                         window.AuthStore.RegistrationUtils.DEVICE_PLATFORM;
                     const getQR = (ref) =>
@@ -266,10 +264,11 @@ class Client extends EventEmitter {
                         ',' +
                         identityKeyB64 +
                         ',' +
-                        advSecretKey +
+                        window
+                            .require('WAWebUserPrefsMultiDevice')
+                            .getADVSecretKey() +
                         ',' +
                         platform;
-
                     window.onQRChangedEvent(getQR(window.AuthStore.Conn.ref)); // initial qr
                     window.AuthStore.Conn.on('change:ref', (_, ref) => {
                         window.onQRChangedEvent(getQR(ref));
@@ -516,6 +515,14 @@ class Client extends EventEmitter {
         showNotification = true,
         intervalMs = 180000,
     ) {
+        await exposeFunctionIfAbsent(
+            this.pupPage,
+            'onCodeReceivedEvent',
+            async (code) => {
+                this.emit(Events.CODE_RECEIVED, code);
+                return code;
+            },
+        );
         return await this.pupPage.evaluate(
             async (phoneNumber, showNotification, intervalMs) => {
                 const getCode = async () => {
@@ -551,6 +558,22 @@ class Client extends EventEmitter {
             showNotification,
             intervalMs,
         );
+    }
+
+    /**
+     * Cancels an active pairing code session and returns to QR code mode
+     */
+    async cancelPairingCode() {
+        await this.pupPage.evaluate(async () => {
+            if (window.codeInterval) {
+                clearInterval(window.codeInterval);
+                window.codeInterval = undefined;
+            }
+            window.require('WAWebLaunchSocketUtils').refreshQR();
+            await window
+                .require('WAWebAltDeviceLinkingApi')
+                .initializeQRLinking();
+        });
     }
 
     /**
@@ -1710,7 +1733,7 @@ class Client extends EventEmitter {
     async acceptInvite(inviteCode) {
         const res = await this.pupPage.evaluate(async (inviteCode) => {
             return await window
-                .require('WAWebGroupQueryJob')
+                .require('WAWebGroupInviteJob')
                 .joinGroupViaInvite(inviteCode);
         }, inviteCode);
 

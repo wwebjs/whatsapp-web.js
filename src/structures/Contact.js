@@ -155,10 +155,18 @@ class Contact extends Base {
         if (this.isGroup) return false;
 
         await this.client.pupPage.evaluate(async (contactId) => {
-            const chat = await window.WWebJS.getChat(contactId);
+            const contact = await window
+                .require('WAWebCollections')
+                .Contact.find(contactId);
+            const resolved = window
+                .require('WAWebBlockContactUtils')
+                .getContactToBlockOnlyUseIfNoAssociatedChat(
+                    contact,
+                    'ChatListBlock',
+                );
             await window
                 .require('WAWebBlockContactAction')
-                .blockContact({ contact: chat });
+                .blockContact({ contact: resolved });
         }, this.id._serialized);
 
         this.isBlocked = true;
@@ -173,12 +181,18 @@ class Contact extends Base {
         if (this.isGroup) return false;
 
         await this.client.pupPage.evaluate(async (contactId) => {
-            const contact = window
+            const contact = await window
                 .require('WAWebCollections')
-                .Contact.get(contactId);
+                .Contact.find(contactId);
+            const resolved = window
+                .require('WAWebBlockContactUtils')
+                .getContactToBlockOnlyUseIfNoAssociatedChat(
+                    contact,
+                    'ChatListBlock',
+                );
             await window
                 .require('WAWebBlockContactAction')
-                .unblockContact(contact);
+                .unblockContact(resolved);
         }, this.id._serialized);
 
         this.isBlocked = false;
