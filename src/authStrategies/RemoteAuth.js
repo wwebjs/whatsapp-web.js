@@ -116,13 +116,10 @@ class RemoteAuth extends BaseAuthStrategy {
     }
 
     async afterAuthReady() {
-        const sessionExists = await this.store.sessionExists({
-            session: this.sessionName,
-        });
+        const sessionKey = path.join(this.dataPath, this.sessionName);
+        const sessionExists = await this.store.sessionExists({ session: sessionKey });
         if (!sessionExists) {
-            await this.delay(
-                60000,
-            ); /* Initial delay sync required for session to be stable enough to recover */
+            await this.delay(60000); /* Initial delay sync required for session to be stable enough to recover */
             await this.storeRemoteSession({ emit: true });
         }
         var self = this;
@@ -138,9 +135,8 @@ class RemoteAuth extends BaseAuthStrategy {
         let compressedSessionPath;
         try {
             compressedSessionPath = await this.compressSession();
-            await this.store.save({
-                session: this.sessionName,
-            });
+            const sessionKey = path.join(this.dataPath, this.sessionName);
+            await this.store.save({ session: sessionKey });
             if (options && options.emit)
                 this.client.emit(Events.REMOTE_SESSION_SAVED);
         } finally {
@@ -166,23 +162,17 @@ class RemoteAuth extends BaseAuthStrategy {
             this.dataPath,
             `${this.sessionName}.zip`,
         );
-        const sessionExists = await this.store.sessionExists({
-            session: this.sessionName,
-        });
+        const sessionKey = path.join(this.dataPath, this.sessionName);
+        const sessionExists = await this.store.sessionExists({ session: sessionKey });
+
+        // If a local user data dir already exists, prefer it over remote extraction
         if (pathExists) {
-            await fs.promises
-                .rm(this.userDataDir, {
-                    recursive: true,
-                    force: true,
-                    maxRetries: this.rmMaxRetries,
-                })
-                .catch(() => {});
+            console.log('[REMOTE AUTH] Local session found at:', this.userDataDir);
+            return;
         }
+
         if (sessionExists) {
-            await this.store.extract({
-                session: this.sessionName,
-                path: compressedSessionPath,
-            });
+            await this.store.extract({ session: sessionKey, path: compressedSessionPath });
             await this.unCompressSession(compressedSessionPath);
         } else {
             fs.mkdirSync(this.userDataDir, { recursive: true });
@@ -190,11 +180,9 @@ class RemoteAuth extends BaseAuthStrategy {
     }
 
     async deleteRemoteSession() {
-        const sessionExists = await this.store.sessionExists({
-            session: this.sessionName,
-        });
-        if (sessionExists)
-            await this.store.delete({ session: this.sessionName });
+        const sessionKey = path.join(this.dataPath, this.sessionName);
+        const sessionExists = await this.store.sessionExists({ session: sessionKey });
+        if (sessionExists) await this.store.delete({ session: sessionKey });
     }
 
     async compressSession() {
