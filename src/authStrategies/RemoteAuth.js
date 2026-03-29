@@ -66,10 +66,8 @@ class RemoteAuth extends BaseAuthStrategy {
 
     async beforeBrowserInitialized() {
         const puppeteerOpts = this.client.options.puppeteer;
-        const sessionDirName = this.clientId
-            ? `RemoteAuth-${this.clientId}`
-            : 'RemoteAuth';
-        const dirPath = path.join(this.dataPath, sessionDirName);
+        const sessionDirName = this.clientId ? `RemoteAuth-${this.clientId}` : 'RemoteAuth'
+        const dirPath = path.join(this.dataPath, sessionDirName)
 
         if (
             puppeteerOpts.userDataDir &&
@@ -82,6 +80,11 @@ class RemoteAuth extends BaseAuthStrategy {
 
         this.userDataDir = dirPath;
         this.sessionName = sessionDirName;
+
+        // Ensure parent directories exist so extract can write temp zip
+        try {
+            fs.mkdirSync(this.dataPath, { recursive: true })
+        } catch (e) {}
 
         await this.extractRemoteSession();
 
@@ -158,24 +161,28 @@ class RemoteAuth extends BaseAuthStrategy {
 
     async extractRemoteSession() {
         const pathExists = await this.isValidPath(this.userDataDir);
-        const compressedSessionPath = path.join(
-            this.dataPath,
-            `${this.sessionName}.zip`,
-        );
-        const sessionKey = path.join(this.dataPath, this.sessionName);
-        const sessionExists = await this.store.sessionExists({ session: sessionKey });
+        const compressedSessionPath = path.join(this.dataPath, `${this.sessionName}.zip`)
+        const sessionKey = path.join(this.dataPath, this.sessionName)
+        const sessionExists = await this.store.sessionExists({ session: sessionKey })
 
         // If a local user data dir already exists, prefer it over remote extraction
         if (pathExists) {
-            console.log('[REMOTE AUTH] Local session found at:', this.userDataDir);
-            return;
+            console.log('[REMOTE AUTH] Local session found at:', this.userDataDir)
+            return
         }
 
         if (sessionExists) {
-            await this.store.extract({ session: sessionKey, path: compressedSessionPath });
-            await this.unCompressSession(compressedSessionPath);
+            // Ask the store to write the compressed session to disk (ensures parent dir exists)
+            await this.store.extract({ session: sessionKey, path: compressedSessionPath })
+            // Verify downloaded zip exists before attempting to uncompress
+            try {
+                await fs.promises.access(compressedSessionPath, fs.constants.R_OK)
+            } catch (err) {
+                throw new Error(`Failed to download remote session to ${compressedSessionPath}: ${err.message}`)
+            }
+            await this.unCompressSession(compressedSessionPath)
         } else {
-            fs.mkdirSync(this.userDataDir, { recursive: true });
+            fs.mkdirSync(this.userDataDir, { recursive: true })
         }
     }
 
