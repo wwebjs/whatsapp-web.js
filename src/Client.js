@@ -980,11 +980,27 @@ class Client extends EventEmitter {
             'onAddMessageCiphertextEvent',
             (msg) => {
                 /**
-                 * Emitted when messages are edited
+                 * Emitted when a message is received as ciphertext (not yet decrypted)
                  * @event Client#message_ciphertext
                  * @param {Message} message
                  */
                 this.emit(Events.MESSAGE_CIPHERTEXT, new Message(this, msg));
+            },
+        );
+
+        await exposeFunctionIfAbsent(
+            this.pupPage,
+            'onCiphertextFailedEvent',
+            (msg) => {
+                /**
+                 * Emitted when a ciphertext message failed to decrypt after recovery attempt
+                 * @event Client#message_ciphertext_failed
+                 * @param {Message} message
+                 */
+                this.emit(
+                    Events.MESSAGE_CIPHERTEXT_FAILED,
+                    new Message(this, msg),
+                );
             },
         );
 
@@ -1007,6 +1023,11 @@ class Client extends EventEmitter {
             const { Msg, Chat, WAWebCallCollection } =
                 window.require('WAWebCollections');
             const AppState = window.require('WAWebSocketModel').Socket;
+
+            // Enable placeholder message resend (recovery for ciphertext messages)
+            const gatingUtils = window.require('WAWebSyncGatingUtils');
+            gatingUtils.isPlaceholderMessageResendEnabled = () => true;
+
             Msg.on('change', (msg) => {
                 window.onChangeMessageEvent(window.WWebJS.getMessageModel(msg));
             });
@@ -1068,24 +1089,59 @@ class Client extends EventEmitter {
                     prevState,
                 );
             });
+            const pendingResend = new Set();
+            let resendFlush = null;
+
+            function requestResend(msg) {
+                pendingResend.add(msg);
+                if (resendFlush) return;
+                resendFlush = setTimeout(() => {
+                    resendFlush = null;
+                    const msgs = [...pendingResend];
+                    pendingResend.clear();
+                    if (msgs.length === 0) return;
+                    window
+                        .require(
+                            'WAWebNonMessageDataRequestPlaceholderMessageResendUtils',
+                        )
+                        .handlePlaceholderMsgsSeen(msgs, true);
+                }, 5000);
+            }
+
             Msg.on('add', (msg) => {
-                if (msg.isNewMsg) {
-                    if (msg.type === 'ciphertext') {
-                        // defer message event until ciphertext is resolved (type changed)
-                        msg.once('change:type', (_msg) =>
-                            window.onAddMessageEvent(
-                                window.WWebJS.getMessageModel(_msg),
-                            ),
-                        );
-                        window.onAddMessageCiphertextEvent(
-                            window.WWebJS.getMessageModel(msg),
-                        );
-                    } else {
-                        window.onAddMessageEvent(
-                            window.WWebJS.getMessageModel(msg),
-                        );
-                    }
+                if (!msg.isNewMsg) return;
+
+                if (msg.type !== 'ciphertext') {
+                    window.onAddMessageEvent(
+                        window.WWebJS.getMessageModel(msg),
+                    );
+                    return;
                 }
+
+                window.onAddMessageCiphertextEvent(
+                    window.WWebJS.getMessageModel(msg),
+                );
+
+                if (msg.subtype && msg.subtype.endsWith('_unavailable_fanout'))
+                    return;
+
+                requestResend(msg);
+
+                const failTimer = setTimeout(() => {
+                    if (msg.type !== 'ciphertext') return;
+                    window.onCiphertextFailedEvent(
+                        window.WWebJS.getMessageModel(msg),
+                    );
+                }, 15000);
+
+                msg.once('change:type', (_msg) => {
+                    clearTimeout(failTimer);
+                    pendingResend.delete(_msg);
+                    if (_msg.type === 'revoked') return;
+                    window.onAddMessageEvent(
+                        window.WWebJS.getMessageModel(_msg),
+                    );
+                });
             });
             Chat.on('change:unreadCount', (chat) => {
                 window.onChatUnreadCountEvent(chat);
