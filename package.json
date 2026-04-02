@@ -59,7 +59,7 @@
         "lint-staged": "^16.2.7",
         "mocha": "^9.0.2",
         "prettier": "^3.8.1",
-        "sinon": "^13.0.1"
+        "sinon": "^21.0.3"
     },
     "engines": {
         "node": ">=18.0.0"
