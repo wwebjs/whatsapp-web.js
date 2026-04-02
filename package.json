@@ -48,7 +48,7 @@
         "@types/node-fetch": "^2.5.12",
         "chai": "^4.3.4",
         "chai-as-promised": "^7.1.1",
-        "dotenv": "^16.0.0",
+        "dotenv": "^17.4.0",
         "eslint": "^8.4.1",
         "eslint-config-prettier": "^10.1.8",
         "eslint-plugin-mocha": "^10.0.3",
