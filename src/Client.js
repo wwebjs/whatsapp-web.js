@@ -107,6 +107,7 @@ class Client extends EventEmitter {
 
         Util.setFfmpegPath(this.options.ffmpegPath);
     }
+
     /**
      * Injection logic
      * Private function
@@ -322,7 +323,7 @@ class Client extends EventEmitter {
                         await webCache.persist(this.currentIndexHtml, version);
                     }
 
-                    //Load util functions (serializers, helper functions)
+                    // Load util functions (serializers, helper functions)
                     await this.pupPage.evaluate(LoadUtils);
 
                     let start = Date.now();

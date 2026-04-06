@@ -361,7 +361,7 @@ exports.LoadUtils = () => {
                 content = options.buttons.body;
                 caption = content;
             } else {
-                caption = options.caption ? options.caption : ' '; //Caption can't be empty
+                caption = options.caption ? options.caption : ' '; // Caption can't be empty
             }
             buttonOptions = {
                 productHeaderImageRejected: false,

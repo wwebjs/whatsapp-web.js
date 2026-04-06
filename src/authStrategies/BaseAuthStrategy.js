@@ -8,6 +8,7 @@ class BaseAuthStrategy {
     setup(client) {
         this.client = client;
     }
+
     async beforeBrowserInitialized() {}
     async afterBrowserInitialized() {}
     async onAuthenticationNeeded() {
@@ -17,6 +18,7 @@ class BaseAuthStrategy {
             failureEventPayload: undefined,
         };
     }
+
     async getAuthEventPayload() {}
     async afterAuthReady() {}
     async disconnect() {}

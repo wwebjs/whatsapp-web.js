@@ -351,7 +351,7 @@ END:VCARD`;
             it('can send multiple Contacts as a contact card message', async function () {
                 const contact1 = await client.getContactById(remoteId);
                 const contact2 =
-                    await client.getContactById('5511942167462@c.us'); //iFood
+                    await client.getContactById('5511942167462@c.us'); // iFood
 
                 const msg = await client.sendMessage(remoteId, [
                     contact1,

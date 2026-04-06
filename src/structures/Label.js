@@ -37,6 +37,7 @@ class Label extends Base {
          */
         this.hexColor = labelData.hexColor;
     }
+
     /**
      * Get all chats that have been assigned this Label
      * @returns {Promise<Array<Chat>>}

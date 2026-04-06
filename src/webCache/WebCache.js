@@ -5,6 +5,7 @@ class WebCache {
     async resolve() {
         return null;
     }
+
     async persist() {}
 }
 
