@@ -47,3 +47,68 @@ jobs:
                     echo "❌ PR title does not match the required format!"
                     exit 1
                   fi
+
+    validate-body:
+        name: Validate body
+        runs-on: ubuntu-latest
+        steps:
+            - name: Validate pull request body
+              env:
+                  BODY: ${{ github.event.pull_request.body }}
+              run: |
+                  errors=()
+
+                  # Strip HTML comments
+                  clean=$(echo "$BODY" | sed 's/<!--.*-->//g')
+
+                  # Check required sections
+                  for section in "## Description" "## Testing Summary" "## Type of Change" "## Checklist"; do
+                    if ! echo "$BODY" | grep -q "$section"; then
+                      errors+=("Missing section: $section")
+                    fi
+                  done
+
+                  # Check Description has content
+                  desc=$(echo "$clean" | sed -n '/^## Description/,/^## /p' | sed '1d;$d' | xargs)
+                  if [ -z "$desc" ]; then
+                    errors+=("Description section is empty")
+                  fi
+
+                  # Check Test Details has content
+                  test_details=$(echo "$clean" | sed -n '/^### Test Details/,/^##\|^###/p' | sed '1d;$d' | xargs)
+                  if [ -z "$test_details" ]; then
+                    errors+=("Test Details section is empty")
+                  fi
+
+                  # Check Environment fields are filled
+                  for field in "Machine OS" "Phone OS" "Library Version" "WhatsApp Web Version" "Browser Type and Version" "Node Version"; do
+                    line=$(echo "$clean" | grep -E "^- ${field}:" || true)
+                    value=$(echo "$line" | sed "s/^- ${field}://" | xargs)
+                    if [ -z "$value" ]; then
+                      errors+=("Environment field not filled: $field")
+                    fi
+                  done
+
+                  # Check at least one checkbox is checked in Type of Change
+                  type_section=$(echo "$BODY" | sed -n '/^## Type of Change/,/^## /p')
+                  if ! echo "$type_section" | grep -q "\[x\]"; then
+                    errors+=("No type of change selected")
+                  fi
+
+                  # Check at least one checkbox is checked in Checklist
+                  checklist_section=$(echo "$BODY" | sed -n '/^## Checklist/,/^## \|$/p')
+                  if ! echo "$checklist_section" | grep -q "\[x\]"; then
+                    errors+=("No checklist item checked")
+                  fi
+
+                  if [ ${#errors[@]} -gt 0 ]; then
+                    echo "❌ PR body does not match the required template:"
+                    for err in "${errors[@]}"; do
+                      echo "  - $err"
+                    done
+                    echo ""
+                    echo "Please follow the PR template: .github/pull_request_template.md"
+                    exit 1
+                  fi
+
+                  echo "✅ PR body matches the template"
