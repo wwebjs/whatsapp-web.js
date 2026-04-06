@@ -1,8 +1,0 @@
-node_modules
-dist
-coverage
-docs
-*.min.js
-.wa-version
-.wwebjs_auth
-.wwebjs_cache
