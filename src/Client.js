@@ -1541,6 +1541,33 @@ class Client extends EventEmitter {
     }
 
     /**
+     * Send an emoji reaction to a specific message
+     * @param {string} messageId - Id of the message to add the reaction.
+     * @param {string} reaction  - Emoji to react with. Send an empty string to remove the reaction.
+     * @return {Promise}
+     */
+    async sendReaction(messageId, reaction) {
+        await this.pupPage.evaluate(
+            async (messageId, reaction) => {
+                if (!messageId) return null;
+                const msg =
+                    window.require('WAWebCollections').Msg.get(messageId) ||
+                    (
+                        await window
+                            .require('WAWebCollections')
+                            .Msg.getMessagesById([messageId])
+                    )?.messages?.[0];
+                if (!msg) return null;
+                await window
+                    .require('WAWebSendReactionMsgAction')
+                    .sendReactionToMsg(msg, reaction);
+            },
+            messageId,
+            reaction,
+        );
+    }
+
+    /**
      * @typedef {Object} SendChannelAdminInviteOptions
      * @property {?string} comment The comment to be added to an invitation
      */
