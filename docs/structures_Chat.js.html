@@ -95,6 +95,12 @@ class Chat extends Base {
         this.pinned &#x3D; !!data.pin;
 
         /**
+         * Indicates if the Chat is locked
+         * @type {boolean}
+         */
+        this.isLocked &#x3D; data.isLocked;
+
+        /**
          * Indicates if the chat is muted or not
          * @type {boolean}
          */
@@ -110,15 +116,17 @@ class Chat extends Base {
          * Last message fo chat
          * @type {Message}
          */
-        this.lastMessage &#x3D; data.lastMessage ? new Message(this.client, data.lastMessage) : undefined;
-        
+        this.lastMessage &#x3D; data.lastMessage
+            ? new Message(this.client, data.lastMessage)
+            : undefined;
+
         return super._patch(data);
     }
 
     /**
      * Send a message to this chat
      * @param {string|MessageMedia|Location} content
-     * @param {MessageSendOptions} [options] 
+     * @param {MessageSendOptions} [options]
      * @returns {Promise&amp;lt;Message&gt;} Message that was just sent
      */
     async sendMessage(content, options) {
@@ -138,7 +146,7 @@ class Chat extends Base {
      * @returns {Promise&amp;lt;boolean&gt;} result
      */
     async clearMessages() {
-        return this.client.pupPage.evaluate(chatId &#x3D;&gt; {
+        return this.client.pupPage.evaluate((chatId) &#x3D;&gt; {
             return window.WWebJS.sendClearChat(chatId);
         }, this.id._serialized);
     }
@@ -148,7 +156,7 @@ class Chat extends Base {
      * @returns {Promise&amp;lt;Boolean&gt;} result
      */
     async delete() {
-        return this.client.pupPage.evaluate(chatId &#x3D;&gt; {
+        return this.client.pupPage.evaluate((chatId) &#x3D;&gt; {
             return window.WWebJS.sendDeleteChat(chatId);
         }, this.id._serialized);
     }
@@ -189,7 +197,10 @@ class Chat extends Base {
      * @returns {Promise&amp;lt;{isMuted: boolean, muteExpiration: number}&gt;}
      */
     async mute(unmuteDate) {
-        const result &#x3D; await this.client.muteChat(this.id._serialized, unmuteDate);
+        const result &#x3D; await this.client.muteChat(
+            this.id._serialized,
+            unmuteDate,
+        );
         this.isMuted &#x3D; result.isMuted;
         this.muteExpiration &#x3D; result.muteExpiration;
         return result;
@@ -209,7 +220,7 @@ class Chat extends Base {
     /**
      * Mark this chat as unread
      */
-    async markUnread(){
+    async markUnread() {
         return this.client.markChatUnread(this.id._serialized);
     }
 
@@ -221,45 +232,56 @@ class Chat extends Base {
      * @returns {Promise&amp;lt;Array&amp;lt;Message&gt;&gt;}
      */
     async fetchMessages(searchOptions) {
-        let messages &#x3D; await this.client.pupPage.evaluate(async (chatId, searchOptions) &#x3D;&gt; {
-            const msgFilter &#x3D; (m) &#x3D;&gt; {
-                if (m.isNotification) {
-                    return false; // dont include notification messages
+        let messages &#x3D; await this.client.pupPage.evaluate(
+            async (chatId, searchOptions) &#x3D;&gt; {
+                const msgFilter &#x3D; (m) &#x3D;&gt; {
+                    if (m.isNotification) {
+                        return false; // dont include notification messages
+                    }
+                    if (
+                        searchOptions &amp;amp;&amp;amp;
+                        searchOptions.fromMe !&#x3D;&#x3D; undefined &amp;amp;&amp;amp;
+                        m.id.fromMe !&#x3D;&#x3D; searchOptions.fromMe
+                    ) {
+                        return false;
+                    }
+                    return true;
+                };
+
+                const chat &#x3D; await window.WWebJS.getChat(chatId, {
+                    getAsModel: false,
+                });
+                let msgs &#x3D; chat.msgs.getModelsArray().filter(msgFilter);
+
+                if (searchOptions &amp;amp;&amp;amp; searchOptions.limit &gt; 0) {
+                    while (msgs.length &amp;lt; searchOptions.limit) {
+                        const loadedMessages &#x3D; await window
+                            .require(&#x27;WAWebChatLoadMessages&#x27;)
+                            .loadEarlierMsgs(chat, chat.msgs);
+                        if (!loadedMessages || !loadedMessages.length) break;
+                        msgs &#x3D; [...loadedMessages.filter(msgFilter), ...msgs];
+                    }
+
+                    if (msgs.length &gt; searchOptions.limit) {
+                        msgs.sort((a, b) &#x3D;&gt; (a.t &gt; b.t ? 1 : -1));
+                        msgs &#x3D; msgs.splice(msgs.length - searchOptions.limit);
+                    }
                 }
-                if (searchOptions &amp;amp;&amp;amp; searchOptions.fromMe !&#x3D;&#x3D; undefined &amp;amp;&amp;amp; m.id.fromMe !&#x3D;&#x3D; searchOptions.fromMe) {
-                    return false;
-                }
-                return true;
-            };
 
-            const chat &#x3D; await window.WWebJS.getChat(chatId, { getAsModel: false });
-            let msgs &#x3D; chat.msgs.getModelsArray().filter(msgFilter);
+                return msgs.map((m) &#x3D;&gt; window.WWebJS.getMessageModel(m));
+            },
+            this.id._serialized,
+            searchOptions,
+        );
 
-            if (searchOptions &amp;amp;&amp;amp; searchOptions.limit &gt; 0) {
-                while (msgs.length &amp;lt; searchOptions.limit) {
-                    const loadedMessages &#x3D; await window.Store.ConversationMsgs.loadEarlierMsgs(chat,chat.msgs);
-                    if (!loadedMessages || !loadedMessages.length) break;
-                    msgs &#x3D; [...loadedMessages.filter(msgFilter), ...msgs];
-                }
-                
-                if (msgs.length &gt; searchOptions.limit) {
-                    msgs.sort((a, b) &#x3D;&gt; (a.t &gt; b.t) ? 1 : -1);
-                    msgs &#x3D; msgs.splice(msgs.length - searchOptions.limit);
-                }
-            }
-
-            return msgs.map(m &#x3D;&gt; window.WWebJS.getMessageModel(m));
-
-        }, this.id._serialized, searchOptions);
-
-        return messages.map(m &#x3D;&gt; new Message(this.client, m));
+        return messages.map((m) &#x3D;&gt; new Message(this.client, m));
     }
 
     /**
      * Simulate typing in chat. This will last for 25 seconds.
      */
     async sendStateTyping() {
-        return this.client.pupPage.evaluate(chatId &#x3D;&gt; {
+        return this.client.pupPage.evaluate((chatId) &#x3D;&gt; {
             window.WWebJS.sendChatstate(&#x27;typing&#x27;, chatId);
             return true;
         }, this.id._serialized);
@@ -269,7 +291,7 @@ class Chat extends Base {
      * Simulate recording audio in chat. This will last for 25 seconds.
      */
     async sendStateRecording() {
-        return this.client.pupPage.evaluate(chatId &#x3D;&gt; {
+        return this.client.pupPage.evaluate((chatId) &#x3D;&gt; {
             window.WWebJS.sendChatstate(&#x27;recording&#x27;, chatId);
             return true;
         }, this.id._serialized);
@@ -279,7 +301,7 @@ class Chat extends Base {
      * Stops typing or recording in chat immediately.
      */
     async clearState() {
-        return this.client.pupPage.evaluate(chatId &#x3D;&gt; {
+        return this.client.pupPage.evaluate((chatId) &#x3D;&gt; {
             window.WWebJS.sendChatstate(&#x27;stop&#x27;, chatId);
             return true;
         }, this.id._serialized);
@@ -317,7 +339,7 @@ class Chat extends Base {
     async getPinnedMessages() {
         return this.client.getPinnedMessages(this.id._serialized);
     }
-    
+
     /**
      * Sync chat history conversation
      * @return {Promise&amp;lt;boolean&gt;} True if operation completed successfully, false otherwise.
@@ -352,7 +374,7 @@ class Chat extends Base {
      */
     async getCustomerNote() {
         if (this.isGroup || this.isChannel) return null;
-        
+
         return this.client.getCustomerNote(this.id._serialized);
     }
 }
@@ -368,7 +390,7 @@ module.exports &#x3D; Chat;
   <footer id="jsdoc-footer" class="jsdoc-footer">
     <div id="jsdoc-footer-container">
       <p>
-        Generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc</a> 3.6.11 on January 30, 2026.
+        Generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc</a> 3.6.11 on April 6, 2026.
       </p>
     </div>
   </footer>

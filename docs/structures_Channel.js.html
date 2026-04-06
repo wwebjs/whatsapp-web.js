@@ -68,11 +68,12 @@ class Channel extends Base {
          */
         this.name &#x3D; data.name;
 
-        /** 
+        /**
          * The channel description
          * @type {string}
          */
-        this.description &#x3D; data.channelMetadata.description;
+        this.description &#x3D;
+            data.channelMetadata?.description ?? data.description ?? &#x27;&#x27;;
 
         /**
          * Indicates if it is a Channel
@@ -120,7 +121,9 @@ class Channel extends Base {
          * Last message in the channel
          * @type {Message}
          */
-        this.lastMessage &#x3D; data.lastMessage ? new Message(super.client, data.lastMessage) : undefined;
+        this.lastMessage &#x3D; data.lastMessage
+            ? new Message(super.client, data.lastMessage)
+            : undefined;
 
         return super._patch(data);
     }
@@ -131,58 +134,82 @@ class Channel extends Base {
      * @returns {Promise&amp;lt;Array&amp;lt;{contact: Contact, role: string}&gt;&gt;} Returns an array of objects that handle the subscribed contacts and their roles in the channel
      */
     async getSubscribers(limit) {
-        return await this.client.pupPage.evaluate(async (channelId, limit) &#x3D;&gt; {
-            const channel &#x3D; await window.WWebJS.getChat(channelId, { getAsModel: false });
-            if (!channel) return [];
-            !limit &amp;amp;&amp;amp; (limit &#x3D; window.Store.ChannelUtils.getMaxSubscriberNumber());
-            const response &#x3D; await window.Store.ChannelSubscribers.mexFetchNewsletterSubscribers(channelId, limit);
-            const contacts &#x3D; window.Store.ChannelSubscribers.getSubscribersInContacts(response.subscribers);
-            return Promise.all(contacts.map((obj) &#x3D;&gt; ({
-                ...obj,
-                contact: window.WWebJS.getContactModel(obj.contact)
-            })));
-        }, this.id._serialized, limit);
+        return await this.client.pupPage.evaluate(
+            async (channelId, limit) &#x3D;&gt; {
+                const channel &#x3D; await window.WWebJS.getChat(channelId, {
+                    getAsModel: false,
+                });
+                if (!channel) return [];
+                !limit &amp;amp;&amp;amp;
+                    (limit &#x3D; window
+                        .require(&#x27;WAWebNewsletterGatingUtils&#x27;)
+                        .getMaxSubscriberNumber());
+                const response &#x3D; await window
+                    .require(&#x27;WAWebMexFetchNewsletterSubscribersJob&#x27;)
+                    .mexFetchNewsletterSubscribers(channelId, limit);
+                const contacts &#x3D; window
+                    .require(&#x27;WAWebNewsletterSubscriberListAction&#x27;)
+                    .getSubscribersInContacts(response.subscribers);
+                return Promise.all(
+                    contacts.map((obj) &#x3D;&gt; ({
+                        ...obj,
+                        contact: window.WWebJS.getContactModel(obj.contact),
+                    })),
+                );
+            },
+            this.id._serialized,
+            limit,
+        );
     }
 
     /**
      * Updates the channel subject
-     * @param {string} newSubject 
+     * @param {string} newSubject
      * @returns {Promise&amp;lt;boolean&gt;} Returns true if the subject was properly updated. This can return false if the user does not have the necessary permissions.
      */
     async setSubject(newSubject) {
-        const success &#x3D; await this._setChannelMetadata({ name: newSubject }, { editName: true });
+        const success &#x3D; await this._setChannelMetadata(
+            { name: newSubject },
+            { editName: true },
+        );
         success &amp;amp;&amp;amp; (this.name &#x3D; newSubject);
         return success;
     }
 
     /**
      * Updates the channel description
-     * @param {string} newDescription 
+     * @param {string} newDescription
      * @returns {Promise&amp;lt;boolean&gt;} Returns true if the operation completed successfully, false otherwise
      */
     async setDescription(newDescription) {
-        const success &#x3D; await this._setChannelMetadata({ description: newDescription }, { editDescription: true });
+        const success &#x3D; await this._setChannelMetadata(
+            { description: newDescription },
+            { editDescription: true },
+        );
         success &amp;amp;&amp;amp; (this.description &#x3D; newDescription);
         return success;
     }
 
     /**
      * Updates the channel profile picture
-     * @param {MessageMedia} newProfilePicture 
+     * @param {MessageMedia} newProfilePicture
      * @returns {Promise&amp;lt;boolean&gt;} Returns true if the operation completed successfully, false otherwise
      */
     async setProfilePicture(newProfilePicture) {
-        return await this._setChannelMetadata({ picture: newProfilePicture }, { editPicture: true });
+        return await this._setChannelMetadata(
+            { picture: newProfilePicture },
+            { editPicture: true },
+        );
     }
 
     /**
      * Updates available reactions to use in the channel
-     * 
+     *
      * Valid values for passing to the method are:
      * 0 for NONE reactions to be avaliable
      * 1 for BASIC reactions to be available: 👍, ❤️, 😂, 😮, 😢, 🙏
      * 2 for ALL reactions to be available
-     * @param {number} reactionCode 
+     * @param {number} reactionCode
      * @returns {Promise&amp;lt;boolean&gt;} Returns true if the operation completed successfully, false otherwise
      */
     async setReactionSetting(reactionCode) {
@@ -190,11 +217,11 @@ class Channel extends Base {
         const reactionMapper &#x3D; {
             0: 3,
             1: 1,
-            2: 0
+            2: 0,
         };
         const success &#x3D; await this._setChannelMetadata(
             { reactionCodesSetting: reactionMapper[reactionCode] },
-            { editReactionCodesSetting: true }
+            { editReactionCodesSetting: true },
         );
         success &amp;amp;&amp;amp; (this.channelMetadata.reactionCodesSetting &#x3D; reactionCode);
         return success;
@@ -212,7 +239,7 @@ class Channel extends Base {
         }
         return success;
     }
-    
+
     /**
      * Unmutes the channel
      * @returns {Promise&amp;lt;boolean&gt;} Returns true if the operation completed successfully, false otherwise
@@ -260,11 +287,15 @@ class Channel extends Base {
     /**
      * Sends a channel admin invitation to a user, allowing them to become an admin of the channel
      * @param {string} chatId The ID of a user to send the channel admin invitation to
-     * @param {SendChannelAdminInviteOptions} options 
+     * @param {SendChannelAdminInviteOptions} options
      * @returns {Promise&amp;lt;boolean&gt;} Returns true if an invitation was sent successfully, false otherwise
      */
     async sendChannelAdminInvite(chatId, options &#x3D; {}) {
-        return this.client.sendChannelAdminInvite(chatId, this.id._serialized, options);
+        return this.client.sendChannelAdminInvite(
+            chatId,
+            this.id._serialized,
+            options,
+        );
     }
 
     /**
@@ -281,7 +312,10 @@ class Channel extends Base {
      * @returns {Promise&amp;lt;boolean&gt;} Returns true if the operation completed successfully, false otherwise
      */
     async revokeChannelAdminInvite(userId) {
-        return this.client.revokeChannelAdminInvite(this.id._serialized, userId);
+        return this.client.revokeChannelAdminInvite(
+            this.id._serialized,
+            userId,
+        );
     }
 
     /**
@@ -307,7 +341,11 @@ class Channel extends Base {
      * @returns {Promise&amp;lt;boolean&gt;} Returns true if the operation completed successfully, false otherwise
      */
     async transferChannelOwnership(newOwnerId, options &#x3D; {}) {
-        return this.client.transferChannelOwnership(this.id._serialized, newOwnerId, options);
+        return this.client.transferChannelOwnership(
+            this.id._serialized,
+            newOwnerId,
+            options,
+        );
     }
 
     /**
@@ -318,36 +356,50 @@ class Channel extends Base {
      * @returns {Promise&amp;lt;Array&amp;lt;Message&gt;&gt;}
      */
     async fetchMessages(searchOptions) {
-        let messages &#x3D; await this.client.pupPage.evaluate(async (channelId, searchOptions) &#x3D;&gt; {
-            const msgFilter &#x3D; (m) &#x3D;&gt; {
-                if (m.isNotification || m.type &#x3D;&#x3D;&#x3D; &#x27;newsletter_notification&#x27;) {
-                    return false; // dont include notification messages
-                }
-                if (searchOptions &amp;amp;&amp;amp; searchOptions.fromMe !&#x3D;&#x3D; undefined &amp;amp;&amp;amp; m.id.fromMe !&#x3D;&#x3D; searchOptions.fromMe) {
-                    return false;
-                }
-                return true;
-            };
+        let messages &#x3D; await this.client.pupPage.evaluate(
+            async (channelId, searchOptions) &#x3D;&gt; {
+                const msgFilter &#x3D; (m) &#x3D;&gt; {
+                    if (
+                        m.isNotification ||
+                        m.type &#x3D;&#x3D;&#x3D; &#x27;newsletter_notification&#x27;
+                    ) {
+                        return false; // dont include notification messages
+                    }
+                    if (
+                        searchOptions &amp;amp;&amp;amp;
+                        searchOptions.fromMe !&#x3D;&#x3D; undefined &amp;amp;&amp;amp;
+                        m.id.fromMe !&#x3D;&#x3D; searchOptions.fromMe
+                    ) {
+                        return false;
+                    }
+                    return true;
+                };
 
-            const channel &#x3D; await window.WWebJS.getChat(channelId, { getAsModel: false });
-            let msgs &#x3D; channel.msgs.getModelsArray().filter(msgFilter);
+                const channel &#x3D; await window.WWebJS.getChat(channelId, {
+                    getAsModel: false,
+                });
+                let msgs &#x3D; channel.msgs.getModelsArray().filter(msgFilter);
 
-            if (searchOptions &amp;amp;&amp;amp; searchOptions.limit &gt; 0) {
-                while (msgs.length &amp;lt; searchOptions.limit) {
-                    const loadedMessages &#x3D; await window.Store.ConversationMsgs.loadEarlierMsgs(channel);
-                    if (!loadedMessages || !loadedMessages.length) break;
-                    msgs &#x3D; [...loadedMessages.filter(msgFilter), ...msgs];
+                if (searchOptions &amp;amp;&amp;amp; searchOptions.limit &gt; 0) {
+                    while (msgs.length &amp;lt; searchOptions.limit) {
+                        const loadedMessages &#x3D; await window
+                            .require(&#x27;WAWebChatLoadMessages&#x27;)
+                            .loadEarlierMsgs(channel);
+                        if (!loadedMessages || !loadedMessages.length) break;
+                        msgs &#x3D; [...loadedMessages.filter(msgFilter), ...msgs];
+                    }
+
+                    if (msgs.length &gt; searchOptions.limit) {
+                        msgs.sort((a, b) &#x3D;&gt; (a.t &gt; b.t ? 1 : -1));
+                        msgs &#x3D; msgs.splice(msgs.length - searchOptions.limit);
+                    }
                 }
-                
-                if (msgs.length &gt; searchOptions.limit) {
-                    msgs.sort((a, b) &#x3D;&gt; (a.t &gt; b.t) ? 1 : -1);
-                    msgs &#x3D; msgs.splice(msgs.length - searchOptions.limit);
-                }
-            }
 
-            return msgs.map(m &#x3D;&gt; window.WWebJS.getMessageModel(m));
-
-        }, this.id._serialized, searchOptions);
+                return msgs.map((m) &#x3D;&gt; window.WWebJS.getMessageModel(m));
+            },
+            this.id._serialized,
+            searchOptions,
+        );
 
         return messages.map((msg) &#x3D;&gt; new Message(this.client, msg));
     }
@@ -367,27 +419,39 @@ class Channel extends Base {
      * @returns {Promise&amp;lt;boolean&gt;} Returns true if the operation completed successfully, false otherwise
      */
     async _setChannelMetadata(value, property) {
-        return await this.client.pupPage.evaluate(async (channelId, value, property) &#x3D;&gt; {
-            const channel &#x3D; await window.WWebJS.getChat(channelId, { getAsModel: false });
-            if (!channel) return false;
-            if (property.editPicture) {
-                value.picture &#x3D; value.picture
-                    ? await window.WWebJS.cropAndResizeImage(value.picture, {
-                        asDataUrl: true,
-                        mimetype: &#x27;image/jpeg&#x27;,
-                        size: 640,
-                        quality: 1
-                    })
-                    : null;
-            }
-            try {
-                await window.Store.ChannelUtils.editNewsletterMetadataAction(channel, property, value);
-                return true;
-            } catch (err) {
-                if (err.name &#x3D;&#x3D;&#x3D; &#x27;ServerStatusCodeError&#x27;) return false;
-                throw err;
-            }
-        }, this.id._serialized, value, property);
+        return await this.client.pupPage.evaluate(
+            async (channelId, value, property) &#x3D;&gt; {
+                const channel &#x3D; await window.WWebJS.getChat(channelId, {
+                    getAsModel: false,
+                });
+                if (!channel) return false;
+                if (property.editPicture) {
+                    value.picture &#x3D; value.picture
+                        ? await window.WWebJS.cropAndResizeImage(
+                              value.picture,
+                              {
+                                  asDataUrl: true,
+                                  mimetype: &#x27;image/jpeg&#x27;,
+                                  size: 640,
+                                  quality: 1,
+                              },
+                          )
+                        : null;
+                }
+                try {
+                    await window
+                        .require(&#x27;WAWebEditNewsletterMetadataAction&#x27;)
+                        .editNewsletterMetadataAction(channel, property, value);
+                    return true;
+                } catch (err) {
+                    if (err.name &#x3D;&#x3D;&#x3D; &#x27;ServerStatusCodeError&#x27;) return false;
+                    throw err;
+                }
+            },
+            this.id._serialized,
+            value,
+            property,
+        );
     }
 
     /**
@@ -396,17 +460,35 @@ class Channel extends Base {
      * @returns {Promise&amp;lt;boolean&gt;} Returns true if the operation completed successfully, false otherwise
      */
     async _muteUnmuteChannel(action) {
-        return await this.client.pupPage.evaluate(async (channelId, action) &#x3D;&gt; {
-            try {
-                action &#x3D;&#x3D;&#x3D; &#x27;MUTE&#x27;
-                    ? await window.Store.ChannelUtils.muteNewsletter([channelId])
-                    : await window.Store.ChannelUtils.unmuteNewsletter([channelId]);
-                return true;
-            } catch (err) {
-                if (err.name &#x3D;&#x3D;&#x3D; &#x27;ServerStatusCodeError&#x27;) return false;
-                throw err;
-            }
-        }, this.id._serialized, action);
+        return await this.client.pupPage.evaluate(
+            async (channelId, action) &#x3D;&gt; {
+                try {
+                    await window
+                        .require(&#x27;WAWebNewsletterUpdateUserSettingJob&#x27;)
+                        .updateNewsletterUserSetting({
+                            newsletterJid: window
+                                .require(&#x27;WAJids&#x27;)
+                                .toNewsletterJid(channelId),
+                            type: window.require(&#x27;WAWebNewsletterModelUtils&#x27;)
+                                .ADMIN_NOTIFICATIONS,
+                            muteExpirationValue:
+                                action &#x3D;&#x3D;&#x3D; &#x27;MUTE&#x27;
+                                    ? window.require(
+                                          &#x27;WAWebNewsletterModelUtils&#x27;,
+                                      ).MUTED_STATE
+                                    : window.require(
+                                          &#x27;WAWebNewsletterModelUtils&#x27;,
+                                      ).UNMUTED_STATE,
+                        });
+                    return true;
+                } catch (err) {
+                    if (err.name &#x3D;&#x3D;&#x3D; &#x27;ServerStatusCodeError&#x27;) return false;
+                    throw err;
+                }
+            },
+            this.id._serialized,
+            action,
+        );
     }
 }
 
@@ -421,7 +503,7 @@ module.exports &#x3D; Channel;
   <footer id="jsdoc-footer" class="jsdoc-footer">
     <div id="jsdoc-footer-container">
       <p>
-        Generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc</a> 3.6.11 on January 30, 2026.
+        Generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc</a> 3.6.11 on April 6, 2026.
       </p>
     </div>
   </footer>

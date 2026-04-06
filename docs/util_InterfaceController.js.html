@@ -35,7 +35,6 @@
  * Interface Controller
  */
 class InterfaceController {
-
     constructor(props) {
         this.pupPage &#x3D; props.pupPage;
     }
@@ -46,8 +45,12 @@ class InterfaceController {
      */
     async openChatWindow(chatId) {
         return await this.pupPage.evaluate(async (chatId) &#x3D;&gt; {
-            const chat &#x3D; await window.WWebJS.getChat(chatId, { getAsModel: false });
-            return await window.Store.Cmd.openChatBottom({&#x27;chat&#x27;:chat});
+            const chat &#x3D; await window.WWebJS.getChat(chatId, {
+                getAsModel: false,
+            });
+            return await window
+                .require(&#x27;WAWebCmd&#x27;)
+                .Cmd.openChatBottom({ chat: chat });
         }, chatId);
     }
 
@@ -56,9 +59,11 @@ class InterfaceController {
      * @param {string} chatId ID of the chat drawer that will be opened
      */
     async openChatDrawer(chatId) {
-        await this.pupPage.evaluate(async chatId &#x3D;&gt; {
-            let chat &#x3D; await window.WWebJS.getChat(chatId, { getAsModel: false });
-            await window.Store.Cmd.openDrawerMid(chat);
+        await this.pupPage.evaluate(async (chatId) &#x3D;&gt; {
+            let chat &#x3D; await window.WWebJS.getChat(chatId, {
+                getAsModel: false,
+            });
+            await window.require(&#x27;WAWebCmd&#x27;).Cmd.openDrawerMid(chat);
         }, chatId);
     }
 
@@ -67,9 +72,11 @@ class InterfaceController {
      * @param {string} chatId ID of the chat search that will be opened
      */
     async openChatSearch(chatId) {
-        await this.pupPage.evaluate(async chatId &#x3D;&gt; {
-            let chat &#x3D; await window.WWebJS.getChat(chatId, { getAsModel: false });
-            await window.Store.Cmd.chatSearch(chat);
+        await this.pupPage.evaluate(async (chatId) &#x3D;&gt; {
+            let chat &#x3D; await window.WWebJS.getChat(chatId, {
+                getAsModel: false,
+            });
+            await window.require(&#x27;WAWebCmd&#x27;).Cmd.chatSearch(chat);
         }, chatId);
     }
 
@@ -79,10 +86,24 @@ class InterfaceController {
      */
     async openChatWindowAt(msgId) {
         await this.pupPage.evaluate(async (msgId) &#x3D;&gt; {
-            const msg &#x3D; window.Store.Msg.get(msgId) || (await window.Store.Msg.getMessagesById([msgId]))?.messages?.[0];
-            const chat &#x3D; window.Store.Chat.get(msg.id.remote) ?? await window.Store.Chat.find(msg.id.remote);
-            const searchContext &#x3D; await window.Store.SearchContext.getSearchContext(chat, msg.id);
-            await window.Store.Cmd.openChatAt({ chat: chat, msgContext: searchContext });
+            const msg &#x3D;
+                window.require(&#x27;WAWebCollections&#x27;).Msg.get(msgId) ||
+                (
+                    await window
+                        .require(&#x27;WAWebCollections&#x27;)
+                        .Msg.getMessagesById([msgId])
+                )?.messages?.[0];
+            const chat &#x3D;
+                window.require(&#x27;WAWebCollections&#x27;).Chat.get(msg.id.remote) ??
+                (await window
+                    .require(&#x27;WAWebCollections&#x27;)
+                    .Chat.find(msg.id.remote));
+            const searchContext &#x3D; await window
+                .require(&#x27;WAWebChatMessageSearch&#x27;)
+                .getSearchContext(chat, msg.id);
+            await window
+                .require(&#x27;WAWebCmd&#x27;)
+                .Cmd.openChatAt({ chat: chat, msgContext: searchContext });
         }, msgId);
     }
 
@@ -91,9 +112,15 @@ class InterfaceController {
      * @param {string} msgId ID of the message drawer that will be opened
      */
     async openMessageDrawer(msgId) {
-        await this.pupPage.evaluate(async msgId &#x3D;&gt; {
-            const msg &#x3D; window.Store.Msg.get(msgId) || (await window.Store.Msg.getMessagesById([msgId]))?.messages?.[0];
-            await window.Store.Cmd.msgInfoDrawer(msg);
+        await this.pupPage.evaluate(async (msgId) &#x3D;&gt; {
+            const msg &#x3D;
+                window.require(&#x27;WAWebCollections&#x27;).Msg.get(msgId) ||
+                (
+                    await window
+                        .require(&#x27;WAWebCollections&#x27;)
+                        .Msg.getMessagesById([msgId])
+                )?.messages?.[0];
+            await window.require(&#x27;WAWebCmd&#x27;).Cmd.msgInfoDrawer(msg);
         }, msgId);
     }
 
@@ -102,7 +129,9 @@ class InterfaceController {
      */
     async closeRightDrawer() {
         await this.pupPage.evaluate(async () &#x3D;&gt; {
-            await window.Store.DrawerManager.closeDrawerRight();
+            await window
+                .require(&#x27;WAWebDrawerManager&#x27;)
+                .DrawerManager.closeDrawerRight();
         });
     }
 
@@ -111,8 +140,11 @@ class InterfaceController {
      */
     async getFeatures() {
         return await this.pupPage.evaluate(() &#x3D;&gt; {
-            if(!window.Store.Features) throw new Error(&#x27;This version of Whatsapp Web does not support features&#x27;);
-            return window.Store.Features.F;
+            if (!window.require(&#x27;WAWebCollections&#x27;).Features)
+                throw new Error(
+                    &#x27;This version of Whatsapp Web does not support features&#x27;,
+                );
+            return window.require(&#x27;WAWebCollections&#x27;).Features.F;
         });
     }
 
@@ -122,8 +154,13 @@ class InterfaceController {
      */
     async checkFeatureStatus(feature) {
         return await this.pupPage.evaluate((feature) &#x3D;&gt; {
-            if(!window.Store.Features) throw new Error(&#x27;This version of Whatsapp Web does not support features&#x27;);
-            return window.Store.Features.supportsFeature(feature);
+            if (!window.require(&#x27;WAWebCollections&#x27;).Features)
+                throw new Error(
+                    &#x27;This version of Whatsapp Web does not support features&#x27;,
+                );
+            return window
+                .require(&#x27;WAWebCollections&#x27;)
+                .Features.supportsFeature(feature);
         }, feature);
     }
 
@@ -133,9 +170,14 @@ class InterfaceController {
      */
     async enableFeatures(features) {
         await this.pupPage.evaluate((features) &#x3D;&gt; {
-            if(!window.Store.Features) throw new Error(&#x27;This version of Whatsapp Web does not support features&#x27;);
+            if (!window.require(&#x27;WAWebCollections&#x27;).Features)
+                throw new Error(
+                    &#x27;This version of Whatsapp Web does not support features&#x27;,
+                );
             for (const feature in features) {
-                window.Store.Features.setFeature(features[feature], true);
+                window
+                    .require(&#x27;WAWebCollections&#x27;)
+                    .Features.setFeature(features[feature], true);
             }
         }, features);
     }
@@ -146,9 +188,14 @@ class InterfaceController {
      */
     async disableFeatures(features) {
         await this.pupPage.evaluate((features) &#x3D;&gt; {
-            if(!window.Store.Features) throw new Error(&#x27;This version of Whatsapp Web does not support features&#x27;);
+            if (!window.require(&#x27;WAWebCollections&#x27;).Features)
+                throw new Error(
+                    &#x27;This version of Whatsapp Web does not support features&#x27;,
+                );
             for (const feature in features) {
-                window.Store.Features.setFeature(features[feature], false);
+                window
+                    .require(&#x27;WAWebCollections&#x27;)
+                    .Features.setFeature(features[feature], false);
             }
         }, features);
     }
@@ -165,7 +212,7 @@ module.exports &#x3D; InterfaceController;
   <footer id="jsdoc-footer" class="jsdoc-footer">
     <div id="jsdoc-footer-container">
       <p>
-        Generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc</a> 3.6.11 on January 30, 2026.
+        Generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc</a> 3.6.11 on April 6, 2026.
       </p>
     </div>
   </footer>

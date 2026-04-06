@@ -54,13 +54,13 @@ class Message extends Base {
 
     _patch(data) {
         this._data &#x3D; data;
-        
+
         /**
          * MediaKey that represents the sticker &#x27;ID&#x27;
          * @type {string}
          */
         this.mediaKey &#x3D; data.mediaKey;
-        
+
         /**
          * ID that represents the message
          * @type {object}
@@ -83,7 +83,9 @@ class Message extends Base {
          * Message content
          * @type {string}
          */
-        this.body &#x3D; this.hasMedia ? data.caption || &#x27;&#x27; : data.body || data.pollName || data.eventName || &#x27;&#x27;;
+        this.body &#x3D; this.hasMedia
+            ? data.caption || &#x27;&#x27;
+            : data.body || data.pollName || data.eventName || &#x27;&#x27;;
 
         /**
          * Message type
@@ -101,7 +103,10 @@ class Message extends Base {
          * ID for the Chat that this message was sent to, except if the message was sent by the current user.
          * @type {string}
          */
-        this.from &#x3D; (typeof (data.from) &#x3D;&#x3D;&#x3D; &#x27;object&#x27; &amp;amp;&amp;amp; data.from !&#x3D;&#x3D; null) ? data.from._serialized : data.from;
+        this.from &#x3D;
+            typeof data.from &#x3D;&#x3D;&#x3D; &#x27;object&#x27; &amp;amp;&amp;amp; data.from !&#x3D;&#x3D; null
+                ? data.from._serialized
+                : data.from;
 
         /**
          * ID for who this message is for.
@@ -110,19 +115,31 @@ class Message extends Base {
          * If the message is sent by another user, it will be the ID for the current user.
          * @type {string}
          */
-        this.to &#x3D; (typeof (data.to) &#x3D;&#x3D;&#x3D; &#x27;object&#x27; &amp;amp;&amp;amp; data.to !&#x3D;&#x3D; null) ? data.to._serialized : data.to;
+        this.to &#x3D;
+            typeof data.to &#x3D;&#x3D;&#x3D; &#x27;object&#x27; &amp;amp;&amp;amp; data.to !&#x3D;&#x3D; null
+                ? data.to._serialized
+                : data.to;
 
         /**
          * If the message was sent to a group, this field will contain the user that sent the message.
          * @type {string}
          */
-        this.author &#x3D; (typeof (data.author) &#x3D;&#x3D;&#x3D; &#x27;object&#x27; &amp;amp;&amp;amp; data.author !&#x3D;&#x3D; null) ? data.author._serialized : data.author;
+        this.author &#x3D;
+            typeof data.author &#x3D;&#x3D;&#x3D; &#x27;object&#x27; &amp;amp;&amp;amp; data.author !&#x3D;&#x3D; null
+                ? data.author._serialized
+                : data.author;
 
         /**
          * String that represents from which device type the message was sent
          * @type {string}
          */
-        this.deviceType &#x3D; typeof data.id.id &#x3D;&#x3D;&#x3D; &#x27;string&#x27; &amp;amp;&amp;amp; data.id.id.length &gt; 21 ? &#x27;android&#x27; : typeof data.id.id &#x3D;&#x3D;&#x3D; &#x27;string&#x27; &amp;amp;&amp;amp; data.id.id.substring(0, 2) &#x3D;&#x3D;&#x3D; &#x27;3A&#x27; ? &#x27;ios&#x27; : &#x27;web&#x27;;
+        this.deviceType &#x3D;
+            typeof data.id.id &#x3D;&#x3D;&#x3D; &#x27;string&#x27; &amp;amp;&amp;amp; data.id.id.length &gt; 21
+                ? &#x27;android&#x27;
+                : typeof data.id.id &#x3D;&#x3D;&#x3D; &#x27;string&#x27; &amp;amp;&amp;amp;
+                    data.id.id.substring(0, 2) &#x3D;&#x3D;&#x3D; &#x27;3A&#x27;
+                  ? &#x27;ios&#x27;
+                  : &#x27;web&#x27;;
         /**
          * Indicates if the message was forwarded
          * @type {boolean}
@@ -141,7 +158,8 @@ class Message extends Base {
          * Indicates if the message is a status update
          * @type {boolean}
          */
-        this.isStatus &#x3D; data.isStatusV3 || data.id.remote &#x3D;&#x3D;&#x3D; &#x27;status@broadcast&#x27;;
+        this.isStatus &#x3D;
+            data.isStatusV3 || data.id.remote &#x3D;&#x3D;&#x3D; &#x27;status@broadcast&#x27;;
 
         /**
          * Indicates if the message was starred
@@ -193,7 +211,7 @@ class Message extends Base {
                 description &#x3D; {
                     name: splitted[0],
                     address: splitted[1],
-                    url: data.clientUrl
+                    url: data.clientUrl,
                 };
             }
             return new Location(data.lat, data.lng, description);
@@ -203,20 +221,36 @@ class Message extends Base {
          * List of vCards contained in the message.
          * @type {Array&amp;lt;string&gt;}
          */
-        this.vCards &#x3D; data.type &#x3D;&#x3D;&#x3D; MessageTypes.CONTACT_CARD_MULTI ? data.vcardList.map((c) &#x3D;&gt; c.vcard) : data.type &#x3D;&#x3D;&#x3D; MessageTypes.CONTACT_CARD ? [data.body] : [];
+        this.vCards &#x3D;
+            data.type &#x3D;&#x3D;&#x3D; MessageTypes.CONTACT_CARD_MULTI
+                ? data.vcardList.map((c) &#x3D;&gt; c.vcard)
+                : data.type &#x3D;&#x3D;&#x3D; MessageTypes.CONTACT_CARD
+                  ? [data.body]
+                  : [];
 
         /**
          * Group Invite Data
          * @type {object}
          */
-        this.inviteV4 &#x3D; data.type &#x3D;&#x3D;&#x3D; MessageTypes.GROUP_INVITE ? {
-            inviteCode: data.inviteCode,
-            inviteCodeExp: data.inviteCodeExp,
-            groupId: data.inviteGrp,
-            groupName: data.inviteGrpName,
-            fromId: typeof data.from &#x3D;&#x3D;&#x3D; &#x27;object&#x27; &amp;amp;&amp;amp; &#x27;_serialized&#x27; in data.from ? data.from._serialized : data.from,
-            toId: typeof data.to &#x3D;&#x3D;&#x3D; &#x27;object&#x27; &amp;amp;&amp;amp; &#x27;_serialized&#x27; in data.to ? data.to._serialized : data.to
-        } : undefined;
+        this.inviteV4 &#x3D;
+            data.type &#x3D;&#x3D;&#x3D; MessageTypes.GROUP_INVITE
+                ? {
+                      inviteCode: data.inviteCode,
+                      inviteCodeExp: data.inviteCodeExp,
+                      groupId: data.inviteGrp,
+                      groupName: data.inviteGrpName,
+                      fromId:
+                          typeof data.from &#x3D;&#x3D;&#x3D; &#x27;object&#x27; &amp;amp;&amp;amp;
+                          &#x27;_serialized&#x27; in data.from
+                              ? data.from._serialized
+                              : data.from,
+                      toId:
+                          typeof data.to &#x3D;&#x3D;&#x3D; &#x27;object&#x27; &amp;amp;&amp;amp;
+                          &#x27;_serialized&#x27; in data.to
+                              ? data.to._serialized
+                              : data.to,
+                  }
+                : undefined;
 
         /**
          * Indicates the mentions in the message body.
@@ -247,7 +281,7 @@ class Message extends Base {
          */
         this.token &#x3D; data.token ? data.token : undefined;
 
-        /** 
+        /**
          * Indicates whether the message is a Gif
          * @type {boolean}
          */
@@ -288,7 +322,7 @@ class Message extends Base {
         if (data.latestEditMsgKey) {
             this.latestEditMsgKey &#x3D; data.latestEditMsgKey;
         }
-        
+
         /**
          * Protocol message key.
          * Can be used to retrieve the ID of an original message that was revoked.
@@ -315,17 +349,27 @@ class Message extends Base {
         }
 
         /** Selected List row Id **/
-        if (data.listResponse &amp;amp;&amp;amp; data.listResponse.singleSelectReply.selectedRowId) {
-            this.selectedRowId &#x3D; data.listResponse.singleSelectReply.selectedRowId;
+        if (
+            data.listResponse &amp;amp;&amp;amp;
+            data.listResponse.singleSelectReply.selectedRowId
+        ) {
+            this.selectedRowId &#x3D;
+                data.listResponse.singleSelectReply.selectedRowId;
         }
 
         if (this.type &#x3D;&#x3D;&#x3D; MessageTypes.POLL_CREATION) {
             this.pollName &#x3D; data.pollName;
             this.pollOptions &#x3D; data.pollOptions;
-            this.allowMultipleAnswers &#x3D; Boolean(!data.pollSelectableOptionsCount);
+            this.allowMultipleAnswers &#x3D; Boolean(
+                !data.pollSelectableOptionsCount,
+            );
             this.pollInvalidated &#x3D; data.pollInvalidated;
             this.isSentCagPollCreation &#x3D; data.isSentCagPollCreation;
-            this.messageSecret &#x3D; data.messageSecret ? Object.keys(data.messageSecret).map((key) &#x3D;&gt; data.messageSecret[key]) : [];
+            this.messageSecret &#x3D; data.messageSecret
+                ? Object.keys(data.messageSecret).map(
+                      (key) &#x3D;&gt; data.messageSecret[key],
+                  )
+                : [];
         }
 
         return super._patch(data);
@@ -336,19 +380,25 @@ class Message extends Base {
     }
 
     /**
-     * Reloads this Message object&#x27;s data in-place with the latest values from WhatsApp Web. 
+     * Reloads this Message object&#x27;s data in-place with the latest values from WhatsApp Web.
      * Note that the Message must still be in the web app cache for this to work, otherwise will return null.
      * @returns {Promise&amp;lt;Message&gt;}
      */
     async reload() {
         const newData &#x3D; await this.client.pupPage.evaluate(async (msgId) &#x3D;&gt; {
-            const msg &#x3D; window.Store.Msg.get(msgId) || (await window.Store.Msg.getMessagesById([msgId]))?.messages?.[0];
+            const msg &#x3D;
+                window.require(&#x27;WAWebCollections&#x27;).Msg.get(msgId) ||
+                (
+                    await window
+                        .require(&#x27;WAWebCollections&#x27;)
+                        .Msg.getMessagesById([msgId])
+                )?.messages?.[0];
             if (!msg) return null;
             return window.WWebJS.getMessageModel(msg);
         }, this.id._serialized);
 
-        if(!newData) return null;
-        
+        if (!newData) return null;
+
         this._patch(newData);
         return this;
     }
@@ -360,7 +410,7 @@ class Message extends Base {
     get rawData() {
         return this._data;
     }
-    
+
     /**
      * Returns the Chat this message was sent in
      * @returns {Promise&amp;lt;Chat&gt;}
@@ -382,15 +432,27 @@ class Message extends Base {
      * @returns {Promise&amp;lt;Array&amp;lt;Contact&gt;&gt;}
      */
     async getMentions() {
-        return await Promise.all(this.mentionedIds.map(async m &#x3D;&gt; await this.client.getContactById(m)));
+        return await Promise.all(
+            this.mentionedIds.map(
+                async (m) &#x3D;&gt;
+                    await this.client.getContactById(
+                        typeof m &#x3D;&#x3D;&#x3D; &#x27;string&#x27; ? m : m._serialized,
+                    ),
+            ),
+        );
     }
-    
+
     /**
      * Returns groups mentioned in this message
      * @returns {Promise&amp;lt;Array&amp;lt;GroupChat&gt;&gt;}
      */
     async getGroupMentions() {
-        return await Promise.all(this.groupMentions.map(async (m) &#x3D;&gt; await this.client.getChatById(m.groupJid._serialized)));
+        return await Promise.all(
+            this.groupMentions.map(
+                async (m) &#x3D;&gt;
+                    await this.client.getChatById(m.groupJid._serialized),
+            ),
+        );
     }
 
     /**
@@ -401,8 +463,16 @@ class Message extends Base {
         if (!this.hasQuotedMsg) return undefined;
 
         const quotedMsg &#x3D; await this.client.pupPage.evaluate(async (msgId) &#x3D;&gt; {
-            const msg &#x3D; window.Store.Msg.get(msgId) || (await window.Store.Msg.getMessagesById([msgId]))?.messages?.[0];
-            const quotedMsg &#x3D; window.Store.QuotedMsg.getQuotedMsgObj(msg);
+            const msg &#x3D;
+                window.require(&#x27;WAWebCollections&#x27;).Msg.get(msgId) ||
+                (
+                    await window
+                        .require(&#x27;WAWebCollections&#x27;)
+                        .Msg.getMessagesById([msgId])
+                )?.messages?.[0];
+            const quotedMsg &#x3D; window
+                .require(&#x27;WAWebQuotedMsgModelUtils&#x27;)
+                .getQuotedMsgObj(msg);
             return window.WWebJS.getMessageModel(quotedMsg);
         }, this.id._serialized);
 
@@ -426,7 +496,7 @@ class Message extends Base {
 
         options &#x3D; {
             ...options,
-            quotedMessageId: this.id._serialized
+            quotedMessageId: this.id._serialized,
         };
 
         return this.client.sendMessage(chatId, content, options);
@@ -437,14 +507,8 @@ class Message extends Base {
      * @param {string} reaction - Emoji to react with. Send an empty string to remove the reaction.
      * @return {Promise}
      */
-    async react(reaction){
-        await this.client.pupPage.evaluate(async (messageId, reaction) &#x3D;&gt; {
-            if (!messageId) return null;
-            const msg &#x3D;
-                window.Store.Msg.get(messageId) || (await window.Store.Msg.getMessagesById([messageId]))?.messages?.[0];
-            if(!msg) return null;
-            await window.Store.sendReactionToMsg(msg, reaction);
-        }, this.id._serialized, reaction);
+    async react(reaction) {
+        return this.client.sendReaction(this.id._serialized, reaction);
     }
 
     /**
@@ -464,9 +528,13 @@ class Message extends Base {
     async forward(chat) {
         const chatId &#x3D; typeof chat &#x3D;&#x3D;&#x3D; &#x27;string&#x27; ? chat : chat.id._serialized;
 
-        await this.client.pupPage.evaluate(async (msgId, chatId) &#x3D;&gt; {
-            return window.WWebJS.forwardMessage(chatId, msgId);
-        }, this.id._serialized, chatId);
+        await this.client.pupPage.evaluate(
+            async (msgId, chatId) &#x3D;&gt; {
+                return window.WWebJS.forwardMessage(chatId, msgId);
+            },
+            this.id._serialized,
+            chatId,
+        );
     }
 
     /**
@@ -479,57 +547,84 @@ class Message extends Base {
         }
 
         const result &#x3D; await this.client.pupPage.evaluate(async (msgId) &#x3D;&gt; {
-            const msg &#x3D; window.Store.Msg.get(msgId) || (await window.Store.Msg.getMessagesById([msgId]))?.messages?.[0];
+            const msg &#x3D;
+                window.require(&#x27;WAWebCollections&#x27;).Msg.get(msgId) ||
+                (
+                    await window
+                        .require(&#x27;WAWebCollections&#x27;)
+                        .Msg.getMessagesById([msgId])
+                )?.messages?.[0];
 
             // REUPLOADING mediaStage means the media is expired and the download button is spinning, cannot be downloaded now
-            if (!msg || !msg.mediaData || msg.mediaData.mediaStage &#x3D;&#x3D;&#x3D; &#x27;REUPLOADING&#x27;) {
+            if (
+                !msg ||
+                !msg.mediaData ||
+                msg.mediaData.mediaStage &#x3D;&#x3D;&#x3D; &#x27;REUPLOADING&#x27;
+            ) {
                 return null;
             }
             if (msg.mediaData.mediaStage !&#x3D; &#x27;RESOLVED&#x27;) {
                 // try to resolve media
                 await msg.downloadMedia({
                     downloadEvenIfExpensive: true,
-                    rmrReason: 1
+                    rmrReason: 1,
                 });
             }
 
-            if (msg.mediaData.mediaStage.includes(&#x27;ERROR&#x27;) || msg.mediaData.mediaStage &#x3D;&#x3D;&#x3D; &#x27;FETCHING&#x27;) {
+            if (
+                msg.mediaData.mediaStage.includes(&#x27;ERROR&#x27;) ||
+                msg.mediaData.mediaStage &#x3D;&#x3D;&#x3D; &#x27;FETCHING&#x27;
+            ) {
                 // media could not be downloaded
                 return undefined;
             }
 
             try {
                 const mockQpl &#x3D; {
-                    addAnnotations: function() { return this; },
-                    addPoint: function() { return this; }
+                    addAnnotations: function () {
+                        return this;
+                    },
+                    addPoint: function () {
+                        return this;
+                    },
                 };
-                const decryptedMedia &#x3D; await window.Store.DownloadManager.downloadAndMaybeDecrypt({
-                    directPath: msg.directPath,
-                    encFilehash: msg.encFilehash,
-                    filehash: msg.filehash,
-                    mediaKey: msg.mediaKey,
-                    mediaKeyTimestamp: msg.mediaKeyTimestamp,
-                    type: msg.type,
-                    signal: (new AbortController).signal,
-                    downloadQpl: mockQpl
-                });
+                const decryptedMedia &#x3D; await window
+                    .require(&#x27;WAWebDownloadManager&#x27;)
+                    .downloadManager.downloadAndMaybeDecrypt({
+                        directPath: msg.directPath,
+                        encFilehash: msg.encFilehash,
+                        filehash: msg.filehash,
+                        mediaKey: msg.mediaKey,
+                        mediaKeyTimestamp: msg.mediaKeyTimestamp,
+                        type: msg.type,
+                        signal: new AbortController().signal,
+                        downloadQpl: mockQpl,
+                    });
 
-                const data &#x3D; await window.WWebJS.arrayBufferToBase64Async(decryptedMedia);
+                const data &#x3D;
+                    await window.WWebJS.arrayBufferToBase64Async(
+                        decryptedMedia,
+                    );
 
                 return {
                     data,
                     mimetype: msg.mimetype,
                     filename: msg.filename,
-                    filesize: msg.size
+                    filesize: msg.size,
                 };
             } catch (e) {
-                if(e.status &amp;amp;&amp;amp; e.status &#x3D;&#x3D;&#x3D; 404) return undefined;
+                if (e.status &amp;amp;&amp;amp; e.status &#x3D;&#x3D;&#x3D; 404) return undefined;
                 throw e;
             }
         }, this.id._serialized);
 
         if (!result) return undefined;
-        return new MessageMedia(result.mimetype, result.data, result.filename, result.filesize);
+        return new MessageMedia(
+            result.mimetype,
+            result.data,
+            result.filename,
+            result.filesize,
+        );
     }
 
     /**
@@ -538,23 +633,66 @@ class Message extends Base {
      * @param {?boolean} [clearMedia &#x3D; true] If true, any associated media will also be deleted from a device.
      */
     async delete(everyone, clearMedia &#x3D; true) {
-        await this.client.pupPage.evaluate(async (msgId, everyone, clearMedia) &#x3D;&gt; {
-            const msg &#x3D; window.Store.Msg.get(msgId) || (await window.Store.Msg.getMessagesById([msgId]))?.messages?.[0];
-            const chat &#x3D; window.Store.Chat.get(msg.id.remote) || (await window.Store.Chat.find(msg.id.remote));
-            
-            const canRevoke &#x3D;
-                window.Store.MsgActionChecks.canSenderRevokeMsg(msg) || window.Store.MsgActionChecks.canAdminRevokeMsg(msg);
+        await this.client.pupPage.evaluate(
+            async (msgId, everyone, clearMedia) &#x3D;&gt; {
+                const msg &#x3D;
+                    window.require(&#x27;WAWebCollections&#x27;).Msg.get(msgId) ||
+                    (
+                        await window
+                            .require(&#x27;WAWebCollections&#x27;)
+                            .Msg.getMessagesById([msgId])
+                    )?.messages?.[0];
+                const chat &#x3D;
+                    window
+                        .require(&#x27;WAWebCollections&#x27;)
+                        .Chat.get(msg.id.remote) ||
+                    (await window
+                        .require(&#x27;WAWebCollections&#x27;)
+                        .Chat.find(msg.id.remote));
 
-            if (everyone &amp;amp;&amp;amp; canRevoke) {
-                return window.compareWwebVersions(window.Debug.VERSION, &#x27;&gt;&#x3D;&#x27;, &#x27;2.3000.0&#x27;)
-                    ? window.Store.Cmd.sendRevokeMsgs(chat, { list: [msg], type: &#x27;message&#x27; }, { clearMedia: clearMedia })
-                    : window.Store.Cmd.sendRevokeMsgs(chat, [msg], { clearMedia: true, type: msg.id.fromMe ? &#x27;Sender&#x27; : &#x27;Admin&#x27; });
-            }
+                const canRevoke &#x3D;
+                    window
+                        .require(&#x27;WAWebMsgActionCapability&#x27;)
+                        .canSenderRevokeMsg(msg) ||
+                    window
+                        .require(&#x27;WAWebMsgActionCapability&#x27;)
+                        .canAdminRevokeMsg(msg);
 
-            return window.compareWwebVersions(window.Debug.VERSION, &#x27;&gt;&#x3D;&#x27;, &#x27;2.3000.0&#x27;)
-                ? window.Store.Cmd.sendDeleteMsgs(chat, { list: [msg], type: &#x27;message&#x27; }, clearMedia)
-                : window.Store.Cmd.sendDeleteMsgs(chat, [msg], clearMedia);
-        }, this.id._serialized, everyone, clearMedia);
+                const { Cmd } &#x3D; window.require(&#x27;WAWebCmd&#x27;);
+
+                if (everyone &amp;amp;&amp;amp; canRevoke) {
+                    return window.WWebJS.compareWwebVersions(
+                        window.Debug.VERSION,
+                        &#x27;&gt;&#x3D;&#x27;,
+                        &#x27;2.3000.0&#x27;,
+                    )
+                        ? Cmd.sendRevokeMsgs(
+                              chat,
+                              { list: [msg], type: &#x27;message&#x27; },
+                              { clearMedia: clearMedia },
+                          )
+                        : Cmd.sendRevokeMsgs(chat, [msg], {
+                              clearMedia: true,
+                              type: msg.id.fromMe ? &#x27;Sender&#x27; : &#x27;Admin&#x27;,
+                          });
+                }
+
+                return window.WWebJS.compareWwebVersions(
+                    window.Debug.VERSION,
+                    &#x27;&gt;&#x3D;&#x27;,
+                    &#x27;2.3000.0&#x27;,
+                )
+                    ? Cmd.sendDeleteMsgs(
+                          chat,
+                          { list: [msg], type: &#x27;message&#x27; },
+                          clearMedia,
+                      )
+                    : Cmd.sendDeleteMsgs(chat, [msg], clearMedia);
+            },
+            this.id._serialized,
+            everyone,
+            clearMedia,
+        );
     }
 
     /**
@@ -562,10 +700,20 @@ class Message extends Base {
      */
     async star() {
         await this.client.pupPage.evaluate(async (msgId) &#x3D;&gt; {
-            const msg &#x3D; window.Store.Msg.get(msgId) || (await window.Store.Msg.getMessagesById([msgId]))?.messages?.[0];
-            if (window.Store.MsgActionChecks.canStarMsg(msg)) {
-                let chat &#x3D; await window.Store.Chat.find(msg.id.remote);
-                return window.Store.Cmd.sendStarMsgs(chat, [msg], false);
+            const msg &#x3D;
+                window.require(&#x27;WAWebCollections&#x27;).Msg.get(msgId) ||
+                (
+                    await window
+                        .require(&#x27;WAWebCollections&#x27;)
+                        .Msg.getMessagesById([msgId])
+                )?.messages?.[0];
+            if (window.require(&#x27;WAWebMsgActionCapability&#x27;).canStarMsg(msg)) {
+                let chat &#x3D; await window
+                    .require(&#x27;WAWebCollections&#x27;)
+                    .Chat.find(msg.id.remote);
+                return window
+                    .require(&#x27;WAWebCmd&#x27;)
+                    .Cmd.sendStarMsgs(chat, [msg], false);
             }
         }, this.id._serialized);
     }
@@ -575,10 +723,20 @@ class Message extends Base {
      */
     async unstar() {
         await this.client.pupPage.evaluate(async (msgId) &#x3D;&gt; {
-            const msg &#x3D; window.Store.Msg.get(msgId) || (await window.Store.Msg.getMessagesById([msgId]))?.messages?.[0];
-            if (window.Store.MsgActionChecks.canStarMsg(msg)) {
-                let chat &#x3D; await window.Store.Chat.find(msg.id.remote);
-                return window.Store.Cmd.sendUnstarMsgs(chat, [msg], false);
+            const msg &#x3D;
+                window.require(&#x27;WAWebCollections&#x27;).Msg.get(msgId) ||
+                (
+                    await window
+                        .require(&#x27;WAWebCollections&#x27;)
+                        .Msg.getMessagesById([msgId])
+                )?.messages?.[0];
+            if (window.require(&#x27;WAWebMsgActionCapability&#x27;).canStarMsg(msg)) {
+                let chat &#x3D; await window
+                    .require(&#x27;WAWebCollections&#x27;)
+                    .Chat.find(msg.id.remote);
+                return window
+                    .require(&#x27;WAWebCmd&#x27;)
+                    .Cmd.sendUnstarMsgs(chat, [msg], false);
             }
         }, this.id._serialized);
     }
@@ -589,9 +747,17 @@ class Message extends Base {
      * @returns {Promise&amp;lt;boolean&gt;} Returns true if the operation completed successfully, false otherwise
      */
     async pin(duration) {
-        return await this.client.pupPage.evaluate(async (msgId, duration) &#x3D;&gt; {
-            return await window.WWebJS.pinUnpinMsgAction(msgId, 1, duration);
-        }, this.id._serialized, duration);
+        return await this.client.pupPage.evaluate(
+            async (msgId, duration) &#x3D;&gt; {
+                return await window.WWebJS.pinUnpinMsgAction(
+                    msgId,
+                    1,
+                    duration,
+                );
+            },
+            this.id._serialized,
+            duration,
+        );
     }
 
     /**
@@ -622,13 +788,28 @@ class Message extends Base {
      */
     async getInfo() {
         const info &#x3D; await this.client.pupPage.evaluate(async (msgId) &#x3D;&gt; {
-            const msg &#x3D; window.Store.Msg.get(msgId) || (await window.Store.Msg.getMessagesById([msgId]))?.messages?.[0];
+            const msg &#x3D;
+                window.require(&#x27;WAWebCollections&#x27;).Msg.get(msgId) ||
+                (
+                    await window
+                        .require(&#x27;WAWebCollections&#x27;)
+                        .Msg.getMessagesById([msgId])
+                )?.messages?.[0];
             if (!msg || !msg.id.fromMe) return null;
 
             return new Promise((resolve) &#x3D;&gt; {
-                setTimeout(async () &#x3D;&gt; {
-                    resolve(await window.Store.getMsgInfo(msg.id));
-                }, (Date.now() - msg.t * 1000 &amp;lt; 1250) &amp;amp;&amp;amp; Math.floor(Math.random() * (1200 - 1100 + 1)) + 1100 || 0);
+                setTimeout(
+                    async () &#x3D;&gt; {
+                        resolve(
+                            await window
+                                .require(&#x27;WAWebApiMessageInfoStore&#x27;)
+                                .queryMsgInfo(msg.id),
+                        );
+                    },
+                    (Date.now() - msg.t * 1000 &amp;lt; 1250 &amp;amp;&amp;amp;
+                        Math.floor(Math.random() * (1200 - 1100 + 1)) + 1100) ||
+                        0,
+                );
             });
         }, this.id._serialized);
 
@@ -641,9 +822,14 @@ class Message extends Base {
      */
     async getOrder() {
         if (this.type &#x3D;&#x3D;&#x3D; MessageTypes.ORDER) {
-            const result &#x3D; await this.client.pupPage.evaluate((orderId, token, chatId) &#x3D;&gt; {
-                return window.WWebJS.getOrderDetail(orderId, token, chatId);
-            }, this.orderId, this.token, this._getChatId());
+            const result &#x3D; await this.client.pupPage.evaluate(
+                (orderId, token, chatId) &#x3D;&gt; {
+                    return window.WWebJS.getOrderDetail(orderId, token, chatId);
+                },
+                this.orderId,
+                this.token,
+                this._getChatId(),
+            );
             if (!result) return undefined;
             return new Order(this.client, result);
         }
@@ -656,15 +842,20 @@ class Message extends Base {
     async getPayment() {
         if (this.type &#x3D;&#x3D;&#x3D; MessageTypes.PAYMENT) {
             const msg &#x3D; await this.client.pupPage.evaluate(async (msgId) &#x3D;&gt; {
-                const msg &#x3D; window.Store.Msg.get(msgId) || (await window.Store.Msg.getMessagesById([msgId]))?.messages?.[0];
-                if(!msg) return null;
+                const msg &#x3D;
+                    window.require(&#x27;WAWebCollections&#x27;).Msg.get(msgId) ||
+                    (
+                        await window
+                            .require(&#x27;WAWebCollections&#x27;)
+                            .Msg.getMessagesById([msgId])
+                    )?.messages?.[0];
+                if (!msg) return null;
                 return msg.serialize();
             }, this.id._serialized);
             return new Payment(this.client, msg);
         }
         return undefined;
     }
-
 
     /**
      * Reaction List
@@ -685,7 +876,9 @@ class Message extends Base {
         }
 
         const reactions &#x3D; await this.client.pupPage.evaluate(async (msgId) &#x3D;&gt; {
-            const msgReactions &#x3D; await window.Store.Reactions.find(msgId);
+            const msgReactions &#x3D; await window
+                .require(&#x27;WAWebCollections&#x27;)
+                .Reactions.find(msgId);
             if (!msgReactions || !msgReactions.reactions.length) return null;
             return msgReactions.reactions.serialize();
         }, this.id._serialized);
@@ -694,8 +887,8 @@ class Message extends Base {
             return undefined;
         }
 
-        return reactions.map(reaction &#x3D;&gt; {
-            reaction.senders &#x3D; reaction.senders.map(sender &#x3D;&gt; {
+        return reactions.map((reaction) &#x3D;&gt; {
+            reaction.senders &#x3D; reaction.senders.map((sender) &#x3D;&gt; {
                 sender.timestamp &#x3D; Math.round(sender.timestamp / 1000);
                 return new Reaction(this.client, sender);
             });
@@ -711,36 +904,68 @@ class Message extends Base {
      */
     async edit(content, options &#x3D; {}) {
         if (options.mentions) {
-            !Array.isArray(options.mentions) &amp;amp;&amp;amp; (options.mentions &#x3D; [options.mentions]);
-            if (options.mentions.some((possiblyContact) &#x3D;&gt; possiblyContact instanceof Contact)) {
-                console.warn(&#x27;Mentions with an array of Contact are now deprecated. See more at https://github.com/pedroslopez/whatsapp-web.js/pull/2166.&#x27;);
-                options.mentions &#x3D; options.mentions.map((a) &#x3D;&gt; a.id._serialized);
+            !Array.isArray(options.mentions) &amp;amp;&amp;amp;
+                (options.mentions &#x3D; [options.mentions]);
+            if (
+                options.mentions.some(
+                    (possiblyContact) &#x3D;&gt; possiblyContact instanceof Contact,
+                )
+            ) {
+                console.warn(
+                    &#x27;Mentions with an array of Contact are now deprecated. See more at https://github.com/pedroslopez/whatsapp-web.js/pull/2166.&#x27;,
+                );
+                options.mentions &#x3D; options.mentions.map(
+                    (a) &#x3D;&gt; a.id._serialized,
+                );
             }
         }
 
-        options.groupMentions &amp;amp;&amp;amp; !Array.isArray(options.groupMentions) &amp;amp;&amp;amp; (options.groupMentions &#x3D; [options.groupMentions]);
+        options.groupMentions &amp;amp;&amp;amp;
+            !Array.isArray(options.groupMentions) &amp;amp;&amp;amp;
+            (options.groupMentions &#x3D; [options.groupMentions]);
 
         let internalOptions &#x3D; {
             linkPreview: options.linkPreview &#x3D;&#x3D;&#x3D; false ? undefined : true,
             mentionedJidList: options.mentions || [],
             groupMentions: options.groupMentions,
-            extraOptions: options.extra
+            extraOptions: options.extra,
         };
-        
+
         if (!this.fromMe) {
             return null;
         }
-        const messageEdit &#x3D; await this.client.pupPage.evaluate(async (msgId, message, options) &#x3D;&gt; {
-            const msg &#x3D; window.Store.Msg.get(msgId) || (await window.Store.Msg.getMessagesById([msgId]))?.messages?.[0];
-            if (!msg) return null;
+        const messageEdit &#x3D; await this.client.pupPage.evaluate(
+            async (msgId, message, options) &#x3D;&gt; {
+                const msg &#x3D;
+                    window.require(&#x27;WAWebCollections&#x27;).Msg.get(msgId) ||
+                    (
+                        await window
+                            .require(&#x27;WAWebCollections&#x27;)
+                            .Msg.getMessagesById([msgId])
+                    )?.messages?.[0];
+                if (!msg) return null;
 
-            let canEdit &#x3D; window.Store.MsgActionChecks.canEditText(msg) || window.Store.MsgActionChecks.canEditCaption(msg);
-            if (canEdit) {
-                const msgEdit &#x3D; await window.WWebJS.editMessage(msg, message, options);
-                return msgEdit.serialize();
-            }
-            return null;
-        }, this.id._serialized, content, internalOptions);
+                let canEdit &#x3D;
+                    window
+                        .require(&#x27;WAWebMsgActionCapability&#x27;)
+                        .canEditText(msg) ||
+                    window
+                        .require(&#x27;WAWebMsgActionCapability&#x27;)
+                        .canEditCaption(msg);
+                if (canEdit) {
+                    const msgEdit &#x3D; await window.WWebJS.editMessage(
+                        msg,
+                        message,
+                        options,
+                    );
+                    return msgEdit.serialize();
+                }
+                return null;
+            },
+            this.id._serialized,
+            content,
+            internalOptions,
+        );
         if (messageEdit) {
             return new Message(this.client, messageEdit);
         }
@@ -758,25 +983,40 @@ class Message extends Base {
             return null;
         }
 
-        const edittedEventMsg &#x3D; await this.client.pupPage.evaluate(async (msgId, editedEventObject) &#x3D;&gt; {
-            const msg &#x3D; window.Store.Msg.get(msgId) || (await window.Store.Msg.getMessagesById([msgId]))?.messages?.[0];
-            if (!msg) return null;
+        const edittedEventMsg &#x3D; await this.client.pupPage.evaluate(
+            async (msgId, editedEventObject) &#x3D;&gt; {
+                const msg &#x3D;
+                    window.require(&#x27;WAWebCollections&#x27;).Msg.get(msgId) ||
+                    (
+                        await window
+                            .require(&#x27;WAWebCollections&#x27;)
+                            .Msg.getMessagesById([msgId])
+                    )?.messages?.[0];
+                if (!msg) return null;
 
-            const { name, startTimeTs, eventSendOptions } &#x3D; editedEventObject;
-            const eventOptions &#x3D; {
-                name: name,
-                description: eventSendOptions.description,
-                startTime: startTimeTs,
-                endTime: eventSendOptions.endTimeTs,
-                location: eventSendOptions.location,
-                callType: eventSendOptions.callType,
-                isEventCanceled: eventSendOptions.isEventCanceled,
-            };
+                const { name, startTimeTs, eventSendOptions } &#x3D;
+                    editedEventObject;
+                const eventOptions &#x3D; {
+                    name: name,
+                    description: eventSendOptions.description,
+                    startTime: startTimeTs,
+                    endTime: eventSendOptions.endTimeTs,
+                    location: eventSendOptions.location,
+                    callType: eventSendOptions.callType,
+                    isEventCanceled: eventSendOptions.isEventCanceled,
+                };
 
-            await window.Store.ScheduledEventMsgUtils.sendEventEditMessage(eventOptions, msg);
-            const editedMsg &#x3D; window.Store.Msg.get(msg.id._serialized);
-            return editedMsg?.serialize();
-        }, this.id._serialized, editedEventObject);
+                await window
+                    .require(&#x27;WAWebSendEventEditMsgAction&#x27;)
+                    .sendEventEditMessage(eventOptions, msg);
+                const editedMsg &#x3D; window
+                    .require(&#x27;WAWebCollections&#x27;)
+                    .Msg.get(msg.id._serialized);
+                return editedMsg?.serialize();
+            },
+            this.id._serialized,
+            editedEventObject,
+        );
 
         return edittedEventMsg &amp;amp;&amp;amp; new Message(this.client, edittedEventMsg);
     }
@@ -794,24 +1034,36 @@ class Message extends Base {
      * @returns {Promise}
      */
     async vote(selectedOptions) {
-        if (this.type !&#x3D; MessageTypes.POLL_CREATION) throw &#x27;Invalid usage! Can only be used with a pollCreation message&#x27;;
+        if (this.type !&#x3D; MessageTypes.POLL_CREATION)
+            throw &#x27;Invalid usage! Can only be used with a pollCreation message&#x27;;
 
-        await this.client.pupPage.evaluate(async (messageId, votes) &#x3D;&gt; {
-            if (!messageId) return null;
-            if (!Array.isArray(votes)) votes &#x3D; [votes];
-            let localIdSet &#x3D; new Set();
-            const msg &#x3D;
-                window.Store.Msg.get(messageId) || (await window.Store.Msg.getMessagesById([messageId]))?.messages?.[0];
-            if (!msg) return null;
+        await this.client.pupPage.evaluate(
+            async (messageId, votes) &#x3D;&gt; {
+                if (!messageId) return null;
+                if (!Array.isArray(votes)) votes &#x3D; [votes];
+                let localIdSet &#x3D; new Set();
+                const msg &#x3D;
+                    window.require(&#x27;WAWebCollections&#x27;).Msg.get(messageId) ||
+                    (
+                        await window
+                            .require(&#x27;WAWebCollections&#x27;)
+                            .Msg.getMessagesById([messageId])
+                    )?.messages?.[0];
+                if (!msg) return null;
 
-            msg.pollOptions.forEach(a &#x3D;&gt; {
-                for (const option of votes) {
-                    if (a.name &#x3D;&#x3D;&#x3D; option) localIdSet.add(a.localId);
-                }
-            });
+                msg.pollOptions.forEach((a) &#x3D;&gt; {
+                    for (const option of votes) {
+                        if (a.name &#x3D;&#x3D;&#x3D; option) localIdSet.add(a.localId);
+                    }
+                });
 
-            await window.Store.PollsSendVote.sendVote(msg, localIdSet);
-        }, this.id._serialized, selectedOptions);
+                await window
+                    .require(&#x27;WAWebPollsSendVoteMsgAction&#x27;)
+                    .sendVote(msg, localIdSet);
+            },
+            this.id._serialized,
+            selectedOptions,
+        );
     }
 }
 
@@ -826,7 +1078,7 @@ module.exports &#x3D; Message;
   <footer id="jsdoc-footer" class="jsdoc-footer">
     <div id="jsdoc-footer-container">
       <p>
-        Generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc</a> 3.6.11 on January 30, 2026.
+        Generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc</a> 3.6.11 on April 6, 2026.
       </p>
     </div>
   </footer>

@@ -23,7 +23,7 @@
                                 <div id="jsdoc-content-container">
                                         <div id="jsdoc-main" role="main">
                     <header class="page-header">
-<div class="symbol-detail-labels"><span class="label label-kind">class</span></div><h1><small></small><span class="symbol-name">Client</span></h1>        <p class="source-link">Source: <a href="Client.js.html#source-line-66">Client.<wbr>js:66</a></p>
+<div class="symbol-detail-labels"><span class="label label-kind">class</span></div><h1><small></small><span class="symbol-name">Client</span></h1>        <p class="source-link">Source: <a href="Client.js.html#source-line-82">Client.<wbr>js:82</a></p>
             <div class="symbol-classdesc">
                 <p>Starting point for interacting with the WhatsApp Web API</p>
             </div>
@@ -105,6 +105,9 @@
                 <dd>
                 </dd>
                 <dt><a href="Client.html#attachEventListeners">attachEventListeners()</a></dt>
+                <dd>
+                </dd>
+                <dt><a href="Client.html#cancelPairingCode">cancelPairingCode()</a></dt>
                 <dd>
                 </dd>
                 <dt><a href="Client.html#createCallLink">createCallLink(startTime, callType)</a></dt>
@@ -247,14 +250,14 @@
                 <dt><a href="Client.html#requestPairingCode">requestPairingCode(phoneNumber[, showNotification][, intervalMs])</a></dt>
                 <dd>
                 </dd>
+                <dt><a href="Client.html#resetState">resetState()</a></dt>
+                <dd>
+                </dd>
         </dl>
 </div>
 
                     <div class="summary-column">
         <dl class="dl-summary-callout">
-                <dt><a href="Client.html#resetState">resetState()</a></dt>
-                <dd>
-                </dd>
                 <dt><a href="Client.html#revokeChannelAdminInvite">revokeChannelAdminInvite(channelId, userId)</a></dt>
                 <dd>
                 </dd>
@@ -280,6 +283,9 @@
                 <dd>
                 </dd>
                 <dt><a href="Client.html#sendPresenceUnavailable">sendPresenceUnavailable()</a></dt>
+                <dd>
+                </dd>
+                <dt><a href="Client.html#sendReaction">sendReaction(messageId, reaction)</a></dt>
                 <dd>
                 </dd>
                 <dt><a href="Client.html#sendResponseToScheduledEvent">sendResponseToScheduledEvent(response, eventMessageId)</a></dt>
@@ -374,14 +380,14 @@
                 <dt><a href="Client.html#event:disconnected">disconnected</a></dt>
                 <dd>
                 </dd>
+                <dt><a href="Client.html#event:group_admin_changed">group_admin_changed</a></dt>
+                <dd>
+                </dd>
         </dl>
 </div>
 
                     <div class="summary-column">
         <dl class="dl-summary-callout">
-                <dt><a href="Client.html#event:group_admin_changed">group_admin_changed</a></dt>
-                <dd>
-                </dd>
                 <dt><a href="Client.html#event:group_join">group_join</a></dt>
                 <dd>
                 </dd>
@@ -406,14 +412,17 @@
                 <dt><a href="Client.html#event:message_ack">message_ack</a></dt>
                 <dd>
                 </dd>
+                <dt><a href="Client.html#event:message_ciphertext">message_ciphertext</a></dt>
+                <dd>
+                </dd>
+                <dt><a href="Client.html#event:message_ciphertext_failed">message_ciphertext_failed</a></dt>
+                <dd>
+                </dd>
         </dl>
 </div>
 
                     <div class="summary-column">
         <dl class="dl-summary-callout">
-                <dt><a href="Client.html#event:message_ciphertext">message_ciphertext</a></dt>
-                <dd>
-                </dd>
                 <dt><a href="Client.html#event:message_create">message_create</a></dt>
                 <dd>
                 </dd>
@@ -497,7 +506,7 @@
                 <p>&nbsp;</p>
         </td>
         <td>
-                <p>Determines how to save and restore sessions. Will use LegacySessionAuth if options.session is set. Otherwise, NoAuth will be used.</p>
+                <p>Determines how to save and restore sessions. If not set, NoAuth will be used.</p>
         </td>
 </tr>
 
@@ -588,36 +597,6 @@
         </td>
         <td>
                 <p>How many times should the qrcode be refreshed before giving up</p>
-        </td>
-</tr>
-
-                <tr>
-        <td>
-            <p>restartOnAuthFail</p>
-        </td>
-        <td>
-                <p>&nbsp;</p>
-        </td>
-        <td>
-                <p>&nbsp;</p>
-        </td>
-        <td>
-                <p>@deprecated This option should be set directly on the LegacySessionAuth.</p>
-        </td>
-</tr>
-
-                <tr>
-        <td>
-            <p>session</p>
-        </td>
-        <td>
-                <p>&nbsp;</p>
-        </td>
-        <td>
-                <p>&nbsp;</p>
-        </td>
-        <td>
-                <p>@deprecated Only here for backwards-compatibility. You should move to using LocalAuth, or set the authStrategy to LegacySessionAuth explicitly.</p>
         </td>
 </tr>
 
@@ -1519,6 +1498,38 @@ Private function</p>
 
     </section>
 
+
+        <dl class="dl-compact">
+            
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        </dl>
+
+                <div class="symbol-detail-labels"><span class="label label-async">async</span></div><h3 id="cancelPairingCode"><span class="symbol-name">cancelPairingCode</span><span class="signature"><span class="signature-params">()</span></span></h3>            <p>Cancels an active pairing code session and returns to QR code mode</p>
+
+        
+        
+        
 
         <dl class="dl-compact">
             
@@ -5001,6 +5012,86 @@ the lastMessage property of a found channel will be 'null'</li>
 
         </dl>
 
+                <div class="symbol-detail-labels"><span class="label label-async">async</span></div><h3 id="sendReaction"><span class="symbol-name">sendReaction</span><span class="signature"><span class="signature-params">(messageId, reaction)</span>&nbsp;&rarr; <span class="signature-returns"> Promise</span></span></h3>            <p>Send an emoji reaction to a specific message</p>
+
+        
+            <section>
+        <h4>Parameters</h4>
+            <table class="jsdoc-details-table">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Type</th>
+                <th>Optional</th>
+                <th>Description</th>
+            </tr>
+        </thead>
+        <tbody>
+                <tr>
+        <td>
+            <p>messageId</p>
+        </td>
+        <td>
+                <p>string</p>
+        </td>
+        <td>
+                <p>&nbsp;</p>
+        </td>
+        <td>
+                <p>Id of the message to add the reaction.</p>
+        </td>
+</tr>
+
+                <tr>
+        <td>
+            <p>reaction</p>
+        </td>
+        <td>
+                <p>string</p>
+        </td>
+        <td>
+                <p>&nbsp;</p>
+        </td>
+        <td>
+                <p>Emoji to react with. Send an empty string to remove the reaction.</p>
+        </td>
+</tr>
+
+        </tbody>
+</table>
+
+    </section>
+
+        
+
+        <dl class="dl-compact">
+            
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    <dt>Returns</dt>
+        <dd><p><code>Promise</code> </p></dd>
+
+
+
+        </dl>
+
                 <div class="symbol-detail-labels"><span class="label label-async">async</span></div><h3 id="sendResponseToScheduledEvent"><span class="symbol-name">sendResponseToScheduledEvent</span><span class="signature"><span class="signature-params">(response, eventMessageId)</span>&nbsp;&rarr; <span class="signature-returns"> Promise containing boolean</span></span></h3>            <p>Sends a response to the scheduled event message, indicating whether a user is going to attend the event or not</p>
 
         
@@ -7526,7 +7617,69 @@ that has the membership approval mode turned on</p>
 
         </dl>
 
-                <h3 id="event:message_ciphertext"><span class="symbol-name">message_ciphertext</span></h3>            <p>Emitted when messages are edited</p>
+                <h3 id="event:message_ciphertext"><span class="symbol-name">message_ciphertext</span></h3>            <p>Emitted when a message is received as ciphertext (not yet decrypted)</p>
+
+        
+            <section>
+        <h4>Parameter</h4>
+            <table class="jsdoc-details-table">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Type</th>
+                <th>Optional</th>
+                <th>Description</th>
+            </tr>
+        </thead>
+        <tbody>
+                <tr>
+        <td>
+            <p>message</p>
+        </td>
+        <td>
+                <p><a href="Message.html">Message</a></p>
+        </td>
+        <td>
+                <p>&nbsp;</p>
+        </td>
+        <td>
+        </td>
+</tr>
+
+        </tbody>
+</table>
+
+    </section>
+
+        
+
+        <dl class="dl-compact">
+            
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        </dl>
+
+                <h3 id="event:message_ciphertext_failed"><span class="symbol-name">message_ciphertext_failed</span></h3>            <p>Emitted when a ciphertext message failed to decrypt after recovery attempt</p>
 
         
             <section>
@@ -8237,7 +8390,7 @@ shows a user's current selected option(s) on the poll</p>
                     <footer id="jsdoc-footer" class="jsdoc-footer">
                             <div id="jsdoc-footer-container">
                                     <p>
-                                      Generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc</a> 3.6.11 on January 30, 2026.
+                                      Generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc</a> 3.6.11 on April 6, 2026.
                                     </p>
                             </div>
                     </footer>

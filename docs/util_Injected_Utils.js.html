@@ -4,7 +4,7 @@
 <head>
   <meta name="generator" content="JSDoc 3.6.11">
   <meta charset="utf-8">
-  <title>whatsapp-web.js 1.28.1-alpha.0 &raquo; Source: util/Injected/Utils.js</title>
+  <title>whatsapp-web.js 1.34.6 &raquo; Source: util/Injected/Utils.js</title>
   <link rel="stylesheet" href="https://brick.a.ssl.fastly.net/Karla:400,400i,700,700i" type="text/css">
   <link rel="stylesheet" href="https://brick.a.ssl.fastly.net/Noto+Serif:400,400i,700,700i" type="text/css">
   <link rel="stylesheet" href="https://brick.a.ssl.fastly.net/Inconsolata:500" type="text/css">
@@ -15,7 +15,7 @@
   <nav id="jsdoc-navbar" role="navigation" class="jsdoc-navbar">
     <div id="jsdoc-navbar-container">
       <div id="jsdoc-navbar-content">
-        <a href="index.html" class="jsdoc-navbar-package-name">whatsapp-web.<wbr>js 1.<wbr>28.<wbr>1-alpha.<wbr>0</a>
+        <a href="index.html" class="jsdoc-navbar-package-name">whatsapp-web.<wbr>js 1.<wbr>34.<wbr>6</a>
       </div>
     </div>
   </nav>
@@ -34,78 +34,209 @@
 exports.LoadUtils &#x3D; () &#x3D;&gt; {
     window.WWebJS &#x3D; {};
 
-    window.WWebJS.forwardMessage &#x3D; async (chatId, msgId) &#x3D;&gt; {
-        const msg &#x3D; window.Store.Msg.get(msgId) || (await window.Store.Msg.getMessagesById([msgId]))?.messages?.[0];
-        let chat &#x3D; window.Store.Chat.get(chatId);
-
-        if (window.compareWwebVersions(window.Debug.VERSION, &#x27;&gt;&#x27;, &#x27;2.3000.0&#x27;)) {
-            return window.Store.ForwardUtils.forwardMessagesToChats([msg], [chat], true);
-        } else {
-            return chat.forwardMessages([msg]);
+    /**
+     * Helper function that compares between two WWeb versions. Its purpose is to help the developer to choose the correct code implementation depending on the comparison value and the WWeb version.
+     * @param {string} lOperand The left operand for the WWeb version string to compare with
+     * @param {string} operator The comparison operator
+     * @param {string} rOperand The right operand for the WWeb version string to compare with
+     * @returns {boolean} Boolean value that indicates the result of the comparison
+     */
+    window.WWebJS.compareWwebVersions &#x3D; (lOperand, operator, rOperand) &#x3D;&gt; {
+        if (![&#x27;&gt;&#x27;, &#x27;&gt;&#x3D;&#x27;, &#x27;&amp;lt;&#x27;, &#x27;&amp;lt;&#x3D;&#x27;, &#x27;&#x3D;&#x27;].includes(operator)) {
+            throw new (class _ extends Error {
+                constructor(m) {
+                    super(m);
+                    this.name &#x3D; &#x27;CompareWwebVersionsError&#x27;;
+                }
+            })(&#x27;Invalid comparison operator is provided&#x27;);
         }
+        if (typeof lOperand !&#x3D;&#x3D; &#x27;string&#x27; || typeof rOperand !&#x3D;&#x3D; &#x27;string&#x27;) {
+            throw new (class _ extends Error {
+                constructor(m) {
+                    super(m);
+                    this.name &#x3D; &#x27;CompareWwebVersionsError&#x27;;
+                }
+            })(&#x27;A non-string WWeb version type is provided&#x27;);
+        }
+
+        lOperand &#x3D; lOperand.replace(/-beta$/, &#x27;&#x27;);
+        rOperand &#x3D; rOperand.replace(/-beta$/, &#x27;&#x27;);
+
+        while (lOperand.length !&#x3D;&#x3D; rOperand.length) {
+            lOperand.length &gt; rOperand.length
+                ? (rOperand &#x3D; rOperand.concat(&#x27;0&#x27;))
+                : (lOperand &#x3D; lOperand.concat(&#x27;0&#x27;));
+        }
+
+        lOperand &#x3D; Number(lOperand.replace(/\./g, &#x27;&#x27;));
+        rOperand &#x3D; Number(rOperand.replace(/\./g, &#x27;&#x27;));
+
+        return operator &#x3D;&#x3D;&#x3D; &#x27;&gt;&#x27;
+            ? lOperand &gt; rOperand
+            : operator &#x3D;&#x3D;&#x3D; &#x27;&gt;&#x3D;&#x27;
+              ? lOperand &gt;&#x3D; rOperand
+              : operator &#x3D;&#x3D;&#x3D; &#x27;&amp;lt;&#x27;
+                ? lOperand &amp;lt; rOperand
+                : operator &#x3D;&#x3D;&#x3D; &#x27;&amp;lt;&#x3D;&#x27;
+                  ? lOperand &amp;lt;&#x3D; rOperand
+                  : operator &#x3D;&#x3D;&#x3D; &#x27;&#x3D;&#x27;
+                    ? lOperand &#x3D;&#x3D;&#x3D; rOperand
+                    : false;
+    };
+
+    /**
+     * Target options object description
+     * @typedef {Object} TargetOptions
+     * @property {string|number} module The target module
+     * @property {string} function The function name to get from a module
+     */
+    /**
+     * Function to modify functions
+     * @param {TargetOptions} target Options specifying the target function to search for modifying
+     * @param {Function} callback Modified function
+     */
+    window.WWebJS.injectToFunction &#x3D; (target, callback) &#x3D;&gt; {
+        try {
+            let module &#x3D; window.require(target.module);
+            if (!module) return;
+
+            const path &#x3D; target.function.split(&#x27;.&#x27;);
+            const funcName &#x3D; path.pop();
+
+            for (const key of path) {
+                if (!module[key]) return;
+                module &#x3D; module[key];
+            }
+
+            const originalFunction &#x3D; module[funcName];
+            if (typeof originalFunction !&#x3D;&#x3D; &#x27;function&#x27;) return;
+
+            module[funcName] &#x3D; ((...args) &#x3D;&gt; {
+                try {
+                    return callback(module, originalFunction, ...args);
+                } catch {
+                    return originalFunction.apply(module, args);
+                }
+            }).bind(module);
+        } catch {
+            return;
+        }
+    };
+
+    window.WWebJS.injectToFunction(
+        { module: &#x27;WAWebBackendJobsCommon&#x27;, function: &#x27;mediaTypeFromProtobuf&#x27; },
+        (module, func, ...args) &#x3D;&gt; {
+            const [proto] &#x3D; args;
+            return proto.locationMessage ? null : func(...args);
+        },
+    );
+
+    window.WWebJS.injectToFunction(
+        { module: &#x27;WAWebE2EProtoUtils&#x27;, function: &#x27;typeAttributeFromProtobuf&#x27; },
+        (module, func, ...args) &#x3D;&gt; {
+            const [proto] &#x3D; args;
+            return proto.locationMessage || proto.groupInviteMessage
+                ? &#x27;text&#x27;
+                : func(...args);
+        },
+    );
+
+    window.WWebJS.forwardMessage &#x3D; async (chatId, msgId) &#x3D;&gt; {
+        const msg &#x3D;
+            window.require(&#x27;WAWebCollections&#x27;).Msg.get(msgId) ||
+            (
+                await window
+                    .require(&#x27;WAWebCollections&#x27;)
+                    .Msg.getMessagesById([msgId])
+            )?.messages?.[0];
+        const chat &#x3D; await window.WWebJS.getChat(chatId, { getAsModel: false });
+        return await window.require(&#x27;WAWebChatForwardMessage&#x27;).forwardMessages({
+            chat: chat,
+            msgs: [msg],
+            multicast: true,
+            includeCaption: true,
+            appendedText: undefined,
+        });
     };
 
     window.WWebJS.sendSeen &#x3D; async (chatId) &#x3D;&gt; {
-        let chat &#x3D; window.Store.Chat.get(chatId);
-        if (chat !&#x3D;&#x3D; undefined) {
-            await window.Store.SendSeen.sendSeen(chat, false);
+        const chat &#x3D; await window.WWebJS.getChat(chatId, { getAsModel: false });
+        if (chat) {
+            window.require(&#x27;WAWebStreamModel&#x27;).Stream.markAvailable();
+            await window.require(&#x27;WAWebUpdateUnreadChatAction&#x27;).sendSeen({
+                chat: chat,
+                threadId: undefined,
+            });
+            window.require(&#x27;WAWebStreamModel&#x27;).Stream.markUnavailable();
             return true;
         }
         return false;
-
     };
 
     window.WWebJS.sendMessage &#x3D; async (chat, content, options &#x3D; {}) &#x3D;&gt; {
-        let attOptions &#x3D; {};
-        if (options.attachment) {
-            attOptions &#x3D; options.sendMediaAsSticker
-                ? await window.WWebJS.processStickerData(options.attachment)
-                : await window.WWebJS.processMediaData(options.attachment, {
-                    forceVoice: options.sendAudioAsVoice,
-                    forceDocument: options.sendMediaAsDocument,
-                    forceGif: options.sendVideoAsGif
-                });
-            
-            attOptions.caption &#x3D; options.caption;
-            content &#x3D; options.sendMediaAsSticker ? undefined : attOptions.preview;
-            attOptions.isViewOnce &#x3D; options.isViewOnce;
+        const { getIsNewsletter, getIsBroadcast } &#x3D;
+            window.require(&#x27;WAWebChatGetters&#x27;);
+        const isChannel &#x3D; getIsNewsletter(chat);
+        const isStatus &#x3D; getIsBroadcast(chat);
 
-            delete options.attachment;
+        const { findLink } &#x3D; window.require(&#x27;WALinkify&#x27;);
+
+        let mediaOptions &#x3D; {};
+        if (options.media) {
+            mediaOptions &#x3D;
+                options.sendMediaAsSticker &amp;amp;&amp;amp; !isChannel &amp;amp;&amp;amp; !isStatus
+                    ? await window.WWebJS.processStickerData(options.media)
+                    : await window.WWebJS.processMediaData(options.media, {
+                          forceSticker: options.sendMediaAsSticker,
+                          forceGif: options.sendVideoAsGif,
+                          forceVoice: options.sendAudioAsVoice,
+                          forceDocument: options.sendMediaAsDocument,
+                          forceMediaHd: options.sendMediaAsHd,
+                          sendToChannel: isChannel,
+                          sendToStatus: isStatus,
+                      });
+            mediaOptions.caption &#x3D; options.caption;
+            content &#x3D; options.sendMediaAsSticker
+                ? undefined
+                : mediaOptions.preview;
+            mediaOptions.isViewOnce &#x3D; options.isViewOnce;
+            delete options.media;
             delete options.sendMediaAsSticker;
         }
+
         let quotedMsgOptions &#x3D; {};
         if (options.quotedMessageId) {
-            let quotedMessage &#x3D; await window.Store.Msg.getMessagesById([options.quotedMessageId]);
-
-            if (quotedMessage[&#x27;messages&#x27;].length &#x3D;&#x3D; 1) {
-                quotedMessage &#x3D; quotedMessage[&#x27;messages&#x27;][0];
-
-                // TODO remove .canReply() once all clients are updated to &gt;&#x3D; v2.2241.6
-                const canReply &#x3D; window.Store.ReplyUtils ?
-                    window.Store.ReplyUtils.canReplyMsg(quotedMessage.unsafe()) :
-                    quotedMessage.canReply();
+            let quotedMessage &#x3D; window
+                .require(&#x27;WAWebCollections&#x27;)
+                .Msg.get(options.quotedMessageId);
+            !quotedMessage &amp;amp;&amp;amp;
+                (quotedMessage &#x3D; (
+                    await window
+                        .require(&#x27;WAWebCollections&#x27;)
+                        .Msg.getMessagesById([options.quotedMessageId])
+                )?.messages?.[0]);
+            if (quotedMessage) {
+                const ReplyUtils &#x3D; window.require(&#x27;WAWebMsgReply&#x27;);
+                const canReply &#x3D; ReplyUtils
+                    ? ReplyUtils.canReplyMsg(quotedMessage.unsafe())
+                    : quotedMessage.canReply();
 
                 if (canReply) {
                     quotedMsgOptions &#x3D; quotedMessage.msgContextInfo(chat);
                 }
-            }else{
-                if(!options.ignoreQuoteErrors) {
+            } else {
+                if (!options.ignoreQuoteErrors) {
                     throw new Error(&#x27;Could not get the quoted message.&#x27;);
                 }
             }
-            
+
             delete options.ignoreQuoteErrors;
             delete options.quotedMessageId;
         }
 
         if (options.mentionedJidList) {
-            options.mentionedJidList &#x3D; await Promise.all(
-                options.mentionedJidList.map(async (id) &#x3D;&gt; {
-                    const wid &#x3D; window.Store.WidFactory.createWid(id);
-                    if (await window.Store.QueryExist(wid)) {
-                        return wid;
-                    }
-                })
+            options.mentionedJidList &#x3D; options.mentionedJidList.map((id) &#x3D;&gt;
+                window.require(&#x27;WAWebWidFactory&#x27;).createWid(id),
             );
             options.mentionedJidList &#x3D; options.mentionedJidList.filter(Boolean);
         }
@@ -113,68 +244,124 @@ exports.LoadUtils &#x3D; () &#x3D;&gt; {
         if (options.groupMentions) {
             options.groupMentions &#x3D; options.groupMentions.map((e) &#x3D;&gt; ({
                 groupSubject: e.subject,
-                groupJid: window.Store.WidFactory.createWid(e.id)
+                groupJid: window.require(&#x27;WAWebWidFactory&#x27;).createWid(e.id),
             }));
         }
 
         let locationOptions &#x3D; {};
         if (options.location) {
             let { latitude, longitude, description, url } &#x3D; options.location;
-            url &#x3D; window.Store.Validators.findLink(url)?.href;
+            url &#x3D; findLink(url)?.href;
             url &amp;amp;&amp;amp; !description &amp;amp;&amp;amp; (description &#x3D; url);
             locationOptions &#x3D; {
                 type: &#x27;location&#x27;,
                 loc: description,
                 lat: latitude,
                 lng: longitude,
-                clientUrl: url
+                clientUrl: url,
             };
             delete options.location;
         }
 
-        let _pollOptions &#x3D; {};
+        let pollOptions &#x3D; {};
         if (options.poll) {
-            const { pollName, pollOptions } &#x3D; options.poll;
-            const { allowMultipleAnswers, messageSecret } &#x3D; options.poll.options;
-            _pollOptions &#x3D; {
+            const { pollName, pollOptions: _pollOptions } &#x3D; options.poll;
+            const { allowMultipleAnswers, messageSecret } &#x3D;
+                options.poll.options;
+            pollOptions &#x3D; {
+                kind: &#x27;pollCreation&#x27;,
                 type: &#x27;poll_creation&#x27;,
                 pollName: pollName,
-                pollOptions: pollOptions,
+                pollOptions: _pollOptions,
                 pollSelectableOptionsCount: allowMultipleAnswers ? 0 : 1,
                 messageSecret:
-                Array.isArray(messageSecret) &amp;amp;&amp;amp; messageSecret.length &#x3D;&#x3D;&#x3D; 32
-                    ? new Uint8Array(messageSecret)
-                    : window.crypto.getRandomValues(new Uint8Array(32))
+                    Array.isArray(messageSecret) &amp;amp;&amp;amp; messageSecret.length &#x3D;&#x3D;&#x3D; 32
+                        ? new Uint8Array(messageSecret)
+                        : window.crypto.getRandomValues(new Uint8Array(32)),
             };
             delete options.poll;
         }
 
+        let eventOptions &#x3D; {};
+        if (options.event) {
+            const { name, startTimeTs, eventSendOptions } &#x3D; options.event;
+            const { messageSecret } &#x3D; eventSendOptions;
+            eventOptions &#x3D; {
+                type: &#x27;event_creation&#x27;,
+                eventName: name,
+                eventDescription: eventSendOptions.description,
+                eventStartTime: startTimeTs,
+                eventEndTime: eventSendOptions.endTimeTs,
+                eventLocation: eventSendOptions.location &amp;amp;&amp;amp; {
+                    degreesLatitude: 0,
+                    degreesLongitude: 0,
+                    name: eventSendOptions.location,
+                },
+                eventJoinLink:
+                    eventSendOptions.callType &#x3D;&#x3D;&#x3D; &#x27;none&#x27;
+                        ? null
+                        : await window
+                              .require(&#x27;WAWebGenerateEventCallLink&#x27;)
+                              .createEventCallLink(
+                                  startTimeTs,
+                                  eventSendOptions.callType,
+                              ),
+                isEventCanceled: eventSendOptions.isEventCanceled,
+                messageSecret:
+                    Array.isArray(messageSecret) &amp;amp;&amp;amp; messageSecret.length &#x3D;&#x3D;&#x3D; 32
+                        ? new Uint8Array(messageSecret)
+                        : window.crypto.getRandomValues(new Uint8Array(32)),
+            };
+            delete options.event;
+        }
+
         let vcardOptions &#x3D; {};
         if (options.contactCard) {
-            let contact &#x3D; window.Store.Contact.get(options.contactCard);
+            let contact &#x3D; await window
+                .require(&#x27;WAWebCollections&#x27;)
+                .Contact.find(options.contactCard);
             vcardOptions &#x3D; {
-                body: window.Store.VCard.vcardFromContactModel(contact).vcard,
+                body: window
+                    .require(&#x27;WAWebFrontendVcardUtils&#x27;)
+                    .vcardFromContactModel(contact).vcard,
                 type: &#x27;vcard&#x27;,
-                vcardFormattedName: contact.formattedName
+                vcardFormattedName: contact.formattedName,
             };
             delete options.contactCard;
         } else if (options.contactCardList) {
-            let contacts &#x3D; options.contactCardList.map(c &#x3D;&gt; window.Store.Contact.get(c));
-            let vcards &#x3D; contacts.map(c &#x3D;&gt; window.Store.VCard.vcardFromContactModel(c));
+            let contacts &#x3D; await Promise.all(
+                options.contactCardList.map((c) &#x3D;&gt;
+                    window.require(&#x27;WAWebCollections&#x27;).Contact.find(c),
+                ),
+            );
+            let vcards &#x3D; contacts.map((c) &#x3D;&gt;
+                window
+                    .require(&#x27;WAWebFrontendVcardUtils&#x27;)
+                    .vcardFromContactModel(c),
+            );
             vcardOptions &#x3D; {
                 type: &#x27;multi_vcard&#x27;,
                 vcardList: vcards,
-                body: undefined
+                body: null,
             };
             delete options.contactCardList;
-        } else if (options.parseVCards &amp;amp;&amp;amp; typeof (content) &#x3D;&#x3D;&#x3D; &#x27;string&#x27; &amp;amp;&amp;amp; content.startsWith(&#x27;BEGIN:VCARD&#x27;)) {
+        } else if (
+            options.parseVCards &amp;amp;&amp;amp;
+            typeof content &#x3D;&#x3D;&#x3D; &#x27;string&#x27; &amp;amp;&amp;amp;
+            content.startsWith(&#x27;BEGIN:VCARD&#x27;)
+        ) {
             delete options.parseVCards;
+            delete options.linkPreview;
             try {
-                const parsed &#x3D; window.Store.VCard.parseVcard(content);
+                const parsed &#x3D; window
+                    .require(&#x27;WAWebVcardParsingUtils&#x27;)
+                    .parseVcard(content);
                 if (parsed) {
                     vcardOptions &#x3D; {
                         type: &#x27;vcard&#x27;,
-                        vcardFormattedName: window.Store.VCard.vcardGetNameFromParsed(parsed)
+                        vcardFormattedName: window
+                            .require(&#x27;WAWebVcardGetNameFromParsed&#x27;)
+                            .vcardGetNameFromParsed(parsed),
                     };
                 }
             } catch (_) {
@@ -184,20 +371,22 @@ exports.LoadUtils &#x3D; () &#x3D;&gt; {
 
         if (options.linkPreview) {
             delete options.linkPreview;
-            const link &#x3D; window.Store.Validators.findLink(content);
+            const link &#x3D; findLink(content);
             if (link) {
-                let preview &#x3D; await window.Store.LinkPreview.getLinkPreview(link);
+                let preview &#x3D; await window
+                    .require(&#x27;WAWebLinkPreviewChatAction&#x27;)
+                    .getLinkPreview(link);
                 if (preview &amp;amp;&amp;amp; preview.data) {
                     preview &#x3D; preview.data;
                     preview.preview &#x3D; true;
                     preview.subtype &#x3D; &#x27;url&#x27;;
-                    options &#x3D; {...options, ...preview};
+                    options &#x3D; { ...options, ...preview };
                 }
             }
         }
-        
+
         let buttonOptions &#x3D; {};
-        if(options.buttons){
+        if (options.buttons) {
             let caption;
             if (options.buttons.type &#x3D;&#x3D;&#x3D; &#x27;chat&#x27;) {
                 content &#x3D; options.buttons.body;
@@ -209,28 +398,35 @@ exports.LoadUtils &#x3D; () &#x3D;&gt; {
                 productHeaderImageRejected: false,
                 isFromTemplate: false,
                 isDynamicReplyButtonsMsg: true,
-                title: options.buttons.title ? options.buttons.title : undefined,
-                footer: options.buttons.footer ? options.buttons.footer : undefined,
+                title: options.buttons.title
+                    ? options.buttons.title
+                    : undefined,
+                footer: options.buttons.footer
+                    ? options.buttons.footer
+                    : undefined,
                 dynamicReplyButtons: options.buttons.buttons,
                 replyButtons: options.buttons.buttons,
-                caption: caption
+                caption: caption,
             };
             delete options.buttons;
         }
 
         let listOptions &#x3D; {};
         if (options.list) {
-            if (window.Store.Conn.platform &#x3D;&#x3D;&#x3D; &#x27;smba&#x27; || window.Store.Conn.platform &#x3D;&#x3D;&#x3D; &#x27;smbi&#x27;) {
-                throw &#x27;[LT01] Whatsapp business can\&#x27;t send this yet&#x27;;
+            if (
+                window.require(&#x27;WAWebConnModel&#x27;).Conn.platform &#x3D;&#x3D;&#x3D; &#x27;smba&#x27; ||
+                window.require(&#x27;WAWebConnModel&#x27;).Conn.platform &#x3D;&#x3D;&#x3D; &#x27;smbi&#x27;
+            ) {
+                throw &quot;[LT01] Whatsapp business can&#x27;t send this yet&quot;;
             }
             listOptions &#x3D; {
                 type: &#x27;list&#x27;,
                 footer: options.list.footer,
                 list: {
                     ...options.list,
-                    listType: 1
+                    listType: 1,
                 },
-                body: options.list.description
+                body: options.list.description,
             };
             delete options.list;
             delete listOptions.list.footer;
@@ -238,39 +434,66 @@ exports.LoadUtils &#x3D; () &#x3D;&gt; {
 
         const botOptions &#x3D; {};
         if (options.invokedBotWid) {
-            botOptions.messageSecret &#x3D; window.crypto.getRandomValues(new Uint8Array(32));
-            botOptions.botMessageSecret &#x3D; await window.Store.BotSecret.genBotMsgSecretFromMsgSecret(botOptions.messageSecret);
-            botOptions.invokedBotWid &#x3D; window.Store.WidFactory.createWid(options.invokedBotWid);
-            botOptions.botPersonaId &#x3D; window.Store.BotProfiles.BotProfileCollection.get(options.invokedBotWid).personaId;
+            botOptions.messageSecret &#x3D; window.crypto.getRandomValues(
+                new Uint8Array(32),
+            );
+            botOptions.botMessageSecret &#x3D; await window
+                .require(&#x27;WAWebBotMessageSecret&#x27;)
+                .genBotMsgSecretFromMsgSecret(botOptions.messageSecret);
+            botOptions.invokedBotWid &#x3D; window
+                .require(&#x27;WAWebWidFactory&#x27;)
+                .createWid(options.invokedBotWid);
+            botOptions.botPersonaId &#x3D; window
+                .require(&#x27;WAWebBotProfileCollection&#x27;)
+                .BotProfileCollection.get(options.invokedBotWid).personaId;
             delete options.invokedBotWid;
         }
+        const { getMaybeMeLidUser, getMaybeMePnUser } &#x3D; window.require(
+            &#x27;WAWebUserPrefsMeUser&#x27;,
+        );
+        const lidUser &#x3D; getMaybeMeLidUser();
+        const meUser &#x3D; getMaybeMePnUser();
+        const newId &#x3D; await window.require(&#x27;WAWebMsgKey&#x27;).newId();
+        let from &#x3D; chat.id.isLid() ? lidUser : meUser;
+        let participant;
 
-        let meUser &#x3D; window.Store.User.getMaybeMeUser();
-        const newId &#x3D; await window.Store.MsgKey.newId();
-
-        if (chat.id.isGroup() &amp;amp;&amp;amp; chat.groupMetadata.isLidAddressingMode) {
-            meUser &#x3D; window.Store.User.getMaybeMeLidUser();
+        if (typeof chat.id?.isGroup &#x3D;&#x3D;&#x3D; &#x27;function&#x27; &amp;amp;&amp;amp; chat.id.isGroup()) {
+            from &#x3D;
+                chat.groupMetadata &amp;amp;&amp;amp; chat.groupMetadata.isLidAddressingMode
+                    ? lidUser
+                    : meUser;
+            participant &#x3D; window
+                .require(&#x27;WAWebWidFactory&#x27;)
+                .asUserWidOrThrow(from);
         }
-        
-        const newMsgId &#x3D; new window.Store.MsgKey({
-            from: meUser,
+
+        if (typeof chat.id?.isStatus &#x3D;&#x3D;&#x3D; &#x27;function&#x27; &amp;amp;&amp;amp; chat.id.isStatus()) {
+            participant &#x3D; window
+                .require(&#x27;WAWebWidFactory&#x27;)
+                .asUserWidOrThrow(from);
+        }
+
+        const newMsgKey &#x3D; new (window.require(&#x27;WAWebMsgKey&#x27;))({
+            from: from,
             to: chat.id,
             id: newId,
-            participant: chat.id.isGroup() ? meUser : undefined,
+            participant: participant,
             selfDir: &#x27;out&#x27;,
         });
 
         const extraOptions &#x3D; options.extraOptions || {};
         delete options.extraOptions;
 
-        const ephemeralFields &#x3D; window.Store.EphemeralFields.getEphemeralFields(chat);
+        const ephemeralFields &#x3D; window
+            .require(&#x27;WAWebGetEphemeralFieldsMsgActionsUtils&#x27;)
+            .getEphemeralFields(chat);
 
         const message &#x3D; {
             ...options,
-            id: newMsgId,
+            id: newMsgKey,
             ack: 0,
             body: content,
-            from: meUser,
+            from: from,
             to: chat.id,
             local: true,
             self: &#x27;out&#x27;,
@@ -278,40 +501,128 @@ exports.LoadUtils &#x3D; () &#x3D;&gt; {
             isNewMsg: true,
             type: &#x27;chat&#x27;,
             ...ephemeralFields,
-            ...locationOptions,
-            ..._pollOptions,
-            ...attOptions,
-            ...(attOptions.toJSON ? attOptions.toJSON() : {}),
+            ...mediaOptions,
+            ...(mediaOptions.toJSON ? mediaOptions.toJSON() : {}),
             ...quotedMsgOptions,
+            ...locationOptions,
+            ...pollOptions,
+            ...eventOptions,
             ...vcardOptions,
             ...buttonOptions,
             ...listOptions,
             ...botOptions,
-            ...extraOptions
+            ...extraOptions,
         };
-        
+
         // Bot&#x27;s won&#x27;t reply if canonicalUrl is set (linking)
         if (botOptions) {
             delete message.canonicalUrl;
         }
 
-        await window.Store.SendMessage.addAndSendMsgToChat(chat, message);
-        return window.Store.Msg.get(newMsgId._serialized);
-    };
-	
-    window.WWebJS.editMessage &#x3D; async (msg, content, options &#x3D; {}) &#x3D;&gt; {
+        if (isChannel) {
+            const msg &#x3D; new (window.require(&#x27;WAWebCollections&#x27;).Msg.modelClass)(
+                message,
+            );
+            const msgDataFromMsgModel &#x3D; window
+                .require(&#x27;WAWebMsgDataFromModel&#x27;)
+                .msgDataFromMsgModel(msg);
+            const isMedia &#x3D; Object.keys(mediaOptions).length &gt; 0;
+            await window
+                .require(&#x27;WAWebNewsletterUpdateMsgsRecordsJob&#x27;)
+                .addNewsletterMsgsRecords([msgDataFromMsgModel]);
+            chat.msgs.add(msg);
+            chat.t &#x3D; msg.t;
 
+            const sendChannelMsgResponse &#x3D; await window
+                .require(&#x27;WAWebNewsletterSendMessageJob&#x27;)
+                .sendNewsletterMessageJob({
+                    msg: msg,
+                    type:
+                        message.type &#x3D;&#x3D;&#x3D; &#x27;chat&#x27;
+                            ? &#x27;text&#x27;
+                            : isMedia
+                              ? &#x27;media&#x27;
+                              : &#x27;pollCreation&#x27;,
+                    newsletterJid: chat.id.toJid(),
+                    ...(isMedia
+                        ? {
+                              mediaMetadata: msg.avParams(),
+                              mediaHandle: isMedia
+                                  ? mediaOptions.mediaHandle
+                                  : null,
+                          }
+                        : {}),
+                });
+
+            if (sendChannelMsgResponse.success) {
+                msg.t &#x3D; sendChannelMsgResponse.ack.t;
+                msg.serverId &#x3D; sendChannelMsgResponse.serverId;
+            }
+            msg.updateAck(1, true);
+            await window
+                .require(&#x27;WAWebNewsletterUpdateMsgsRecordsJob&#x27;)
+                .updateNewsletterMsgRecord(msg);
+            return msg;
+        }
+
+        if (isStatus) {
+            const { backgroundColor, fontStyle } &#x3D; extraOptions;
+            const isMedia &#x3D; Object.keys(mediaOptions).length &gt; 0;
+            const mediaUpdate &#x3D; (data) &#x3D;&gt;
+                window.require(&#x27;WAWebMediaUpdateMsg&#x27;)(data, mediaOptions);
+            const msg &#x3D; new (window.require(&#x27;WAWebCollections&#x27;).Msg.modelClass)(
+                {
+                    ...message,
+                    author: participant ? participant : null,
+                    messageSecret: window.crypto.getRandomValues(
+                        new Uint8Array(32),
+                    ),
+                    cannotBeRanked: window
+                        .require(&#x27;WAWebStatusGatingUtils&#x27;)
+                        .canCheckStatusRankingPosterGating(),
+                },
+            );
+
+            // for text only
+            const statusOptions &#x3D; {
+                color:
+                    (backgroundColor &amp;amp;&amp;amp;
+                        window.WWebJS.assertColor(backgroundColor)) ||
+                    0xff7acca5,
+                font: (fontStyle &gt;&#x3D; 0 &amp;amp;&amp;amp; fontStyle &amp;lt;&#x3D; 7 &amp;amp;&amp;amp; fontStyle) || 0,
+                text: msg.body,
+            };
+
+            await window
+                .require(&#x27;WAWebSendStatusMsgAction&#x27;)
+                [
+                    isMedia
+                        ? &#x27;sendStatusMediaMsgAction&#x27;
+                        : &#x27;sendStatusTextMsgAction&#x27;
+                ](...(isMedia ? [msg, mediaUpdate] : [statusOptions]));
+
+            return msg;
+        }
+
+        const [msgPromise, sendMsgResultPromise] &#x3D; window
+            .require(&#x27;WAWebSendMsgChatAction&#x27;)
+            .addAndSendMsgToChat(chat, message);
+        await msgPromise;
+
+        if (options.waitUntilMsgSent) await sendMsgResultPromise;
+
+        return window
+            .require(&#x27;WAWebCollections&#x27;)
+            .Msg.get(newMsgKey._serialized);
+    };
+
+    window.WWebJS.editMessage &#x3D; async (msg, content, options &#x3D; {}) &#x3D;&gt; {
         const extraOptions &#x3D; options.extraOptions || {};
         delete options.extraOptions;
-        
+
         if (options.mentionedJidList) {
-            options.mentionedJidList &#x3D; await Promise.all(
-                options.mentionedJidList.map(async (id) &#x3D;&gt; {
-                    const wid &#x3D; window.Store.WidFactory.createWid(id);
-                    if (await window.Store.QueryExist(wid)) {
-                        return wid;
-                    }
-                })
+            options.mentionedJidList &#x3D; options.mentionedJidList.map((id) &#x3D;&gt;
+                window.require(&#x27;WAWebWidFactory&#x27;).createWid(id),
             );
             options.mentionedJidList &#x3D; options.mentionedJidList.filter(Boolean);
         }
@@ -319,59 +630,73 @@ exports.LoadUtils &#x3D; () &#x3D;&gt; {
         if (options.groupMentions) {
             options.groupMentions &#x3D; options.groupMentions.map((e) &#x3D;&gt; ({
                 groupSubject: e.subject,
-                groupJid: window.Store.WidFactory.createWid(e.id)
+                groupJid: window.require(&#x27;WAWebWidFactory&#x27;).createWid(e.id),
             }));
         }
 
         if (options.linkPreview) {
+            const { findLink } &#x3D; window.require(&#x27;WALinkify&#x27;);
             delete options.linkPreview;
-            const link &#x3D; window.Store.Validators.findLink(content);
+            const link &#x3D; findLink(content);
             if (link) {
-                const preview &#x3D; await window.Store.LinkPreview.getLinkPreview(link);
+                const preview &#x3D; await window
+                    .require(&#x27;WAWebLinkPreviewChatAction&#x27;)
+                    .getLinkPreview(link);
                 preview.preview &#x3D; true;
                 preview.subtype &#x3D; &#x27;url&#x27;;
                 options &#x3D; { ...options, ...preview };
             }
         }
 
-
         const internalOptions &#x3D; {
             ...options,
-            ...extraOptions
+            ...extraOptions,
         };
 
-        await window.Store.EditMessage.sendMessageEdit(msg, content, internalOptions);
-        return window.Store.Msg.get(msg.id._serialized);
+        await window
+            .require(&#x27;WAWebSendMessageEditAction&#x27;)
+            .sendMessageEdit(msg, content, internalOptions);
+        return window.require(&#x27;WAWebCollections&#x27;).Msg.get(msg.id._serialized);
     };
 
     window.WWebJS.toStickerData &#x3D; async (mediaInfo) &#x3D;&gt; {
         if (mediaInfo.mimetype &#x3D;&#x3D; &#x27;image/webp&#x27;) return mediaInfo;
 
         const file &#x3D; window.WWebJS.mediaInfoToFile(mediaInfo);
-        const webpSticker &#x3D; await window.Store.StickerTools.toWebpSticker(file);
+        const webpSticker &#x3D; await window
+            .require(&#x27;WAWebImageUtils&#x27;)
+            .toWebpSticker(file);
         const webpBuffer &#x3D; await webpSticker.arrayBuffer();
         const data &#x3D; window.WWebJS.arrayBufferToBase64(webpBuffer);
 
         return {
             mimetype: &#x27;image/webp&#x27;,
-            data
+            data,
         };
     };
 
     window.WWebJS.processStickerData &#x3D; async (mediaInfo) &#x3D;&gt; {
-        if (mediaInfo.mimetype !&#x3D;&#x3D; &#x27;image/webp&#x27;) throw new Error(&#x27;Invalid media type&#x27;);
+        if (mediaInfo.mimetype !&#x3D;&#x3D; &#x27;image/webp&#x27;)
+            throw new Error(&#x27;Invalid media type&#x27;);
 
         const file &#x3D; window.WWebJS.mediaInfoToFile(mediaInfo);
         let filehash &#x3D; await window.WWebJS.getFileHash(file);
         let mediaKey &#x3D; await window.WWebJS.generateHash(32);
 
         const controller &#x3D; new AbortController();
-        const uploadedInfo &#x3D; await window.Store.UploadUtils.encryptAndUpload({
-            blob: file,
-            type: &#x27;sticker&#x27;,
-            signal: controller.signal,
-            mediaKey
-        });
+        const uploadedInfo &#x3D; await window
+            .require(&#x27;WAWebUploadManager&#x27;)
+            .encryptAndUpload({
+                blob: file,
+                type: &#x27;sticker&#x27;,
+                signal: controller.signal,
+                mediaKey,
+                uploadQpl: window
+                    .require(&#x27;WAWebStartMediaUploadQpl&#x27;)
+                    .startMediaUploadQpl({
+                        entryPoint: &#x27;MediaUpload&#x27;,
+                    }),
+            });
 
         const stickerInfo &#x3D; {
             ...uploadedInfo,
@@ -380,52 +705,108 @@ exports.LoadUtils &#x3D; () &#x3D;&gt; {
             uploadhash: uploadedInfo.encFilehash,
             size: file.size,
             type: &#x27;sticker&#x27;,
-            filehash
+            filehash,
         };
 
         return stickerInfo;
     };
 
-    window.WWebJS.processMediaData &#x3D; async (mediaInfo, { forceVoice, forceDocument, forceGif }) &#x3D;&gt; {
+    window.WWebJS.processMediaData &#x3D; async (
+        mediaInfo,
+        {
+            forceSticker,
+            forceGif,
+            forceVoice,
+            forceDocument,
+            forceMediaHd,
+            sendToChannel,
+            sendToStatus,
+        },
+    ) &#x3D;&gt; {
         const file &#x3D; window.WWebJS.mediaInfoToFile(mediaInfo);
-        const mData &#x3D; await window.Store.OpaqueData.createFromData(file, file.type);
-        const mediaPrep &#x3D; window.Store.MediaPrep.prepRawMedia(mData, { asDocument: forceDocument });
-        const mediaData &#x3D; await mediaPrep.waitForPrep();
-        const mediaObject &#x3D; window.Store.MediaObject.getOrCreateMediaObject(mediaData.filehash);
+        const OpaqueData &#x3D; window.require(&#x27;WAWebMediaOpaqueData&#x27;);
+        const opaqueData &#x3D; await OpaqueData.createFromData(
+            file,
+            mediaInfo.mimetype,
+        );
+        const mediaParams &#x3D; {
+            asSticker: forceSticker,
+            asGif: forceGif,
+            isPtt: forceVoice,
+            asDocument: forceDocument,
+        };
 
-        const mediaType &#x3D; window.Store.MediaTypes.msgToMediaType({
+        if (forceMediaHd &amp;amp;&amp;amp; file.type.indexOf(&#x27;image/&#x27;) &#x3D;&#x3D;&#x3D; 0) {
+            mediaParams.maxDimension &#x3D; 2560;
+        }
+
+        const mediaPrep &#x3D; window
+            .require(&#x27;WAWebPrepRawMedia&#x27;)
+            .prepRawMedia(opaqueData, mediaParams);
+        const mediaData &#x3D; await mediaPrep.waitForPrep();
+        const mediaObject &#x3D; window
+            .require(&#x27;WAWebMediaStorage&#x27;)
+            .getOrCreateMediaObject(mediaData.filehash);
+        const mediaType &#x3D; window.require(&#x27;WAWebMmsMediaTypes&#x27;).msgToMediaType({
             type: mediaData.type,
-            isGif: mediaData.isGif
+            isGif: mediaData.isGif,
+            isNewsletter: sendToChannel,
         });
 
-        if (forceVoice &amp;amp;&amp;amp; mediaData.type &#x3D;&#x3D;&#x3D; &#x27;audio&#x27;) {
-            mediaData.type &#x3D; &#x27;ptt&#x27;;
+        if (!mediaData.filehash) {
+            throw new Error(&#x27;media-fault: sendToChat filehash undefined&#x27;);
+        }
+
+        if (
+            (forceVoice &amp;amp;&amp;amp; mediaData.type &#x3D;&#x3D;&#x3D; &#x27;ptt&#x27;) ||
+            (sendToStatus &amp;amp;&amp;amp; mediaData.type &#x3D;&#x3D;&#x3D; &#x27;audio&#x27;)
+        ) {
             const waveform &#x3D; mediaObject.contentInfo.waveform;
             mediaData.waveform &#x3D;
-                waveform ?? await window.WWebJS.generateWaveform(file);
+                waveform || (await window.WWebJS.generateWaveform(file));
         }
 
-        if (forceGif &amp;amp;&amp;amp; mediaData.type &#x3D;&#x3D;&#x3D; &#x27;video&#x27;) {
-            mediaData.isGif &#x3D; true;
-        }
-
-        if (forceDocument) {
-            mediaData.type &#x3D; &#x27;document&#x27;;
-        }
-
-        if (!(mediaData.mediaBlob instanceof window.Store.OpaqueData)) {
-            mediaData.mediaBlob &#x3D; await window.Store.OpaqueData.createFromData(mediaData.mediaBlob, mediaData.mediaBlob.type);
+        if (!(mediaData.mediaBlob instanceof OpaqueData)) {
+            mediaData.mediaBlob &#x3D; await OpaqueData.createFromData(
+                mediaData.mediaBlob,
+                mediaData.mediaBlob.type,
+            );
         }
 
         mediaData.renderableUrl &#x3D; mediaData.mediaBlob.url();
         mediaObject.consolidate(mediaData.toJSON());
-        mediaData.mediaBlob.autorelease();
 
-        const uploadedMedia &#x3D; await window.Store.MediaUpload.uploadMedia({
+        mediaData.mediaBlob.autorelease();
+        const shouldUseMediaCache &#x3D; window
+            .require(&#x27;WAWebMediaDataUtils&#x27;)
+            .shouldUseMediaCache(
+                window.require(&#x27;WAWebMmsMediaTypes&#x27;).castToV4(mediaObject.type),
+            );
+        if (shouldUseMediaCache &amp;amp;&amp;amp; mediaData.mediaBlob instanceof OpaqueData) {
+            const formData &#x3D; mediaData.mediaBlob.formData();
+            window
+                .require(&#x27;WAWebMediaInMemoryBlobCache&#x27;)
+                .InMemoryMediaBlobCache.put(mediaObject.filehash, formData);
+        }
+
+        const dataToUpload &#x3D; {
             mimetype: mediaData.mimetype,
             mediaObject,
-            mediaType
-        });
+            mediaType,
+            ...(sendToChannel
+                ? {
+                      calculateToken: window.require(&#x27;WAMediaCalculateFilehash&#x27;)
+                          .getRandomFilehash,
+                  }
+                : {}),
+        };
+
+        const { uploadMedia, uploadUnencryptedMedia } &#x3D; window.require(
+            &#x27;WAWebMediaMmsV4Upload&#x27;,
+        );
+        const uploadedMedia &#x3D; !sendToChannel
+            ? await uploadMedia(dataToUpload)
+            : await uploadUnencryptedMedia(dataToUpload);
 
         const mediaEntry &#x3D; uploadedMedia.mediaEntry;
         if (!mediaEntry) {
@@ -443,34 +824,45 @@ exports.LoadUtils &#x3D; () &#x3D;&gt; {
             uploadhash: mediaEntry.uploadHash,
             size: mediaObject.size,
             streamingSidecar: mediaEntry.sidecar,
-            firstFrameSidecar: mediaEntry.firstFrameSidecar
+            firstFrameSidecar: mediaEntry.firstFrameSidecar,
+            mediaHandle: sendToChannel ? mediaEntry.handle : null,
         });
 
         return mediaData;
     };
 
-    window.WWebJS.getMessageModel &#x3D; message &#x3D;&gt; {
+    window.WWebJS.getMessageModel &#x3D; (message) &#x3D;&gt; {
         const msg &#x3D; message.serialize();
+
+        const { findLinks } &#x3D; window.require(&#x27;WALinkify&#x27;);
 
         msg.isEphemeral &#x3D; message.isEphemeral;
         msg.isStatusV3 &#x3D; message.isStatusV3;
-        msg.links &#x3D; (window.Store.Validators.findLinks(message.mediaObject ? message.caption : message.body)).map((link) &#x3D;&gt; ({
+        msg.links &#x3D; findLinks(
+            message.mediaObject ? message.caption : message.body,
+        ).map((link) &#x3D;&gt; ({
             link: link.href,
-            isSuspicious: Boolean(link.suspiciousCharacters &amp;amp;&amp;amp; link.suspiciousCharacters.size)
+            isSuspicious: Boolean(
+                link.suspiciousCharacters &amp;amp;&amp;amp; link.suspiciousCharacters.size,
+            ),
         }));
 
         if (msg.buttons) {
             msg.buttons &#x3D; msg.buttons.serialize();
         }
         if (msg.dynamicReplyButtons) {
-            msg.dynamicReplyButtons &#x3D; JSON.parse(JSON.stringify(msg.dynamicReplyButtons));
+            msg.dynamicReplyButtons &#x3D; JSON.parse(
+                JSON.stringify(msg.dynamicReplyButtons),
+            );
         }
         if (msg.replyButtons) {
             msg.replyButtons &#x3D; JSON.parse(JSON.stringify(msg.replyButtons));
         }
 
         if (typeof msg.id.remote &#x3D;&#x3D;&#x3D; &#x27;object&#x27;) {
-            msg.id &#x3D; Object.assign({}, msg.id, { remote: msg.id.remote._serialized });
+            msg.id &#x3D; Object.assign({}, msg.id, {
+                remote: msg.id.remote._serialized,
+            });
         }
 
         delete msg.pendingAckUpdate;
@@ -478,127 +870,260 @@ exports.LoadUtils &#x3D; () &#x3D;&gt; {
         return msg;
     };
 
-    window.WWebJS.getPollVoteModel &#x3D; async (vote) &#x3D;&gt; {
-        const _vote &#x3D; vote.serialize();
-        if (!vote.parentMsgKey) return null;
-        const msg &#x3D;
-            window.Store.Msg.get(vote.parentMsgKey) || (await window.Store.Msg.getMessagesById([vote.parentMsgKey]))?.messages?.[0];
-        msg &amp;amp;&amp;amp; (_vote.parentMessage &#x3D; window.WWebJS.getMessageModel(msg));
-        return _vote;
-    };
+    window.WWebJS.getChat &#x3D; async (chatId, { getAsModel &#x3D; true } &#x3D; {}) &#x3D;&gt; {
+        const isChannel &#x3D; /@\w*newsletter\b/.test(chatId);
+        const chatWid &#x3D; window.require(&#x27;WAWebWidFactory&#x27;).createWid(chatId);
+        let chat;
 
-    window.WWebJS.getChatModel &#x3D; async chat &#x3D;&gt; {
-
-        let res &#x3D; chat.serialize();
-        res.isGroup &#x3D; false;
-        res.formattedTitle &#x3D; chat.formattedTitle;
-        res.isMuted &#x3D; chat.mute?.expiration !&#x3D;&#x3D; 0;
-
-        if (chat.groupMetadata) {
-            res.isGroup &#x3D; true;
-            const chatWid &#x3D; window.Store.WidFactory.createWid((chat.id._serialized));
-            await window.Store.GroupMetadata.update(chatWid);
-            res.groupMetadata &#x3D; chat.groupMetadata.serialize();
-            res.isReadOnly &#x3D; chat.groupMetadata.announce;
-        }
-        
-        res.lastMessage &#x3D; null;
-        if (res.msgs &amp;amp;&amp;amp; res.msgs.length) {
-            const lastMessage &#x3D; chat.lastReceivedKey
-                ? window.Store.Msg.get(chat.lastReceivedKey._serialized) || (await window.Store.Msg.getMessagesById([chat.lastReceivedKey._serialized]))?.messages?.[0]
-                : null;
-            if (lastMessage) {
-                res.lastMessage &#x3D; window.WWebJS.getMessageModel(lastMessage);
+        if (isChannel) {
+            try {
+                chat &#x3D; window
+                    .require(&#x27;WAWebCollections&#x27;)
+                    .WAWebNewsletterCollection.get(chatId);
+                if (!chat) {
+                    await window
+                        .require(&#x27;WAWebLoadNewsletterPreviewChatAction&#x27;)
+                        .loadNewsletterPreviewChat(chatId);
+                    chat &#x3D; await window
+                        .require(&#x27;WAWebCollections&#x27;)
+                        .WAWebNewsletterCollection.find(chatWid);
+                }
+            } catch (err) {
+                chat &#x3D; null;
             }
+        } else {
+            chat &#x3D;
+                window.require(&#x27;WAWebCollections&#x27;).Chat.get(chatWid) ||
+                (
+                    await window
+                        .require(&#x27;WAWebFindChatAction&#x27;)
+                        .findOrCreateLatestChat(chatWid)
+                )?.chat;
         }
-        
-        delete res.msgs;
-        delete res.msgUnsyncedButtonReplyMsgs;
-        delete res.unsyncedButtonReplies;
 
-        return res;
+        return getAsModel &amp;amp;&amp;amp; chat
+            ? await window.WWebJS.getChatModel(chat, { isChannel: isChannel })
+            : chat;
     };
 
-    window.WWebJS.getChat &#x3D; async chatId &#x3D;&gt; {
-        const chatWid &#x3D; window.Store.WidFactory.createWid(chatId);
-        const chat &#x3D; await window.Store.Chat.find(chatWid);
-        return await window.WWebJS.getChatModel(chat);
+    window.WWebJS.getChannelMetadata &#x3D; async (inviteCode) &#x3D;&gt; {
+        const role &#x3D; window
+            .require(&#x27;WAWebNewsletterModelUtils&#x27;)
+            .getRoleByIdentifier(inviteCode);
+        const response &#x3D; await window
+            .require(&#x27;WAWebNewsletterMetadataQueryJob&#x27;)
+            .queryNewsletterMetadataByInviteCode(inviteCode, role);
+
+        const picUrl &#x3D;
+            response.newsletterPictureMetadataMixin?.picture[0]
+                ?.queryPictureDirectPathOrEmptyResponseMixinGroup.value
+                .directPath;
+
+        return {
+            id: response.idJid,
+            createdAtTs:
+                response.newsletterCreationTimeMetadataMixin.creationTimeValue,
+            titleMetadata: {
+                title: response.newsletterNameMetadataMixin.nameElementValue,
+                updatedAtTs:
+                    response.newsletterNameMetadataMixin.nameUpdateTime,
+            },
+            descriptionMetadata: {
+                description:
+                    response.newsletterDescriptionMetadataMixin
+                        .descriptionQueryDescriptionResponseMixin.elementValue,
+                updatedAtTs:
+                    response.newsletterDescriptionMetadataMixin
+                        .descriptionQueryDescriptionResponseMixin.updateTime,
+            },
+            inviteLink: &#x60;https://whatsapp.com/channel/${response.newsletterInviteLinkMetadataMixin.inviteCode}&#x60;,
+            membershipType: role,
+            stateType: response.newsletterStateMetadataMixin.stateType,
+            pictureUrl: picUrl ? &#x60;https://pps.whatsapp.net${picUrl}&#x60; : null,
+            subscribersCount:
+                response.newsletterSubscribersMetadataMixin.subscribersCount,
+            isVerified:
+                response.newsletterVerificationMetadataMixin
+                    .verificationState &#x3D;&#x3D;&#x3D; &#x27;verified&#x27;,
+        };
     };
 
     window.WWebJS.getChats &#x3D; async () &#x3D;&gt; {
-        const chats &#x3D; window.Store.Chat.getModelsArray();
-
-        const chatPromises &#x3D; chats.map(chat &#x3D;&gt; window.WWebJS.getChatModel(chat));
+        const chats &#x3D; window.require(&#x27;WAWebCollections&#x27;).Chat.getModelsArray();
+        const chatPromises &#x3D; chats.map((chat) &#x3D;&gt;
+            window.WWebJS.getChatModel(chat),
+        );
         return await Promise.all(chatPromises);
     };
 
-    window.WWebJS.getContactModel &#x3D; contact &#x3D;&gt; {
+    window.WWebJS.getChannels &#x3D; async () &#x3D;&gt; {
+        const channels &#x3D; window
+            .require(&#x27;WAWebCollections&#x27;)
+            .WAWebNewsletterCollection.getModelsArray();
+        const channelPromises &#x3D; channels?.map((channel) &#x3D;&gt;
+            window.WWebJS.getChatModel(channel, { isChannel: true }),
+        );
+        return await Promise.all(channelPromises);
+    };
+
+    window.WWebJS.getChatModel &#x3D; async (chat, { isChannel &#x3D; false } &#x3D; {}) &#x3D;&gt; {
+        if (!chat) return null;
+
+        const model &#x3D; chat.serialize();
+        model.isGroup &#x3D; false;
+        model.isMuted &#x3D; chat.mute?.expiration !&#x3D;&#x3D; 0;
+        if (isChannel) {
+            model.isChannel &#x3D; window
+                .require(&#x27;WAWebChatGetters&#x27;)
+                .getIsNewsletter(chat);
+        } else {
+            model.formattedTitle &#x3D; chat.formattedTitle;
+        }
+
+        if (chat.groupMetadata) {
+            model.isGroup &#x3D; true;
+            const chatWid &#x3D; window
+                .require(&#x27;WAWebWidFactory&#x27;)
+                .createWid(chat.id._serialized);
+            const groupMetadata &#x3D;
+                window.require(&#x27;WAWebCollections&#x27;).GroupMetadata ||
+                window.require(&#x27;WAWebCollections&#x27;).WAWebGroupMetadataCollection;
+            await groupMetadata.update(chatWid);
+            const { toPn } &#x3D; window.require(&#x27;WAWebLidMigrationUtils&#x27;);
+            const serializedMetadata &#x3D; chat.groupMetadata.serialize();
+            for (const p of serializedMetadata.participants || []) {
+                p.id &#x3D; toPn(p.id) ?? p.id;
+            }
+            model.groupMetadata &#x3D; serializedMetadata;
+            model.isReadOnly &#x3D; chat.groupMetadata.announce;
+        }
+
+        if (chat.newsletterMetadata) {
+            const newsletterMetadata &#x3D;
+                window.require(&#x27;WAWebCollections&#x27;)
+                    .NewsletterMetadataCollection ||
+                window.require(&#x27;WAWebCollections&#x27;)
+                    .WAWebNewsletterMetadataCollection;
+            await newsletterMetadata.update(chat.id);
+            model.channelMetadata &#x3D; chat.newsletterMetadata.serialize();
+            model.channelMetadata.createdAtTs &#x3D;
+                chat.newsletterMetadata.creationTime;
+        }
+
+        model.lastMessage &#x3D; null;
+        if (model.msgs &amp;amp;&amp;amp; model.msgs.length) {
+            const lastMessage &#x3D; chat.lastReceivedKey
+                ? window
+                      .require(&#x27;WAWebCollections&#x27;)
+                      .Msg.get(chat.lastReceivedKey._serialized) ||
+                  (
+                      await window
+                          .require(&#x27;WAWebCollections&#x27;)
+                          .Msg.getMessagesById([
+                              chat.lastReceivedKey._serialized,
+                          ])
+                  )?.messages?.[0]
+                : null;
+            lastMessage &amp;amp;&amp;amp;
+                (model.lastMessage &#x3D;
+                    window.WWebJS.getMessageModel(lastMessage));
+        }
+
+        delete model.msgs;
+        delete model.msgUnsyncedButtonReplyMsgs;
+        delete model.unsyncedButtonReplies;
+
+        return model;
+    };
+
+    window.WWebJS.getContactModel &#x3D; (contact) &#x3D;&gt; {
         let res &#x3D; contact.serialize();
-        res.isBusiness &#x3D; contact.isBusiness &#x3D;&#x3D;&#x3D; undefined ? false : contact.isBusiness;
+
+        const wid &#x3D; window
+            .require(&#x27;WAWebWidFactory&#x27;)
+            .createWidFromWidLike(contact.id);
+        if (wid.isLid() &amp;amp;&amp;amp; contact.phoneNumber) {
+            res.id &#x3D; contact.phoneNumber;
+        }
+
+        res.isBusiness &#x3D;
+            contact.isBusiness &#x3D;&#x3D;&#x3D; undefined ? false : contact.isBusiness;
 
         if (contact.businessProfile) {
             res.businessProfile &#x3D; contact.businessProfile.serialize();
         }
 
-        // TODO: remove useOldImplementation and its checks once all clients are updated to &gt;&#x3D; v2.2327.4
-        const useOldImplementation
-            &#x3D; window.compareWwebVersions(window.Debug.VERSION, &#x27;&amp;lt;&#x27;, &#x27;2.2327.4&#x27;);
-
-        res.isMe &#x3D; useOldImplementation
-            ? contact.isMe
-            : window.Store.ContactMethods.getIsMe(contact);
-        res.isUser &#x3D; useOldImplementation
-            ? contact.isUser
-            : window.Store.ContactMethods.getIsUser(contact);
-        res.isGroup &#x3D; useOldImplementation
-            ? contact.isGroup
-            : window.Store.ContactMethods.getIsGroup(contact);
-        res.isWAContact &#x3D; useOldImplementation
-            ? contact.isWAContact
-            : window.Store.ContactMethods.getIsWAContact(contact);
-        res.isMyContact &#x3D; useOldImplementation
-            ? contact.isMyContact
-            : window.Store.ContactMethods.getIsMyContact(contact);
         res.isBlocked &#x3D; contact.isContactBlocked;
-        res.userid &#x3D; useOldImplementation
-            ? contact.userid
-            : window.Store.ContactMethods.getUserid(contact);
-        res.isEnterprise &#x3D; useOldImplementation
-            ? contact.isEnterprise
-            : window.Store.ContactMethods.getIsEnterprise(contact);
-        res.verifiedName &#x3D; useOldImplementation
-            ? contact.verifiedName
-            : window.Store.ContactMethods.getVerifiedName(contact);
-        res.verifiedLevel &#x3D; useOldImplementation
-            ? contact.verifiedLevel
-            : window.Store.ContactMethods.getVerifiedLevel(contact);
-        res.statusMute &#x3D; useOldImplementation
-            ? contact.statusMute
-            : window.Store.ContactMethods.getStatusMute(contact);
-        res.name &#x3D; useOldImplementation
-            ? contact.name
-            : window.Store.ContactMethods.getName(contact);
-        res.shortName &#x3D; useOldImplementation
-            ? contact.shortName
-            : window.Store.ContactMethods.getShortName(contact);
-        res.pushname &#x3D; useOldImplementation
-            ? contact.pushname
-            : window.Store.ContactMethods.getPushname(contact);
+        if (!res.isBlocked) {
+            const alt &#x3D; window
+                .require(&#x27;WAWebApiContact&#x27;)
+                .getAlternateUserWid(
+                    window
+                        .require(&#x27;WAWebWidFactory&#x27;)
+                        .asUserWidOrThrow(contact.id),
+                );
+            if (alt) {
+                res.isBlocked &#x3D; !!window
+                    .require(&#x27;WAWebCollections&#x27;)
+                    .Blocklist.get(alt);
+            }
+        }
+
+        const ContactMethods &#x3D; window.require(&#x27;WAWebContactGetters&#x27;);
+        res.isMe &#x3D; ContactMethods.getIsMe(contact);
+        res.isUser &#x3D; ContactMethods.getIsUser(contact);
+        res.isGroup &#x3D; ContactMethods.getIsGroup(contact);
+        res.isWAContact &#x3D; ContactMethods.getIsWAContact(contact);
+        res.userid &#x3D; ContactMethods.getUserid(contact);
+        res.verifiedName &#x3D; ContactMethods.getVerifiedName(contact);
+        res.verifiedLevel &#x3D; ContactMethods.getVerifiedLevel(contact);
+        res.statusMute &#x3D; ContactMethods.getStatusMute(contact);
+        res.name &#x3D; ContactMethods.getName(contact);
+        res.shortName &#x3D; ContactMethods.getShortName(contact);
+        res.pushname &#x3D; ContactMethods.getPushname(contact);
+
+        const { getIsMyContact } &#x3D; window.require(
+            &#x27;WAWebFrontendContactGetters&#x27;,
+        );
+        res.isMyContact &#x3D; getIsMyContact(contact);
+        res.isEnterprise &#x3D; ContactMethods.getIsEnterprise(contact);
 
         return res;
     };
 
-    window.WWebJS.getContact &#x3D; async contactId &#x3D;&gt; {
-        const wid &#x3D; window.Store.WidFactory.createWid(contactId);
-        const contact &#x3D; await window.Store.Contact.find(wid);
-        const bizProfile &#x3D; await window.Store.BusinessProfile.fetchBizProfile(wid);
-        bizProfile.profileOptions &amp;amp;&amp;amp; (contact.businessProfile &#x3D; bizProfile);
+    window.WWebJS.getContact &#x3D; async (contactId) &#x3D;&gt; {
+        const contactWid &#x3D; window
+            .require(&#x27;WAWebWidFactory&#x27;)
+            .createWid(contactId);
+        const contact &#x3D; await window
+            .require(&#x27;WAWebCollections&#x27;)
+            .Contact.find(contactWid);
+        if (contact.isBusiness || contact.isEnterprise) {
+            const bizProfile &#x3D; await window
+                .require(&#x27;WAWebCollections&#x27;)
+                .BusinessProfile.find(contactWid);
+            bizProfile.profileOptions &amp;amp;&amp;amp; (contact.businessProfile &#x3D; bizProfile);
+        }
         return window.WWebJS.getContactModel(contact);
     };
 
     window.WWebJS.getContacts &#x3D; () &#x3D;&gt; {
-        const contacts &#x3D; window.Store.Contact.getModelsArray();
-        return contacts.map(contact &#x3D;&gt; window.WWebJS.getContactModel(contact));
+        const contacts &#x3D; window
+            .require(&#x27;WAWebCollections&#x27;)
+            .Contact.getModelsArray();
+        return contacts.map(async (contact) &#x3D;&gt; {
+            if (contact.isBusiness || contact.isEnterprise) {
+                const contactWid &#x3D; window
+                    .require(&#x27;WAWebWidFactory&#x27;)
+                    .createWid(contact.id);
+                const bizProfile &#x3D; await window
+                    .require(&#x27;WAWebCollections&#x27;)
+                    .BusinessProfile.find(contactWid);
+                bizProfile.profileOptions &amp;amp;&amp;amp;
+                    (contact.businessProfile &#x3D; bizProfile);
+            }
+            return window.WWebJS.getContactModel(contact);
+        });
     };
 
     window.WWebJS.mediaInfoToFile &#x3D; ({ data, mimetype, filename }) &#x3D;&gt; {
@@ -613,7 +1138,7 @@ exports.LoadUtils &#x3D; () &#x3D;&gt; {
         const blob &#x3D; new Blob([buffer], { type: mimetype });
         return new File([blob], filename, {
             type: mimetype,
-            lastModified: Date.now()
+            lastModified: Date.now(),
         });
     };
 
@@ -649,18 +1174,17 @@ exports.LoadUtils &#x3D; () &#x3D;&gt; {
 
     window.WWebJS.generateHash &#x3D; async (length) &#x3D;&gt; {
         var result &#x3D; &#x27;&#x27;;
-        var characters &#x3D; &#x27;ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789&#x27;;
+        var characters &#x3D;
+            &#x27;ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789&#x27;;
         var charactersLength &#x3D; characters.length;
         for (var i &#x3D; 0; i &amp;lt; length; i++) {
-            result +&#x3D; characters.charAt(Math.floor(Math.random() * charactersLength));
+            result +&#x3D; characters.charAt(
+                Math.floor(Math.random() * charactersLength),
+            );
         }
         return result;
     };
 
-    /**
-     * Referenced from and modified:
-     * @see https://github.com/wppconnect-team/wa-js/commit/290ebfefe6021b3d17f7fdfdda5545bb0473b26f
-     */
     window.WWebJS.generateWaveform &#x3D; async (audioFile) &#x3D;&gt; {
         try {
             const audioData &#x3D; await audioFile.arrayBuffer();
@@ -684,7 +1208,7 @@ exports.LoadUtils &#x3D; () &#x3D;&gt; {
             const normalizedData &#x3D; filteredData.map((n) &#x3D;&gt; n * multiplier);
 
             const waveform &#x3D; new Uint8Array(
-                normalizedData.map((n) &#x3D;&gt; Math.floor(100 * n))
+                normalizedData.map((n) &#x3D;&gt; Math.floor(100 * n)),
             );
 
             return waveform;
@@ -694,44 +1218,45 @@ exports.LoadUtils &#x3D; () &#x3D;&gt; {
     };
 
     window.WWebJS.sendClearChat &#x3D; async (chatId) &#x3D;&gt; {
-        let chat &#x3D; window.Store.Chat.get(chatId);
+        let chat &#x3D; await window.WWebJS.getChat(chatId, { getAsModel: false });
         if (chat !&#x3D;&#x3D; undefined) {
-            await window.Store.SendClear.sendClear(chat, false);
+            await window.require(&#x27;WAWebChatClearBridge&#x27;).sendClear(chat, false);
             return true;
         }
         return false;
     };
 
     window.WWebJS.sendDeleteChat &#x3D; async (chatId) &#x3D;&gt; {
-        let chat &#x3D; window.Store.Chat.get(chatId);
+        let chat &#x3D; await window.WWebJS.getChat(chatId, { getAsModel: false });
         if (chat !&#x3D;&#x3D; undefined) {
-            await window.Store.SendDelete.sendDelete(chat);
+            await window.require(&#x27;WAWebDeleteChatAction&#x27;).sendDelete(chat);
             return true;
         }
         return false;
     };
 
     window.WWebJS.sendChatstate &#x3D; async (state, chatId) &#x3D;&gt; {
-        chatId &#x3D; window.Store.WidFactory.createWid(chatId);
+        chatId &#x3D; window.require(&#x27;WAWebWidFactory&#x27;).createWid(chatId);
 
+        const ChatState &#x3D; window.require(&#x27;WAWebChatStateBridge&#x27;);
         switch (state) {
-        case &#x27;typing&#x27;:
-            await window.Store.ChatState.sendChatStateComposing(chatId);
-            break;
-        case &#x27;recording&#x27;:
-            await window.Store.ChatState.sendChatStateRecording(chatId);
-            break;
-        case &#x27;stop&#x27;:
-            await window.Store.ChatState.sendChatStatePaused(chatId);
-            break;
-        default:
-            throw &#x27;Invalid chatstate&#x27;;
+            case &#x27;typing&#x27;:
+                await ChatState.sendChatStateComposing(chatId);
+                break;
+            case &#x27;recording&#x27;:
+                await ChatState.sendChatStateRecording(chatId);
+                break;
+            case &#x27;stop&#x27;:
+                await ChatState.sendChatStatePaused(chatId);
+                break;
+            default:
+                throw &#x27;Invalid chatstate&#x27;;
         }
 
         return true;
     };
 
-    window.WWebJS.getLabelModel &#x3D; label &#x3D;&gt; {
+    window.WWebJS.getLabelModel &#x3D; (label) &#x3D;&gt; {
         let res &#x3D; label.serialize();
         res.hexColor &#x3D; label.hexColor;
 
@@ -739,28 +1264,34 @@ exports.LoadUtils &#x3D; () &#x3D;&gt; {
     };
 
     window.WWebJS.getLabels &#x3D; () &#x3D;&gt; {
-        const labels &#x3D; window.Store.Label.getModelsArray();
-        return labels.map(label &#x3D;&gt; window.WWebJS.getLabelModel(label));
+        const labels &#x3D; window
+            .require(&#x27;WAWebCollections&#x27;)
+            .Label.getModelsArray();
+        return labels.map((label) &#x3D;&gt; window.WWebJS.getLabelModel(label));
     };
 
     window.WWebJS.getLabel &#x3D; (labelId) &#x3D;&gt; {
-        const label &#x3D; window.Store.Label.get(labelId);
+        const label &#x3D; window.require(&#x27;WAWebCollections&#x27;).Label.get(labelId);
         return window.WWebJS.getLabelModel(label);
     };
 
     window.WWebJS.getChatLabels &#x3D; async (chatId) &#x3D;&gt; {
         const chat &#x3D; await window.WWebJS.getChat(chatId);
-        return (chat.labels || []).map(id &#x3D;&gt; window.WWebJS.getLabel(id));
+        return (chat.labels || []).map((id) &#x3D;&gt; window.WWebJS.getLabel(id));
     };
 
     window.WWebJS.getOrderDetail &#x3D; async (orderId, token, chatId) &#x3D;&gt; {
-        const chatWid &#x3D; window.Store.WidFactory.createWid(chatId);
-        return window.Store.QueryOrder.queryOrder(chatWid, orderId, 80, 80, token);
+        const chatWid &#x3D; window.require(&#x27;WAWebWidFactory&#x27;).createWid(chatId);
+        return window
+            .require(&#x27;WAWebBizOrderBridge&#x27;)
+            .queryOrder(chatWid, orderId, 80, 80, token);
     };
 
     window.WWebJS.getProductMetadata &#x3D; async (productId) &#x3D;&gt; {
-        let sellerId &#x3D; window.Store.Conn.wid;
-        let product &#x3D; await window.Store.QueryProduct.queryProduct(sellerId, productId);
+        let sellerId &#x3D; window.require(&#x27;WAWebConnModel&#x27;).Conn.wid;
+        let product &#x3D; await window
+            .require(&#x27;WAWebBizProductCatalogBridge&#x27;)
+            .queryProduct(sellerId, productId);
         if (product &amp;amp;&amp;amp; product.data) {
             return product.data;
         }
@@ -769,20 +1300,26 @@ exports.LoadUtils &#x3D; () &#x3D;&gt; {
     };
 
     window.WWebJS.rejectCall &#x3D; async (peerJid, id) &#x3D;&gt; {
-        peerJid &#x3D; peerJid.split(&#x27;@&#x27;)[0] + &#x27;@s.whatsapp.net&#x27;;
-        let userId &#x3D; window.Store.User.getMaybeMeUser().user + &#x27;@s.whatsapp.net&#x27;;
-        const stanza &#x3D; window.Store.SocketWap.wap(&#x27;call&#x27;, {
-            id: window.Store.SocketWap.generateId(),
-            from: window.Store.SocketWap.USER_JID(userId),
-            to: window.Store.SocketWap.USER_JID(peerJid),
-        }, [
-            window.Store.SocketWap.wap(&#x27;reject&#x27;, {
-                &#x27;call-id&#x27;: id,
-                &#x27;call-creator&#x27;: window.Store.SocketWap.USER_JID(peerJid),
-                count: &#x27;0&#x27;,
-            })
-        ]);
-        await window.Store.Socket.deprecatedCastStanza(stanza);
+        let userId &#x3D; window
+            .require(&#x27;WAWebUserPrefsMeUser&#x27;)
+            .getMaybeMePnUser()._serialized;
+
+        const stanza &#x3D; window.require(&#x27;WAWap&#x27;).wap(
+            &#x27;call&#x27;,
+            {
+                id: window.require(&#x27;WAWap&#x27;).generateId(),
+                from: userId,
+                to: peerJid,
+            },
+            [
+                window.require(&#x27;WAWap&#x27;).wap(&#x27;reject&#x27;, {
+                    &#x27;call-id&#x27;: id,
+                    &#x27;call-creator&#x27;: peerJid,
+                    count: &#x27;0&#x27;,
+                }),
+            ],
+        );
+        await window.require(&#x27;WADeprecatedSendIq&#x27;).deprecatedCastStanza(stanza);
     };
 
     window.WWebJS.cropAndResizeImage &#x3D; async (media, options &#x3D; {}) &#x3D;&gt; {
@@ -792,9 +1329,17 @@ exports.LoadUtils &#x3D; () &#x3D;&gt; {
         if (options.mimetype &amp;amp;&amp;amp; !options.mimetype.includes(&#x27;image&#x27;))
             delete options.mimetype;
 
-        options &#x3D; Object.assign({ size: 640, mimetype: media.mimetype, quality: .75, asDataUrl: false }, options);
+        options &#x3D; Object.assign(
+            {
+                size: 640,
+                mimetype: media.mimetype,
+                quality: 0.75,
+                asDataUrl: false,
+            },
+            options,
+        );
 
-        const img &#x3D; await new Promise ((resolve, reject) &#x3D;&gt; {
+        const img &#x3D; await new Promise((resolve, reject) &#x3D;&gt; {
             const img &#x3D; new Image();
             img.onload &#x3D; () &#x3D;&gt; resolve(img);
             img.onerror &#x3D; reject;
@@ -814,48 +1359,69 @@ exports.LoadUtils &#x3D; () &#x3D;&gt; {
 
         const dataUrl &#x3D; canvas.toDataURL(options.mimetype, options.quality);
 
-        if (options.asDataUrl)
-            return dataUrl;
+        if (options.asDataUrl) return dataUrl;
 
         return Object.assign(media, {
-            mimetype: options.mimeType,
-            data: dataUrl.replace(&#x60;data:${options.mimeType};base64,&#x60;, &#x27;&#x27;)
+            mimetype: options.mimetype,
+            data: dataUrl.replace(&#x60;data:${options.mimetype};base64,&#x60;, &#x27;&#x27;),
         });
     };
 
-    window.WWebJS.setPicture &#x3D; async (chatid, media) &#x3D;&gt; {
-        const thumbnail &#x3D; await window.WWebJS.cropAndResizeImage(media, { asDataUrl: true, mimetype: &#x27;image/jpeg&#x27;, size: 96 });
-        const profilePic &#x3D; await window.WWebJS.cropAndResizeImage(media, { asDataUrl: true, mimetype: &#x27;image/jpeg&#x27;, size: 640 });
+    window.WWebJS.setPicture &#x3D; async (chatId, media) &#x3D;&gt; {
+        const thumbnail &#x3D; await window.WWebJS.cropAndResizeImage(media, {
+            asDataUrl: true,
+            mimetype: &#x27;image/jpeg&#x27;,
+            size: 96,
+        });
+        const profilePic &#x3D; await window.WWebJS.cropAndResizeImage(media, {
+            asDataUrl: true,
+            mimetype: &#x27;image/jpeg&#x27;,
+            size: 640,
+        });
 
-        const chatWid &#x3D; window.Store.WidFactory.createWid(chatid);
+        const chatWid &#x3D; window.require(&#x27;WAWebWidFactory&#x27;).createWid(chatId);
         try {
-            const collection &#x3D; window.Store.ProfilePicThumb.get(chatid);
-            if (!collection.canSet()) return;
+            const collection &#x3D;
+                window
+                    .require(&#x27;WAWebCollections&#x27;)
+                    .ProfilePicThumb.get(chatId) ||
+                (await window
+                    .require(&#x27;WAWebCollections&#x27;)
+                    .ProfilePicThumb.find(chatId));
+            if (!collection?.canSet()) return false;
 
-            const res &#x3D; await window.Store.GroupUtils.sendSetPicture(chatWid, thumbnail, profilePic);
+            const res &#x3D; await window
+                .require(&#x27;WAWebContactProfilePicThumbBridge&#x27;)
+                .sendSetPicture(chatWid, thumbnail, profilePic);
             return res ? res.status &#x3D;&#x3D;&#x3D; 200 : false;
         } catch (err) {
-            if(err.name &#x3D;&#x3D;&#x3D; &#x27;ServerStatusCodeError&#x27;) return false;
+            if (err.name &#x3D;&#x3D;&#x3D; &#x27;ServerStatusCodeError&#x27;) return false;
             throw err;
         }
     };
 
     window.WWebJS.deletePicture &#x3D; async (chatid) &#x3D;&gt; {
-        const chatWid &#x3D; window.Store.WidFactory.createWid(chatid);
+        const chatWid &#x3D; window.require(&#x27;WAWebWidFactory&#x27;).createWid(chatid);
         try {
-            const collection &#x3D; window.Store.ProfilePicThumb.get(chatid);
+            const collection &#x3D; window
+                .require(&#x27;WAWebCollections&#x27;)
+                .ProfilePicThumb.get(chatid);
             if (!collection.canDelete()) return;
 
-            const res &#x3D; await window.Store.GroupUtils.requestDeletePicture(chatWid);
+            const res &#x3D; await window
+                .require(&#x27;WAWebContactProfilePicThumbBridge&#x27;)
+                .requestDeletePicture(chatWid);
             return res ? res.status &#x3D;&#x3D;&#x3D; 200 : false;
         } catch (err) {
-            if(err.name &#x3D;&#x3D;&#x3D; &#x27;ServerStatusCodeError&#x27;) return false;
+            if (err.name &#x3D;&#x3D;&#x3D; &#x27;ServerStatusCodeError&#x27;) return false;
             throw err;
         }
     };
-    
+
     window.WWebJS.getProfilePicThumbToBase64 &#x3D; async (chatWid) &#x3D;&gt; {
-        const profilePicCollection &#x3D; await window.Store.ProfilePicThumb.find(chatWid);
+        const profilePicCollection &#x3D; await window
+            .require(&#x27;WAWebCollections&#x27;)
+            .ProfilePicThumb.find(chatWid);
 
         const _readImageAsBase64 &#x3D; (imageBlob) &#x3D;&gt; {
             return new Promise((resolve) &#x3D;&gt; {
@@ -883,69 +1449,60 @@ exports.LoadUtils &#x3D; () &#x3D;&gt; {
                         return base64Image;
                     }
                 }
-            } catch (error) { /* empty */ }
+            } catch (error) {
+                /* empty */
+            }
         }
         return undefined;
     };
 
-    window.WWebJS.getAddParticipantsRpcResult &#x3D; async (groupMetadata, groupWid, participantWid) &#x3D;&gt; {
-        const participantLidArgs &#x3D; groupMetadata?.isLidAddressingMode
-            ? {
-                phoneNumber: participantWid,
-                lid: window.Store.LidUtils.getCurrentLid(participantWid)
-            }
-            : { phoneNumber: participantWid };
+    window.WWebJS.getAddParticipantsRpcResult &#x3D; async (
+        groupWid,
+        participantWid,
+    ) &#x3D;&gt; {
+        const iqTo &#x3D; window.require(&#x27;WAWebWidToJid&#x27;).widToGroupJid(groupWid);
 
-        const iqTo &#x3D; window.Store.WidToJid.widToGroupJid(groupWid);
-
-        const participantArgs &#x3D;
-            participantLidArgs.lid
-                ? [{
-                    participantJid: window.Store.WidToJid.widToUserJid(participantLidArgs.lid),
-                    phoneNumberMixinArgs: {
-                        anyPhoneNumber: window.Store.WidToJid.widToUserJid(participantLidArgs.phoneNumber)
-                    }
-                }]
-                : [{
-                    participantJid: window.Store.WidToJid.widToUserJid(participantLidArgs.phoneNumber)
-                }];
+        const participantArgs &#x3D; [
+            {
+                participantJid: window
+                    .require(&#x27;WAWebWidToJid&#x27;)
+                    .widToUserJid(participantWid),
+            },
+        ];
 
         let rpcResult, resultArgs;
-        const isOldImpl &#x3D; window.compareWwebVersions(window.Debug.VERSION, &#x27;&amp;lt;&#x3D;&#x27;, &#x27;2.2335.9&#x27;);
         const data &#x3D; {
             name: undefined,
             code: undefined,
             inviteV4Code: undefined,
-            inviteV4CodeExp: undefined
+            inviteV4CodeExp: undefined,
         };
 
         try {
-            rpcResult &#x3D; await window.Store.GroupParticipants.sendAddParticipantsRPC({ participantArgs, iqTo });
-            resultArgs &#x3D; isOldImpl
-                ? rpcResult.value.addParticipant[0].addParticipantsParticipantMixins
-                : rpcResult.value.addParticipant[0]
+            rpcResult &#x3D; await window
+                .require(&#x27;WASmaxGroupsAddParticipantsRPC&#x27;)
+                .sendAddParticipantsRPC({ participantArgs, iqTo });
+            resultArgs &#x3D;
+                rpcResult.value.addParticipant[0]
                     .addParticipantsParticipantAddedOrNonRegisteredWaUserParticipantErrorLidResponseMixinGroup
-                    .value
-                    .addParticipantsParticipantMixins;
+                    .value.addParticipantsParticipantMixins;
         } catch (err) {
             data.code &#x3D; 400;
             return data;
         }
 
         if (rpcResult.name &#x3D;&#x3D;&#x3D; &#x27;AddParticipantsResponseSuccess&#x27;) {
-            const code &#x3D; resultArgs?.value.error ?? &#x27;200&#x27;;
+            const code &#x3D; resultArgs?.value.error || &#x27;200&#x27;;
             data.name &#x3D; resultArgs?.name;
             data.code &#x3D; +code;
             data.inviteV4Code &#x3D; resultArgs?.value.addRequestCode;
-            data.inviteV4CodeExp &#x3D; resultArgs?.value.addRequestExpiration?.toString();
-        }
-
-        else if (rpcResult.name &#x3D;&#x3D;&#x3D; &#x27;AddParticipantsResponseClientError&#x27;) {
-            const { code: code } &#x3D; rpcResult.value.errorAddParticipantsClientErrors.value;
+            data.inviteV4CodeExp &#x3D;
+                resultArgs?.value.addRequestExpiration?.toString();
+        } else if (rpcResult.name &#x3D;&#x3D;&#x3D; &#x27;AddParticipantsResponseClientError&#x27;) {
+            const { code: code } &#x3D;
+                rpcResult.value.errorAddParticipantsClientErrors.value;
             data.code &#x3D; +code;
-        }
-
-        else if (rpcResult.name &#x3D;&#x3D;&#x3D; &#x27;AddParticipantsResponseServerError&#x27;) {
+        } else if (rpcResult.name &#x3D;&#x3D;&#x3D; &#x27;AddParticipantsResponseServerError&#x27;) {
             const { code: code } &#x3D; rpcResult.value.errorServerErrors.value;
             data.code &#x3D; +code;
         }
@@ -953,44 +1510,69 @@ exports.LoadUtils &#x3D; () &#x3D;&gt; {
         return data;
     };
 
-    window.WWebJS.membershipRequestAction &#x3D; async (groupId, action, requesterIds, sleep) &#x3D;&gt; {
-        const groupWid &#x3D; window.Store.WidFactory.createWid(groupId);
-        const group &#x3D; await window.Store.Chat.find(groupWid);
+    window.WWebJS.membershipRequestAction &#x3D; async (
+        groupId,
+        action,
+        requesterIds,
+        sleep,
+    ) &#x3D;&gt; {
+        const groupWid &#x3D; window.require(&#x27;WAWebWidFactory&#x27;).createWid(groupId);
+        const group &#x3D; await window
+            .require(&#x27;WAWebCollections&#x27;)
+            .Chat.find(groupWid);
         const toApprove &#x3D; action &#x3D;&#x3D;&#x3D; &#x27;Approve&#x27;;
         let membershipRequests;
         let response;
         let result &#x3D; [];
 
-        await window.Store.GroupQueryAndUpdate({ id: groupId });
+        await window
+            .require(&#x27;WAWebGroupQueryJob&#x27;)
+            .queryAndUpdateGroupMetadataById({ id: groupId });
 
         if (!requesterIds?.length) {
-            membershipRequests &#x3D; group.groupMetadata.membershipApprovalRequests._models.map(({ id }) &#x3D;&gt; id);
+            membershipRequests &#x3D;
+                group.groupMetadata.membershipApprovalRequests._models.map(
+                    ({ id }) &#x3D;&gt; id,
+                );
         } else {
             !Array.isArray(requesterIds) &amp;amp;&amp;amp; (requesterIds &#x3D; [requesterIds]);
-            membershipRequests &#x3D; requesterIds.map(r &#x3D;&gt; window.Store.WidFactory.createWid(r));
+            membershipRequests &#x3D; requesterIds.map((r) &#x3D;&gt;
+                window.require(&#x27;WAWebWidFactory&#x27;).createWid(r),
+            );
         }
 
         if (!membershipRequests.length) return [];
 
-        const participantArgs &#x3D; membershipRequests.map(m &#x3D;&gt; ({
+        const participantArgs &#x3D; membershipRequests.map((m) &#x3D;&gt; ({
             participantArgs: [
                 {
-                    participantJid: window.Store.WidToJid.widToUserJid(m)
-                }
-            ]
+                    participantJid: window
+                        .require(&#x27;WAWebWidToJid&#x27;)
+                        .widToUserJid(m),
+                },
+            ],
         }));
 
-        const groupJid &#x3D; window.Store.WidToJid.widToGroupJid(groupWid);
-        
+        const groupJid &#x3D; window
+            .require(&#x27;WAWebWidToJid&#x27;)
+            .widToGroupJid(groupWid);
+
         const _getSleepTime &#x3D; (sleep) &#x3D;&gt; {
-            if (!Array.isArray(sleep) || (sleep.length &#x3D;&#x3D;&#x3D; 2 &amp;amp;&amp;amp; sleep[0] &#x3D;&#x3D;&#x3D; sleep[1])) {
+            if (
+                !Array.isArray(sleep) ||
+                (sleep.length &#x3D;&#x3D;&#x3D; 2 &amp;amp;&amp;amp; sleep[0] &#x3D;&#x3D;&#x3D; sleep[1])
+            ) {
                 return sleep;
             }
             if (sleep.length &#x3D;&#x3D;&#x3D; 1) {
                 return sleep[0];
             }
-            sleep[1] - sleep[0] &amp;lt; 100 &amp;amp;&amp;amp; (sleep[0] &#x3D; sleep[1]) &amp;amp;&amp;amp; (sleep[1] +&#x3D; 100);
-            return Math.floor(Math.random() * (sleep[1] - sleep[0] + 1)) + sleep[0];
+            sleep[1] - sleep[0] &amp;lt; 100 &amp;amp;&amp;amp;
+                (sleep[0] &#x3D; sleep[1]) &amp;amp;&amp;amp;
+                (sleep[1] +&#x3D; 100);
+            return (
+                Math.floor(Math.random() * (sleep[1] - sleep[0] + 1)) + sleep[0]
+            );
         };
 
         const membReqResCodes &#x3D; {
@@ -1002,45 +1584,69 @@ exports.LoadUtils &#x3D; () &#x3D;&gt; {
             408: &#x27;ParticipantTemporarilyBlockedError&#x27;,
             409: &#x27;ParticipantConflictError&#x27;,
             412: &#x27;ParticipantParentLinkedGroupsResourceConstraintError&#x27;,
-            500: &#x27;ParticipantResourceConstraintError&#x27;
+            500: &#x27;ParticipantResourceConstraintError&#x27;,
         };
 
         try {
             for (const participant of participantArgs) {
-                response &#x3D; await window.Store.MembershipRequestUtils.sendMembershipRequestsActionRPC({
-                    iqTo: groupJid,
-                    [toApprove ? &#x27;approveArgs&#x27; : &#x27;rejectArgs&#x27;]: participant
-                });
+                response &#x3D; await window
+                    .require(&#x27;WASmaxGroupsMembershipRequestsActionRPC&#x27;)
+                    .sendMembershipRequestsActionRPC({
+                        iqTo: groupJid,
+                        [toApprove ? &#x27;approveArgs&#x27; : &#x27;rejectArgs&#x27;]: participant,
+                    });
 
-                if (response.name &#x3D;&#x3D;&#x3D; &#x27;MembershipRequestsActionResponseSuccess&#x27;) {
+                if (
+                    response.name &#x3D;&#x3D;&#x3D; &#x27;MembershipRequestsActionResponseSuccess&#x27;
+                ) {
                     const value &#x3D; toApprove
                         ? response.value.membershipRequestsActionApprove
                         : response.value.membershipRequestsActionReject;
                     if (value?.participant) {
-                        const [_] &#x3D; value.participant.map(p &#x3D;&gt; {
+                        const [_] &#x3D; value.participant.map((p) &#x3D;&gt; {
                             const error &#x3D; toApprove
-                                ? value.participant[0].membershipRequestsActionAcceptParticipantMixins?.value.error
-                                : value.participant[0].membershipRequestsActionRejectParticipantMixins?.value.error;
+                                ? value.participant[0]
+                                      .membershipRequestsActionAcceptParticipantMixins
+                                      ?.value.error
+                                : value.participant[0]
+                                      .membershipRequestsActionRejectParticipantMixins
+                                      ?.value.error;
                             return {
-                                requesterId: window.Store.WidFactory.createWid(p.jid)._serialized,
+                                requesterId: window
+                                    .require(&#x27;WAWebWidFactory&#x27;)
+                                    .createWid(p.jid)._serialized,
                                 ...(error
-                                    ? { error: +error, message: membReqResCodes[error] || membReqResCodes.default }
-                                    : { message: &#x60;${toApprove ? &#x27;Approved&#x27; : &#x27;Rejected&#x27;} successfully&#x60; })
+                                    ? {
+                                          error: +error,
+                                          message:
+                                              membReqResCodes[error] ||
+                                              membReqResCodes.default,
+                                      }
+                                    : {
+                                          message: &#x60;${toApprove ? &#x27;Approved&#x27; : &#x27;Rejected&#x27;} successfully&#x60;,
+                                      }),
                             };
                         });
                         _ &amp;amp;&amp;amp; result.push(_);
                     }
                 } else {
                     result.push({
-                        requesterId: window.Store.JidToWid.userJidToUserWid(participant.participantArgs[0].participantJid)._serialized,
-                        message: &#x27;ServerStatusCodeError&#x27;
+                        requesterId: window
+                            .require(&#x27;WAWebJidToWid&#x27;)
+                            .userJidToUserWid(
+                                participant.participantArgs[0].participantJid,
+                            )._serialized,
+                        message: &#x27;ServerStatusCodeError&#x27;,
                     });
                 }
 
                 sleep &amp;amp;&amp;amp;
                     participantArgs.length &gt; 1 &amp;amp;&amp;amp;
-                    participantArgs.indexOf(participant) !&#x3D;&#x3D; participantArgs.length - 1 &amp;amp;&amp;amp;
-                    (await new Promise((resolve) &#x3D;&gt; setTimeout(resolve, _getSleepTime(sleep))));
+                    participantArgs.indexOf(participant) !&#x3D;&#x3D;
+                        participantArgs.length - 1 &amp;amp;&amp;amp;
+                    (await new Promise((resolve) &#x3D;&gt;
+                        setTimeout(resolve, _getSleepTime(sleep)),
+                    ));
             }
             return result;
         } catch (err) {
@@ -1048,22 +1654,124 @@ exports.LoadUtils &#x3D; () &#x3D;&gt; {
         }
     };
 
+    window.WWebJS.subscribeToUnsubscribeFromChannel &#x3D; async (
+        channelId,
+        action,
+        options &#x3D; {},
+    ) &#x3D;&gt; {
+        const channel &#x3D; await window.WWebJS.getChat(channelId, {
+            getAsModel: false,
+        });
+
+        if (!channel || channel.newsletterMetadata.membershipType &#x3D;&#x3D;&#x3D; &#x27;owner&#x27;)
+            return false;
+        options &#x3D; {
+            eventSurface: 3,
+            deleteLocalModels: options.deleteLocalModels ?? true,
+        };
+
+        try {
+            if (action &#x3D;&#x3D;&#x3D; &#x27;Subscribe&#x27;) {
+                await window
+                    .require(&#x27;WAWebNewsletterSubscribeAction&#x27;)
+                    .subscribeToNewsletterAction(channel, options);
+            } else if (action &#x3D;&#x3D;&#x3D; &#x27;Unsubscribe&#x27;) {
+                await window
+                    .require(&#x27;WAWebNewsletterUnsubscribeAction&#x27;)
+                    .unsubscribeFromNewsletterAction(channel, options);
+            } else return false;
+            return true;
+        } catch (err) {
+            if (err.name &#x3D;&#x3D;&#x3D; &#x27;ServerStatusCodeError&#x27;) return false;
+            throw err;
+        }
+    };
+
     window.WWebJS.pinUnpinMsgAction &#x3D; async (msgId, action, duration) &#x3D;&gt; {
-        const message &#x3D; window.Store.Msg.get(msgId) || (await window.Store.Msg.getMessagesById([msgId]))?.messages?.[0];
+        const message &#x3D;
+            window.require(&#x27;WAWebCollections&#x27;).Msg.get(msgId) ||
+            (
+                await window
+                    .require(&#x27;WAWebCollections&#x27;)
+                    .Msg.getMessagesById([msgId])
+            )?.messages?.[0];
         if (!message) return false;
-        const response &#x3D; await window.Store.pinUnpinMsg(message, action, duration);
+
+        if (typeof duration !&#x3D;&#x3D; &#x27;number&#x27;) return false;
+
+        const originalFunction &#x3D; window.require(
+            &#x27;WAWebPinMsgConstants&#x27;,
+        ).getPinExpiryDuration;
+        window.require(&#x27;WAWebPinMsgConstants&#x27;).getPinExpiryDuration &#x3D; () &#x3D;&gt;
+            duration;
+
+        const response &#x3D; await window
+            .require(&#x27;WAWebSendPinMessageAction&#x27;)
+            .sendPinInChatMsg(message, action, duration);
+
+        window.require(&#x27;WAWebPinMsgConstants&#x27;).getPinExpiryDuration &#x3D;
+            originalFunction;
+
         return response.messageSendResult &#x3D;&#x3D;&#x3D; &#x27;OK&#x27;;
     };
-    
-    window.WWebJS.getStatusModel &#x3D; status &#x3D;&gt; {
+
+    window.WWebJS.getStatusModel &#x3D; (status) &#x3D;&gt; {
         const res &#x3D; status.serialize();
         delete res._msgs;
         return res;
     };
 
     window.WWebJS.getAllStatuses &#x3D; () &#x3D;&gt; {
-        const statuses &#x3D; window.Store.Status.getModelsArray();
-        return statuses.map(status &#x3D;&gt; window.WWebJS.getStatusModel(status));
+        const statuses &#x3D; window
+            .require(&#x27;WAWebCollections&#x27;)
+            .Status.getModelsArray();
+        return statuses.map((status) &#x3D;&gt; window.WWebJS.getStatusModel(status));
+    };
+
+    window.WWebJS.enforceLidAndPnRetrieval &#x3D; async (userId) &#x3D;&gt; {
+        const wid &#x3D; window.require(&#x27;WAWebWidFactory&#x27;).createWid(userId);
+        const isLid &#x3D; wid.server &#x3D;&#x3D;&#x3D; &#x27;lid&#x27;;
+
+        let lid &#x3D; isLid
+            ? wid
+            : window.require(&#x27;WAWebApiContact&#x27;).getCurrentLid(wid);
+        let phone &#x3D; isLid
+            ? window.require(&#x27;WAWebApiContact&#x27;).getPhoneNumber(wid)
+            : wid;
+
+        if (!isLid &amp;amp;&amp;amp; !lid) {
+            const queryResult &#x3D; await window
+                .require(&#x27;WAWebQueryExistsJob&#x27;)
+                .queryWidExists(wid);
+            if (!queryResult?.wid) return {};
+            lid &#x3D; window.require(&#x27;WAWebApiContact&#x27;).getCurrentLid(wid);
+        }
+
+        if (isLid &amp;amp;&amp;amp; !phone) {
+            const queryResult &#x3D; await window
+                .require(&#x27;WAWebQueryExistsJob&#x27;)
+                .queryWidExists(wid);
+            if (!queryResult?.wid) return {};
+            phone &#x3D; window.require(&#x27;WAWebApiContact&#x27;).getPhoneNumber(wid);
+        }
+
+        return { lid, phone };
+    };
+
+    window.WWebJS.assertColor &#x3D; (hex) &#x3D;&gt; {
+        let color;
+        if (typeof hex &#x3D;&#x3D;&#x3D; &#x27;number&#x27;) {
+            color &#x3D; hex &gt; 0 ? hex : 0xffffffff + parseInt(hex) + 1;
+        } else if (typeof hex &#x3D;&#x3D;&#x3D; &#x27;string&#x27;) {
+            let number &#x3D; hex.trim().replace(&#x27;#&#x27;, &#x27;&#x27;);
+            if (number.length &amp;lt;&#x3D; 6) {
+                number &#x3D; &#x27;FF&#x27; + number.padStart(6, &#x27;0&#x27;);
+            }
+            color &#x3D; parseInt(number, 16);
+        } else {
+            throw &#x27;Invalid hex color&#x27;;
+        }
+        return color;
     };
 };
 </code></pre>
@@ -1076,7 +1784,7 @@ exports.LoadUtils &#x3D; () &#x3D;&gt; {
   <footer id="jsdoc-footer" class="jsdoc-footer">
     <div id="jsdoc-footer-container">
       <p>
-        Generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc</a> 3.6.11 on May 30, 2025.
+        Generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc</a> 3.6.11 on April 6, 2026.
       </p>
     </div>
   </footer>

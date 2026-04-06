@@ -31,56 +31,57 @@
     </header>
 
                 <article><div align="center">
-    <br />
     <p>
-        <a href="https://wwebjs.dev"><img src="https://github.com/wwebjs/assets/blob/main/Collection/GitHub/wwebjs.png?raw=true" title="whatsapp-web.js" alt="WWebJS Website" width="500" /></a>
+        <a href="https://wwebjs.dev">
+            <img src="https://github.com/wwebjs/Assets/blob/main/Collection/GitHub/whatsapp-web.js.png?raw=true"
+                title="whatsapp-web.js" alt="WWebJS Website" />
+        </a>
     </p>
-    <br />
     <p>
-		<a href="https://www.npmjs.com/package/whatsapp-web.js"><img src="https://img.shields.io/npm/v/whatsapp-web.js.svg" alt="npm" /></a>
-        <a href="https://depfu.com/github/pedroslopez/whatsapp-web.js?project_id=9765"><img src="https://badges.depfu.com/badges/4a65a0de96ece65fdf39e294e0c8dcba/overview.svg" alt="Depfu" /></a>
-        <img src="https://img.shields.io/badge/WhatsApp_Web-2.3000.1017054665-brightgreen.svg" alt="WhatsApp_Web 2.2346.52" />
-        <a href="https://discord.gg/H7DqQs4"><img src="https://img.shields.io/discord/698610475432411196.svg?logo=discord" alt="Discord server" /></a>
-	</p>
-    <br />
+        <a href="https://www.npmjs.com/package/whatsapp-web.js"><img
+                src="https://img.shields.io/npm/v/whatsapp-web.js.svg" alt="npm" /></a>
+        <a href="https://www.npmjs.com/package/whatsapp-web.js"><img alt="NPM Downloads"
+                src="https://img.shields.io/npm/d18m/whatsapp-web.js" /></a>
+        <a href="https://github.com/pedroslopez/whatsapp-web.js/graphs/contributors"><img alt="GitHub contributors"
+                src="https://img.shields.io/github/contributors-anon/pedroslopez/whatsapp-web.js" /></a>
+        <a href="https://depfu.com/github/pedroslopez/whatsapp-web.js?project_id=9765"><img
+                src="https://badges.depfu.com/badges/4a65a0de96ece65fdf39e294e0c8dcba/overview.svg" alt="Depfu" /></a>
+        <a href="https://discord.wwebjs.dev"><img
+                src="https://img.shields.io/discord/698610475432411196.svg?logo=discord" alt="Discord server" /></a>
+    </p>
 </div>
 <h2>About</h2>
-<p><strong>A WhatsApp API client that operates via the WhatsApp Web browser.</strong></p>
-<p>The library launches the WhatsApp Web browser app via Puppeteer, accessing its internal functions and creating a managed instance to reduce the risk of being blocked. This gives the API client nearly all WhatsApp Web features for dynamic use in a Node.js application.</p>
-<blockquote>
-<p>[!IMPORTANT]
-<strong>It is not guaranteed you will not be blocked by using this method. WhatsApp does not allow bots or unofficial clients on their platform, so this shouldn't be considered totally safe.</strong></p>
-</blockquote>
+<p>whatsapp‑web.js is a powerful <a href="https://nodejs.org/en/download/">Node.js</a> library that lets you interact with WhatsApp Web, making it easy to build a dynamic WhatsApp API with nearly all features of the web client. It uses <a href="https://pptr.dev/">Puppeteer</a> to access WhatsApp Web’s internal functions and runs them in a managed browser instance to reduce the risk of being blocked.</p>
 <h2>Links</h2>
 <ul>
 <li><a href="https://github.com/pedroslopez/whatsapp-web.js">GitHub</a></li>
 <li><a href="https://guide.wwebjs.dev/guide">Guide</a> (<a href="https://github.com/wwebjs/wwebjs.dev/tree/main">source</a>)</li>
 <li><a href="https://docs.wwebjs.dev/">Documentation</a> (<a href="https://github.com/pedroslopez/whatsapp-web.js/tree/main/docs">source</a>)</li>
-<li><a href="https://discord.gg/H7DqQs4">Discord Server</a></li>
+<li><a href="https://discord.wwebjs.dev">Discord Server</a></li>
 <li><a href="https://npmjs.org/package/whatsapp-web.js">npm</a></li>
 </ul>
 <h2>Installation</h2>
-<p>The module is available on <a href="https://npmjs.org/package/whatsapp-web.js">npm</a> via <code>npm i whatsapp-web.js</code>!</p>
-<blockquote>
-<p>[!NOTE]
-<strong>Node <code>v18</code> or higher, is required.</strong><br>
-See the <a href="https://guide.wwebjs.dev/guide">Guide</a> for quick upgrade instructions.</p>
-</blockquote>
+<p><strong>Node.js <code>v18.0.0</code> or higher, is required.</strong></p>
+<pre class="prettyprint source lang-sh"><code>npm install whatsapp-web.js
+yarn add whatsapp-web.js
+pnpm add whatsapp-web.js
+</code></pre>
+<p>Having trouble installing? Take a peak at the <a href="https://guide.wwebjs.dev/guide">Guide</a> for more detailed instructions.</p>
 <h2>Example usage</h2>
 <pre class="prettyprint source lang-js"><code>const { Client } = require('whatsapp-web.js');
+const qrcode = require('qrcode-terminal');
 
 const client = new Client();
 
 client.on('qr', (qr) => {
-    // Generate and scan this code with your phone
-    console.log('QR RECEIVED', qr);
+    qrcode.generate(qr, { small: true });
 });
 
 client.on('ready', () => {
     console.log('Client is ready!');
 });
 
-client.on('message', msg => {
+client.on('message', (msg) => {
     if (msg.body == '!ping') {
         msg.reply('pong');
     }
@@ -88,8 +89,8 @@ client.on('message', msg => {
 
 client.initialize();
 </code></pre>
-<p>Take a look at <a href="https://github.com/pedroslopez/whatsapp-web.js/blob/master/example.js">example.js</a> for another examples with additional use cases.<br>
-For further details on saving and restoring sessions, explore the provided <a href="https://wwebjs.dev/guide/creating-your-bot/authentication.html">Authentication Strategies</a>.</p>
+<p>Take a look at <a href="https://github.com/pedroslopez/whatsapp-web.js/blob/main/example.js">example.js</a> for additional examples and use cases.<br>
+For more details on saving and restoring sessions, check out the <a href="https://wwebjs.dev/guide/creating-your-bot/authentication.html">Authentication Strategies</a>.</p>
 <h2>Supported features</h2>
 <table>
 <thead>
@@ -137,11 +138,11 @@ For further details on saving and restoring sessions, explore the provided <a hr
 </tr>
 <tr>
 <td>Send buttons</td>
-<td>❌  <a href="https://www.youtube.com/watch?v=hv1R1rLeVVE">(DEPRECATED)</a></td>
+<td>❌ <a href="https://www.youtube.com/watch?v=hv1R1rLeVVE">(DEPRECATED)</a></td>
 </tr>
 <tr>
 <td>Send lists</td>
-<td>❌  <a href="https://www.youtube.com/watch?v=hv1R1rLeVVE">(DEPRECATED)</a></td>
+<td>❌ <a href="https://www.youtube.com/watch?v=hv1R1rLeVVE">(DEPRECATED)</a></td>
 </tr>
 <tr>
 <td>Receive location</td>
@@ -221,7 +222,7 @@ For further details on saving and restoring sessions, explore the provided <a hr
 </tr>
 <tr>
 <td>Vote in polls</td>
-<td>🔜</td>
+<td>✅</td>
 </tr>
 <tr>
 <td>Communities</td>
@@ -230,22 +231,21 @@ For further details on saving and restoring sessions, explore the provided <a hr
 </tbody>
 </table>
 <p>Something missing? Make an issue and let us know!</p>
-<h2>Contributing</h2>
-<p>Feel free to open pull requests; we welcome contributions! However, for significant changes, it's best to open an issue beforehand. Make sure to review our <a href="https://github.com/pedroslopez/whatsapp-web.js/blob/main/CODE_OF_CONDUCT.md">contribution guidelines</a> before creating a pull request. Before creating your own issue or pull request, always check to see if one already exists!</p>
 <h2>Supporting the project</h2>
-<p>You can support the maintainer of this project through the links below</p>
+<p>You can support the maintainer of this project through the links below:</p>
 <ul>
 <li><a href="https://github.com/sponsors/pedroslopez">Support via GitHub Sponsors</a></li>
 <li><a href="https://www.paypal.me/psla/">Support via PayPal</a></li>
-<li><a href="https://m.do.co/c/73f906a36ed4">Sign up for DigitalOcean</a> and get $200 in credit when you sign up (Referral)</li>
 </ul>
+<h2>Contributing</h2>
+<p>Feel free to open pull requests; we welcome contributions! However, for significant changes, it's best to open an issue beforehand. Make sure to review our <a href=".github/CONTRIBUTING.md">contribution guidelines</a> before creating a pull request. Before creating your own issue or pull request, always check to see if one already exists!</p>
 <h2>Disclaimer</h2>
 <p>This project is not affiliated, associated, authorized, endorsed by, or in any way officially connected with WhatsApp or any of its subsidiaries or its affiliates. The official WhatsApp website can be found at <a href="https://whatsapp.com">whatsapp.com</a>. &quot;WhatsApp&quot; as well as related names, marks, emblems and images are registered trademarks of their respective owners. Also it is not guaranteed you will not be blocked by using this method. WhatsApp does not allow bots or unofficial clients on their platform, so this shouldn't be considered totally safe.</p>
 <h2>License</h2>
 <p>Copyright 2019 Pedro S Lopez</p>
 <p>Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);<br>
 you may not use this project except in compliance with the License.<br>
-You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0.</p>
+You may obtain a copy of the License at <a href="https:%5C/%5C/www.apache.org/licenses/LICENSE-2.0">https://www.apache.org/licenses/LICENSE-2.0</a>.</p>
 <p>Unless required by applicable law or agreed to in writing, software<br>
 distributed under the License is distributed on an &quot;AS IS&quot; BASIS,<br>
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.<br>
@@ -899,6 +899,11 @@ limitations under the License.</p></article>
             <dd>
             </dd>
             <dt class="symbol-index-name">
+                <a href="Chat.html#isLocked" class="!symbol-index-name">Chat#<wbr>isLocked</a>
+            </dt>
+            <dd>
+            </dd>
+            <dt class="symbol-index-name">
                 <a href="Chat.html#isMuted" class="!symbol-index-name">Chat#<wbr>isMuted</a>
             </dt>
             <dd>
@@ -938,16 +943,16 @@ limitations under the License.</p></article>
             </dt>
             <dd>
             </dd>
-            <dt class="symbol-index-name">
-                <a href="Chat.html#pinned" class="!symbol-index-name">Chat#<wbr>pinned</a>
-            </dt>
-            <dd>
-            </dd>
     </dl>
 </div>
 
                             <div class="symbol-index-column">
     <dl class="symbol-index-list">
+            <dt class="symbol-index-name">
+                <a href="Chat.html#pinned" class="!symbol-index-name">Chat#<wbr>pinned</a>
+            </dt>
+            <dd>
+            </dd>
             <dt class="symbol-index-name">
                 <a href="Chat.html#sendMessage" class="!symbol-index-name">Chat#<wbr>sendMessage(content[, options])</a>
             </dt>
@@ -1098,6 +1103,11 @@ limitations under the License.</p></article>
             <dd>
             </dd>
             <dt class="symbol-index-name">
+                <a href="Client.html#cancelPairingCode" class="!symbol-index-name">Client#<wbr>cancelPairingCode()</a>
+            </dt>
+            <dd>
+            </dd>
+            <dt class="symbol-index-name">
                 <a href="Client.html#createCallLink" class="!symbol-index-name">Client#<wbr>createCallLink(startTime, callType)</a>
             </dt>
             <dd>
@@ -1233,7 +1243,7 @@ limitations under the License.</p></article>
             <dd>
             </dd>
             <dt class="symbol-index-name">
-                <a href="Client.html#event:message_create" class="!symbol-index-name">Client#<wbr>event:message_create</a>
+                <a href="Client.html#event:message_ciphertext_failed" class="!symbol-index-name">Client#<wbr>event:message_ciphertext_failed</a>
             </dt>
             <dd>
             </dd>
@@ -1242,6 +1252,11 @@ limitations under the License.</p></article>
 
                             <div class="symbol-index-column">
     <dl class="symbol-index-list">
+            <dt class="symbol-index-name">
+                <a href="Client.html#event:message_create" class="!symbol-index-name">Client#<wbr>event:message_create</a>
+            </dt>
+            <dd>
+            </dd>
             <dt class="symbol-index-name">
                 <a href="Client.html#event:message_edit" class="!symbol-index-name">Client#<wbr>event:message_edit</a>
             </dt>
@@ -1529,6 +1544,11 @@ limitations under the License.</p></article>
             </dd>
             <dt class="symbol-index-name">
                 <a href="Client.html#sendPresenceUnavailable" class="!symbol-index-name">Client#<wbr>sendPresenceUnavailable()</a>
+            </dt>
+            <dd>
+            </dd>
+            <dt class="symbol-index-name">
+                <a href="Client.html#sendReaction" class="!symbol-index-name">Client#<wbr>sendReaction(messageId, reaction)</a>
             </dt>
             <dd>
             </dd>
@@ -1873,16 +1893,16 @@ limitations under the License.</p></article>
             </dt>
             <dd>
             </dd>
-    </dl>
-</div>
-
-                            <div class="symbol-index-column">
-    <dl class="symbol-index-list">
             <dt class="symbol-index-name">
                 <a href="global.html#Events#.GROUP_LEAVE" class="!symbol-index-name">Events.<wbr>GROUP_LEAVE</a>
             </dt>
             <dd>
             </dd>
+    </dl>
+</div>
+
+                            <div class="symbol-index-column">
+    <dl class="symbol-index-list">
             <dt class="symbol-index-name">
                 <a href="global.html#Events#.GROUP_MEMBERSHIP_REQUEST" class="!symbol-index-name">Events.<wbr>GROUP_MEMBERSHIP_REQUEST</a>
             </dt>
@@ -1919,6 +1939,11 @@ limitations under the License.</p></article>
             <dd>
             </dd>
             <dt class="symbol-index-name">
+                <a href="global.html#Events#.MESSAGE_CIPHERTEXT_FAILED" class="!symbol-index-name">Events.<wbr>MESSAGE_CIPHERTEXT_FAILED</a>
+            </dt>
+            <dd>
+            </dd>
+            <dt class="symbol-index-name">
                 <a href="global.html#Events#.MESSAGE_CREATE" class="!symbol-index-name">Events.<wbr>MESSAGE_CREATE</a>
             </dt>
             <dd>
@@ -1928,16 +1953,16 @@ limitations under the License.</p></article>
             </dt>
             <dd>
             </dd>
-    </dl>
-</div>
-
-                            <div class="symbol-index-column">
-    <dl class="symbol-index-list">
             <dt class="symbol-index-name">
                 <a href="global.html#Events#.MESSAGE_REACTION" class="!symbol-index-name">Events.<wbr>MESSAGE_REACTION</a>
             </dt>
             <dd>
             </dd>
+    </dl>
+</div>
+
+                            <div class="symbol-index-column">
+    <dl class="symbol-index-list">
             <dt class="symbol-index-name">
                 <a href="global.html#Events#.MESSAGE_RECEIVED" class="!symbol-index-name">Events.<wbr>MESSAGE_RECEIVED</a>
             </dt>
@@ -2116,6 +2141,11 @@ limitations under the License.</p></article>
             <dd>
             </dd>
             <dt class="symbol-index-name">
+                <a href="GroupChat.html#isLocked" class="!symbol-index-name">GroupChat#<wbr>isLocked</a>
+            </dt>
+            <dd>
+            </dd>
+            <dt class="symbol-index-name">
                 <a href="GroupChat.html#isMuted" class="!symbol-index-name">GroupChat#<wbr>isMuted</a>
             </dt>
             <dd>
@@ -2185,16 +2215,16 @@ limitations under the License.</p></article>
             </dt>
             <dd>
             </dd>
-            <dt class="symbol-index-name">
-                <a href="GroupChat.html#removeParticipants" class="!symbol-index-name">GroupChat#<wbr>removeParticipants(participantIds)</a>
-            </dt>
-            <dd>
-            </dd>
     </dl>
 </div>
 
                             <div class="symbol-index-column">
     <dl class="symbol-index-list">
+            <dt class="symbol-index-name">
+                <a href="GroupChat.html#removeParticipants" class="!symbol-index-name">GroupChat#<wbr>removeParticipants(participantIds)</a>
+            </dt>
+            <dd>
+            </dd>
             <dt class="symbol-index-name">
                 <a href="GroupChat.html#revokeInvite" class="!symbol-index-name">GroupChat#<wbr>revokeInvite()</a>
             </dt>
@@ -3672,6 +3702,11 @@ limitations under the License.</p></article>
             <dd>
             </dd>
             <dt class="symbol-index-name">
+                <a href="PrivateChat.html#isLocked" class="!symbol-index-name">PrivateChat#<wbr>isLocked</a>
+            </dt>
+            <dd>
+            </dd>
+            <dt class="symbol-index-name">
                 <a href="PrivateChat.html#isMuted" class="!symbol-index-name">PrivateChat#<wbr>isMuted</a>
             </dt>
             <dd>
@@ -3711,16 +3746,16 @@ limitations under the License.</p></article>
             </dt>
             <dd>
             </dd>
-            <dt class="symbol-index-name">
-                <a href="PrivateChat.html#pinned" class="!symbol-index-name">PrivateChat#<wbr>pinned</a>
-            </dt>
-            <dd>
-            </dd>
     </dl>
 </div>
 
                             <div class="symbol-index-column">
     <dl class="symbol-index-list">
+            <dt class="symbol-index-name">
+                <a href="PrivateChat.html#pinned" class="!symbol-index-name">PrivateChat#<wbr>pinned</a>
+            </dt>
+            <dd>
+            </dd>
             <dt class="symbol-index-name">
                 <a href="PrivateChat.html#sendMessage" class="!symbol-index-name">PrivateChat#<wbr>sendMessage(content[, options])</a>
             </dt>
@@ -4391,7 +4426,7 @@ limitations under the License.</p></article>
                             <div class="symbol-index-column">
     <dl class="symbol-index-list">
             <dt class="symbol-index-name">
-                <a href="window.html#.compareWwebVersions" class="!symbol-index-name">window.<wbr>compareWwebVersions(lOperand, operator, rOperand)</a>
+                <a href="window.WWebJS.html#.compareWwebVersions" class="!symbol-index-name">window.<wbr>WWebJS.<wbr>compareWwebVersions(lOperand, operator, rOperand)</a>
             </dt>
             <dd>
             </dd>
@@ -4401,7 +4436,7 @@ limitations under the License.</p></article>
                             <div class="symbol-index-column">
     <dl class="symbol-index-list">
             <dt class="symbol-index-name">
-                <a href="window.html#.injectToFunction" class="!symbol-index-name">window.<wbr>injectToFunction(target, callback)</a>
+                <a href="window.WWebJS.html#.injectToFunction" class="!symbol-index-name">window.<wbr>WWebJS.<wbr>injectToFunction(target, callback)</a>
             </dt>
             <dd>
             </dd>
@@ -4426,7 +4461,7 @@ limitations under the License.</p></article>
                     <footer id="jsdoc-footer" class="jsdoc-footer">
                             <div id="jsdoc-footer-container">
                                     <p>
-                                      Generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc</a> 3.6.11 on January 30, 2026.
+                                      Generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc</a> 3.6.11 on April 6, 2026.
                                     </p>
                             </div>
                     </footer>

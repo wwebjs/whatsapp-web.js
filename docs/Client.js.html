@@ -10,68 +10,84 @@
   <link rel="stylesheet" href="https://brick.a.ssl.fastly.net/Inconsolata:500" type="text/css">
   <link href="css/baseline.css" rel="stylesheet">
 </head>
-
-<body onload="prettyPrint()">
-  <nav id="jsdoc-navbar" role="navigation" class="jsdoc-navbar">
+        <body onload="prettyPrint()">
+                <nav id="jsdoc-navbar" role="navigation" class="jsdoc-navbar">
     <div id="jsdoc-navbar-container">
-      <div id="jsdoc-navbar-content">
-        <a href="index.html" class="jsdoc-navbar-package-name">whatsapp-web.<wbr>js 1.<wbr>34.<wbr>6</a>
-      </div>
-    </div>
-  </nav>
-  <div id="jsdoc-body-container">
-    <div id="jsdoc-content">
-      <div id="jsdoc-content-container">
-        <div id="jsdoc-banner" role="banner">
+        <div id="jsdoc-navbar-content">
+            <a href="index.html" class="jsdoc-navbar-package-name">whatsapp-web.<wbr>js 1.<wbr>34.<wbr>6</a>
         </div>
-        <div id="jsdoc-main" role="main">
-          <header class="page-header">
-            <h1>Source: Client.js</h1>
-          </header>
-          <article>
-            <pre class="prettyprint linenums"><code>&#x27;use strict&#x27;;
+    </div>
+</nav>
+
+                <div id="jsdoc-body-container">
+                        <div id="jsdoc-content">
+                                <div id="jsdoc-content-container">
+                                        <div id="jsdoc-banner" role="banner">
+                                        </div>
+                                        <div id="jsdoc-main" role="main">
+            <header class="page-header">
+                <h1>Source: Client.js</h1>
+            </header>
+            <article>
+                <pre class="prettyprint linenums"><code>&#x27;use strict&#x27;;
 
 const EventEmitter &#x3D; require(&#x27;events&#x27;);
 const puppeteer &#x3D; require(&#x27;puppeteer&#x27;);
-const moduleRaid &#x3D; require(&#x27;@pedroslopez/moduleraid/moduleraid&#x27;);
 
 const Util &#x3D; require(&#x27;./util/Util&#x27;);
 const InterfaceController &#x3D; require(&#x27;./util/InterfaceController&#x27;);
-const { WhatsWebURL, DefaultOptions, Events, WAState, MessageTypes } &#x3D; require(&#x27;./util/Constants&#x27;);
+const {
+    WhatsWebURL,
+    DefaultOptions,
+    Events,
+    WAState,
+    MessageTypes,
+} &#x3D; require(&#x27;./util/Constants&#x27;);
 const { ExposeAuthStore } &#x3D; require(&#x27;./util/Injected/AuthStore/AuthStore&#x27;);
-const { ExposeStore } &#x3D; require(&#x27;./util/Injected/Store&#x27;);
-const { ExposeLegacyAuthStore } &#x3D; require(&#x27;./util/Injected/AuthStore/LegacyAuthStore&#x27;);
-const { ExposeLegacyStore } &#x3D; require(&#x27;./util/Injected/LegacyStore&#x27;);
 const { LoadUtils } &#x3D; require(&#x27;./util/Injected/Utils&#x27;);
 const ChatFactory &#x3D; require(&#x27;./factories/ChatFactory&#x27;);
 const ContactFactory &#x3D; require(&#x27;./factories/ContactFactory&#x27;);
 const WebCacheFactory &#x3D; require(&#x27;./webCache/WebCacheFactory&#x27;);
-const { ClientInfo, Message, MessageMedia, Contact, Location, Poll, PollVote, GroupNotification, Label, Call, Buttons, List, Reaction, Broadcast, ScheduledEvent } &#x3D; require(&#x27;./structures&#x27;);
+const {
+    ClientInfo,
+    Message,
+    MessageMedia,
+    Contact,
+    Location,
+    Poll,
+    PollVote,
+    GroupNotification,
+    Label,
+    Call,
+    Buttons,
+    List,
+    Reaction,
+    Broadcast,
+    ScheduledEvent,
+} &#x3D; require(&#x27;./structures&#x27;);
 const NoAuth &#x3D; require(&#x27;./authStrategies/NoAuth&#x27;);
-const {exposeFunctionIfAbsent} &#x3D; require(&#x27;./util/Puppeteer&#x27;);
+const { exposeFunctionIfAbsent } &#x3D; require(&#x27;./util/Puppeteer&#x27;);
 
 /**
  * Starting point for interacting with the WhatsApp Web API
  * @extends {EventEmitter}
  * @param {object} options - Client options
- * @param {AuthStrategy} options.authStrategy - Determines how to save and restore sessions. Will use LegacySessionAuth if options.session is set. Otherwise, NoAuth will be used.
+ * @param {AuthStrategy} options.authStrategy - Determines how to save and restore sessions. If not set, NoAuth will be used.
  * @param {string} options.webVersion - The version of WhatsApp Web to use. Use options.webVersionCache to configure how the version is retrieved.
  * @param {object} options.webVersionCache - Determines how to retrieve the WhatsApp Web version. Defaults to a local cache (LocalWebCache) that falls back to latest if the requested version is not found.
  * @param {number} options.authTimeoutMs - Timeout for authentication selector in puppeteer
  * @param {function} options.evalOnNewDoc - function to eval on new doc
  * @param {object} options.puppeteer - Puppeteer launch options. View docs here: https://github.com/puppeteer/puppeteer/
  * @param {number} options.qrMaxRetries - How many times should the qrcode be refreshed before giving up
- * @param {string} options.restartOnAuthFail  - @deprecated This option should be set directly on the LegacySessionAuth.
- * @param {object} options.session - @deprecated Only here for backwards-compatibility. You should move to using LocalAuth, or set the authStrategy to LegacySessionAuth explicitly. 
  * @param {number} options.takeoverOnConflict - If another whatsapp web session is detected (another browser), take over the session in the current browser
  * @param {number} options.takeoverTimeoutMs - How much time to wait before taking over the session
  * @param {string} options.userAgent - User agent to use in puppeteer
- * @param {string} options.ffmpegPath - Ffmpeg path to use when formatting videos to webp while sending stickers 
+ * @param {string} options.ffmpegPath - Ffmpeg path to use when formatting videos to webp while sending stickers
  * @param {boolean} options.bypassCSP - Sets bypassing of page&#x27;s Content-Security-Policy.
  * @param {string} options.deviceName - Sets the device name of a current linked device., i.e.: &#x27;TEST&#x27;.
  * @param {string} options.browserName - Sets the browser name of a current linked device, i.e.: &#x27;Firefox&#x27;.
  * @param {object} options.proxyAuthentication - Proxy Authentication object.
- * 
+ *
  * @fires Client#qr
  * @fires Client#authenticated
  * @fires Client#auth_failure
@@ -99,8 +115,8 @@ class Client extends EventEmitter {
         super();
 
         this.options &#x3D; Util.mergeDefault(DefaultOptions, options);
-        
-        if(!this.options.authStrategy) {
+
+        if (!this.options.authStrategy) {
             this.authStrategy &#x3D; new NoAuth();
         } else {
             this.authStrategy &#x3D; this.options.authStrategy;
@@ -127,53 +143,77 @@ class Client extends EventEmitter {
      * Private function
      */
     async inject() {
-        if(this.options.authTimeoutMs &#x3D;&#x3D;&#x3D; undefined || this.options.authTimeoutMs&#x3D;&#x3D;0){
+        if (
+            this.options.authTimeoutMs &#x3D;&#x3D;&#x3D; undefined ||
+            this.options.authTimeoutMs &#x3D;&#x3D; 0
+        ) {
             this.options.authTimeoutMs &#x3D; 30000;
         }
         let start &#x3D; Date.now();
         let timeout &#x3D; this.options.authTimeoutMs;
         let res &#x3D; false;
-        while(start &gt; (Date.now() - timeout)){
-            res &#x3D; await this.pupPage.evaluate(&#x27;window.Debug?.VERSION !&#x3D; undefined&#x27;);
-            if(res){break;}
-            await new Promise(r &#x3D;&gt; setTimeout(r, 200));
+        while (start &gt; Date.now() - timeout) {
+            res &#x3D; await this.pupPage.evaluate(
+                &#x27;window.Debug?.VERSION !&#x3D; undefined&#x27;,
+            );
+            if (res) {
+                break;
+            }
+            await new Promise((r) &#x3D;&gt; setTimeout(r, 200));
         }
-        if(!res){ 
+        if (!res) {
             throw &#x27;auth timeout&#x27;;
-        }       
-        await this.setDeviceName(this.options.deviceName, this.options.browserName);
+        }
+        await this.setDeviceName(
+            this.options.deviceName,
+            this.options.browserName,
+        );
         const pairWithPhoneNumber &#x3D; this.options.pairWithPhoneNumber;
         const version &#x3D; await this.getWWebVersion();
-        const isCometOrAbove &#x3D; parseInt(version.split(&#x27;.&#x27;)?.[1]) &gt;&#x3D; 3000;
 
-        if (isCometOrAbove) {
-            await this.pupPage.evaluate(ExposeAuthStore);
-        } else {
-            await this.pupPage.evaluate(ExposeLegacyAuthStore, moduleRaid.toString());
-        }
+        await this.pupPage.evaluate(ExposeAuthStore);
 
         const needAuthentication &#x3D; await this.pupPage.evaluate(async () &#x3D;&gt; {
-            let state &#x3D; window.AuthStore.AppState.state;
+            let state &#x3D; window.require(&#x27;WAWebSocketModel&#x27;).Socket.state;
 
-            if (state &#x3D;&#x3D;&#x3D; &#x27;OPENING&#x27; || state &#x3D;&#x3D;&#x3D; &#x27;UNLAUNCHED&#x27; || state &#x3D;&#x3D;&#x3D; &#x27;PAIRING&#x27;) {
+            if (
+                state &#x3D;&#x3D;&#x3D; &#x27;OPENING&#x27; ||
+                state &#x3D;&#x3D;&#x3D; &#x27;UNLAUNCHED&#x27; ||
+                state &#x3D;&#x3D;&#x3D; &#x27;PAIRING&#x27;
+            ) {
                 // wait till state changes
-                await new Promise(r &#x3D;&gt; {
-                    window.AuthStore.AppState.on(&#x27;change:state&#x27;, function waitTillInit(_AppState, state) {
-                        if (state !&#x3D;&#x3D; &#x27;OPENING&#x27; &amp;amp;&amp;amp; state !&#x3D;&#x3D; &#x27;UNLAUNCHED&#x27; &amp;amp;&amp;amp; state !&#x3D;&#x3D; &#x27;PAIRING&#x27;) {
-                            window.AuthStore.AppState.off(&#x27;change:state&#x27;, waitTillInit);
-                            r();
-                        } 
-                    });
-                }); 
+                await new Promise((r) &#x3D;&gt; {
+                    window
+                        .require(&#x27;WAWebSocketModel&#x27;)
+                        .Socket.on(
+                            &#x27;change:state&#x27;,
+                            function waitTillInit(_AppState, state) {
+                                if (
+                                    state !&#x3D;&#x3D; &#x27;OPENING&#x27; &amp;amp;&amp;amp;
+                                    state !&#x3D;&#x3D; &#x27;UNLAUNCHED&#x27; &amp;amp;&amp;amp;
+                                    state !&#x3D;&#x3D; &#x27;PAIRING&#x27;
+                                ) {
+                                    window
+                                        .require(&#x27;WAWebSocketModel&#x27;)
+                                        .Socket.off(
+                                            &#x27;change:state&#x27;,
+                                            waitTillInit,
+                                        );
+                                    r();
+                                }
+                            },
+                        );
+                });
             }
-            state &#x3D; window.AuthStore.AppState.state;
+            state &#x3D; window.require(&#x27;WAWebSocketModel&#x27;).Socket.state;
             return state &#x3D;&#x3D; &#x27;UNPAIRED&#x27; || state &#x3D;&#x3D; &#x27;UNPAIRED_IDLE&#x27;;
         });
 
         if (needAuthentication) {
-            const { failed, failureEventPayload, restart } &#x3D; await this.authStrategy.onAuthenticationNeeded();
+            const { failed, failureEventPayload, restart } &#x3D;
+                await this.authStrategy.onAuthenticationNeeded();
 
-            if(failed) {
+            if (failed) {
                 /**
                  * Emitted when there has been an error while trying to restore an existing session
                  * @event Client#auth_failure
@@ -190,138 +230,224 @@ class Client extends EventEmitter {
 
             // Register qr/code events
             if (pairWithPhoneNumber.phoneNumber) {
-                await exposeFunctionIfAbsent(this.pupPage, &#x27;onCodeReceivedEvent&#x27;, async (code) &#x3D;&gt; {
-                    /**
-                    * Emitted when a pairing code is received
-                    * @event Client#code
-                    * @param {string} code Code
-                    * @returns {string} Code that was just received
-                    */
-                    this.emit(Events.CODE_RECEIVED, code);
-                    return code;
-                });
-                this.requestPairingCode(pairWithPhoneNumber.phoneNumber, pairWithPhoneNumber.showNotification, pairWithPhoneNumber.intervalMs);
+                await exposeFunctionIfAbsent(
+                    this.pupPage,
+                    &#x27;onCodeReceivedEvent&#x27;,
+                    async (code) &#x3D;&gt; {
+                        /**
+                         * Emitted when a pairing code is received
+                         * @event Client#code
+                         * @param {string} code Code
+                         * @returns {string} Code that was just received
+                         */
+                        this.emit(Events.CODE_RECEIVED, code);
+                        return code;
+                    },
+                );
+                this.requestPairingCode(
+                    pairWithPhoneNumber.phoneNumber,
+                    pairWithPhoneNumber.showNotification,
+                    pairWithPhoneNumber.intervalMs,
+                );
             } else {
                 let qrRetries &#x3D; 0;
-                await exposeFunctionIfAbsent(this.pupPage, &#x27;onQRChangedEvent&#x27;, async (qr) &#x3D;&gt; {
-                    /**
-                    * Emitted when a QR code is received
-                    * @event Client#qr
-                    * @param {string} qr QR Code
-                    */
-                    this.emit(Events.QR_RECEIVED, qr);
-                    if (this.options.qrMaxRetries &gt; 0) {
-                        qrRetries++;
-                        if (qrRetries &gt; this.options.qrMaxRetries) {
-                            this.emit(Events.DISCONNECTED, &#x27;Max qrcode retries reached&#x27;);
-                            await this.destroy();
+                await exposeFunctionIfAbsent(
+                    this.pupPage,
+                    &#x27;onQRChangedEvent&#x27;,
+                    async (qr) &#x3D;&gt; {
+                        /**
+                         * Emitted when a QR code is received
+                         * @event Client#qr
+                         * @param {string} qr QR Code
+                         */
+                        this.emit(Events.QR_RECEIVED, qr);
+                        if (this.options.qrMaxRetries &gt; 0) {
+                            qrRetries++;
+                            if (qrRetries &gt; this.options.qrMaxRetries) {
+                                this.emit(
+                                    Events.DISCONNECTED,
+                                    &#x27;Max qrcode retries reached&#x27;,
+                                );
+                                await this.destroy();
+                            }
                         }
-                    }
-                });
-
+                    },
+                );
 
                 await this.pupPage.evaluate(async () &#x3D;&gt; {
-                    const registrationInfo &#x3D; await window.AuthStore.RegistrationUtils.waSignalStore.getRegistrationInfo();
-                    const noiseKeyPair &#x3D; await window.AuthStore.RegistrationUtils.waNoiseInfo.get();
-                    const staticKeyB64 &#x3D; window.AuthStore.Base64Tools.encodeB64(noiseKeyPair.staticKeyPair.pubKey);
-                    const identityKeyB64 &#x3D; window.AuthStore.Base64Tools.encodeB64(registrationInfo.identityKeyPair.pubKey);
-                    const advSecretKey &#x3D; await window.AuthStore.RegistrationUtils.getADVSecretKey();
-                    const platform &#x3D; window.AuthStore.RegistrationUtils.DEVICE_PLATFORM;
-                    const getQR &#x3D; (ref) &#x3D;&gt; ref + &#x27;,&#x27; + staticKeyB64 + &#x27;,&#x27; + identityKeyB64 + &#x27;,&#x27; + advSecretKey + &#x27;,&#x27; + platform;
-
+                    const registrationInfo &#x3D;
+                        await window.AuthStore.RegistrationUtils.waSignalStore.getRegistrationInfo();
+                    const noiseKeyPair &#x3D;
+                        await window.AuthStore.RegistrationUtils.waNoiseInfo.get();
+                    const staticKeyB64 &#x3D; window.AuthStore.Base64Tools.encodeB64(
+                        noiseKeyPair.staticKeyPair.pubKey,
+                    );
+                    const identityKeyB64 &#x3D;
+                        window.AuthStore.Base64Tools.encodeB64(
+                            registrationInfo.identityKeyPair.pubKey,
+                        );
+                    const platform &#x3D;
+                        window.AuthStore.RegistrationUtils.DEVICE_PLATFORM;
+                    const getQR &#x3D; (ref) &#x3D;&gt;
+                        ref +
+                        &#x27;,&#x27; +
+                        staticKeyB64 +
+                        &#x27;,&#x27; +
+                        identityKeyB64 +
+                        &#x27;,&#x27; +
+                        window
+                            .require(&#x27;WAWebUserPrefsMultiDevice&#x27;)
+                            .getADVSecretKey() +
+                        &#x27;,&#x27; +
+                        platform;
                     window.onQRChangedEvent(getQR(window.AuthStore.Conn.ref)); // initial qr
-                    window.AuthStore.Conn.on(&#x27;change:ref&#x27;, (_, ref) &#x3D;&gt; { window.onQRChangedEvent(getQR(ref)); }); // future QR changes
+                    window.AuthStore.Conn.on(&#x27;change:ref&#x27;, (_, ref) &#x3D;&gt; {
+                        window.onQRChangedEvent(getQR(ref));
+                    }); // future QR changes
                 });
             }
         }
 
-        await exposeFunctionIfAbsent(this.pupPage, &#x27;onAuthAppStateChangedEvent&#x27;, async (state) &#x3D;&gt; {
-            if (state &#x3D;&#x3D; &#x27;UNPAIRED_IDLE&#x27; &amp;amp;&amp;amp; !pairWithPhoneNumber.phoneNumber) {
-                // refresh qr code
-                window.Store.Cmd.refreshQR();
-            }
-        });
+        await exposeFunctionIfAbsent(
+            this.pupPage,
+            &#x27;onAuthAppStateChangedEvent&#x27;,
+            async (state) &#x3D;&gt; {
+                if (
+                    state &#x3D;&#x3D; &#x27;UNPAIRED_IDLE&#x27; &amp;amp;&amp;amp;
+                    !pairWithPhoneNumber.phoneNumber
+                ) {
+                    // refresh qr code
+                    window.require(&#x27;WAWebCmd&#x27;).Cmd.refreshQR();
+                }
+            },
+        );
 
-        await exposeFunctionIfAbsent(this.pupPage, &#x27;onAppStateHasSyncedEvent&#x27;, async () &#x3D;&gt; {
-            const authEventPayload &#x3D; await this.authStrategy.getAuthEventPayload();
-            /**
+        await exposeFunctionIfAbsent(
+            this.pupPage,
+            &#x27;onAppStateHasSyncedEvent&#x27;,
+            async () &#x3D;&gt; {
+                const authEventPayload &#x3D;
+                    await this.authStrategy.getAuthEventPayload();
+                /**
                  * Emitted when authentication is successful
                  * @event Client#authenticated
                  */
-            this.emit(Events.AUTHENTICATED, authEventPayload);
+                this.emit(Events.AUTHENTICATED, authEventPayload);
 
-            const injected &#x3D; await this.pupPage.evaluate(async () &#x3D;&gt; {
-                return typeof window.Store !&#x3D;&#x3D; &#x27;undefined&#x27; &amp;amp;&amp;amp; typeof window.WWebJS !&#x3D;&#x3D; &#x27;undefined&#x27;;
-            });
+                const injected &#x3D; await this.pupPage.evaluate(async () &#x3D;&gt; {
+                    return typeof window.WWebJS !&#x3D;&#x3D; &#x27;undefined&#x27;;
+                });
 
-            if (!injected) {
-                if (this.options.webVersionCache.type &#x3D;&#x3D;&#x3D; &#x27;local&#x27; &amp;amp;&amp;amp; this.currentIndexHtml) {
-                    const { type: webCacheType, ...webCacheOptions } &#x3D; this.options.webVersionCache;
-                    const webCache &#x3D; WebCacheFactory.createWebCache(webCacheType, webCacheOptions);
-            
-                    await webCache.persist(this.currentIndexHtml, version);
-                }
+                if (!injected) {
+                    if (
+                        this.options.webVersionCache.type &#x3D;&#x3D;&#x3D; &#x27;local&#x27; &amp;amp;&amp;amp;
+                        this.currentIndexHtml
+                    ) {
+                        const { type: webCacheType, ...webCacheOptions } &#x3D;
+                            this.options.webVersionCache;
+                        const webCache &#x3D; WebCacheFactory.createWebCache(
+                            webCacheType,
+                            webCacheOptions,
+                        );
 
-                if (isCometOrAbove) {
-                    await this.pupPage.evaluate(ExposeStore);
-                } else {
-                    // make sure all modules are ready before injection
-                    // 2 second delay after authentication makes sense and does not need to be made dyanmic or removed
-                    await new Promise(r &#x3D;&gt; setTimeout(r, 2000)); 
-                    await this.pupPage.evaluate(ExposeLegacyStore);
-                }
-                let start &#x3D; Date.now();
-                let res &#x3D; false;
-                while(start &gt; (Date.now() - 30000)){
-                    // Check window.Store Injection
-                    res &#x3D; await this.pupPage.evaluate(&#x27;window.Store !&#x3D; undefined&#x27;);
-                    if(res){break;}
-                    await new Promise(r &#x3D;&gt; setTimeout(r, 200));
-                }
-                if(!res){
-                    throw &#x27;ready timeout&#x27;;
-                }
-            
-                /**
+                        await webCache.persist(this.currentIndexHtml, version);
+                    }
+
+                    //Load util functions (serializers, helper functions)
+                    await this.pupPage.evaluate(LoadUtils);
+
+                    let start &#x3D; Date.now();
+                    let res &#x3D; false;
+                    while (start &gt; Date.now() - 30000) {
+                        // Check window.WWebJS Injection
+                        res &#x3D; await this.pupPage.evaluate(
+                            &#x27;window.WWebJS !&#x3D; undefined&#x27;,
+                        );
+                        if (res) {
+                            break;
+                        }
+                        await new Promise((r) &#x3D;&gt; setTimeout(r, 200));
+                    }
+                    if (!res) {
+                        throw &#x27;ready timeout&#x27;;
+                    }
+
+                    /**
                      * Current connection information
                      * @type {ClientInfo}
                      */
-                this.info &#x3D; new ClientInfo(this, await this.pupPage.evaluate(() &#x3D;&gt; {
-                    return { ...window.Store.Conn.serialize(), wid: window.Store.User.getMaybeMePnUser() || window.Store.User.getMaybeMeLidUser() };
-                }));
+                    this.info &#x3D; new ClientInfo(
+                        this,
+                        await this.pupPage.evaluate(() &#x3D;&gt; {
+                            return {
+                                ...window
+                                    .require(&#x27;WAWebConnModel&#x27;)
+                                    .Conn.serialize(),
+                                wid:
+                                    window
+                                        .require(&#x27;WAWebUserPrefsMeUser&#x27;)
+                                        .getMaybeMePnUser() ||
+                                    window
+                                        .require(&#x27;WAWebUserPrefsMeUser&#x27;)
+                                        .getMaybeMeLidUser(),
+                            };
+                        }),
+                    );
 
-                this.interface &#x3D; new InterfaceController(this);
+                    this.interface &#x3D; new InterfaceController(this);
 
-                //Load util functions (serializers, helper functions)
-                await this.pupPage.evaluate(LoadUtils);
-
-                await this.attachEventListeners();
-            }
-            /**
+                    await this.attachEventListeners();
+                }
+                /**
                  * Emitted when the client has initialized and is ready to receive messages.
                  * @event Client#ready
                  */
-            this.emit(Events.READY);
-            this.authStrategy.afterAuthReady();
-        });
+                this.emit(Events.READY);
+                this.authStrategy.afterAuthReady();
+            },
+        );
         let lastPercent &#x3D; null;
-        await exposeFunctionIfAbsent(this.pupPage, &#x27;onOfflineProgressUpdateEvent&#x27;, async (percent) &#x3D;&gt; {
-            if (lastPercent !&#x3D;&#x3D; percent) {
-                lastPercent &#x3D; percent;
-                this.emit(Events.LOADING_SCREEN, percent, &#x27;WhatsApp&#x27;); // Message is hardcoded as &quot;WhatsApp&quot; for now
-            }
-        });
-        await exposeFunctionIfAbsent(this.pupPage, &#x27;onLogoutEvent&#x27;, async () &#x3D;&gt; {
-            this.lastLoggedOut &#x3D; true;
-            await this.pupPage.waitForNavigation({waitUntil: &#x27;load&#x27;, timeout: 5000}).catch((_) &#x3D;&gt; _);
-        });
+        await exposeFunctionIfAbsent(
+            this.pupPage,
+            &#x27;onOfflineProgressUpdateEvent&#x27;,
+            async (percent) &#x3D;&gt; {
+                if (lastPercent !&#x3D;&#x3D; percent) {
+                    lastPercent &#x3D; percent;
+                    this.emit(Events.LOADING_SCREEN, percent, &#x27;WhatsApp&#x27;); // Message is hardcoded as &quot;WhatsApp&quot; for now
+                }
+            },
+        );
+        await exposeFunctionIfAbsent(
+            this.pupPage,
+            &#x27;onLogoutEvent&#x27;,
+            async () &#x3D;&gt; {
+                this.lastLoggedOut &#x3D; true;
+                await this.pupPage
+                    .waitForNavigation({ waitUntil: &#x27;load&#x27;, timeout: 5000 })
+                    .catch((_) &#x3D;&gt; _);
+            },
+        );
         await this.pupPage.evaluate(() &#x3D;&gt; {
-            window.AuthStore.AppState.on(&#x27;change:state&#x27;, (_AppState, state) &#x3D;&gt; { window.onAuthAppStateChangedEvent(state); });
-            window.AuthStore.AppState.on(&#x27;change:hasSynced&#x27;, () &#x3D;&gt; { window.onAppStateHasSyncedEvent(); });
-            window.AuthStore.Cmd.on(&#x27;offline_progress_update&#x27;, () &#x3D;&gt; {
-                window.onOfflineProgressUpdateEvent(window.AuthStore.OfflineMessageHandler.getOfflineDeliveryProgress()); 
+            window
+                .require(&#x27;WAWebSocketModel&#x27;)
+                .Socket.on(&#x27;change:state&#x27;, (_AppState, state) &#x3D;&gt; {
+                    window.onAuthAppStateChangedEvent(state);
+                });
+            window
+                .require(&#x27;WAWebSocketModel&#x27;)
+                .Socket.on(&#x27;change:hasSynced&#x27;, () &#x3D;&gt; {
+                    window.onAppStateHasSyncedEvent();
+                });
+            const Cmd &#x3D; window.require(&#x27;WAWebCmd&#x27;).Cmd;
+            Cmd.on(&#x27;offline_progress_update_from_bridge&#x27;, () &#x3D;&gt; {
+                window.onOfflineProgressUpdateEvent(
+                    window.AuthStore.OfflineMessageHandler.getOfflineDeliveryProgress(),
+                );
             });
-            window.AuthStore.Cmd.on(&#x27;logout&#x27;, async () &#x3D;&gt; {
+            Cmd.on(&#x27;logout&#x27;, async () &#x3D;&gt; {
+                await window.onLogoutEvent();
+            });
+            Cmd.on(&#x27;logout_from_bridge&#x27;, async () &#x3D;&gt; {
                 await window.onLogoutEvent();
             });
         });
@@ -331,12 +457,10 @@ class Client extends EventEmitter {
      * Sets up events and requirements, kicks off authentication request
      */
     async initialize() {
-
-        let 
-            /**
+        let /**
              * @type {puppeteer.Browser}
              */
-            browser, 
+            browser,
             /**
              * @type {puppeteer.Page}
              */
@@ -348,25 +472,34 @@ class Client extends EventEmitter {
         await this.authStrategy.beforeBrowserInitialized();
 
         const puppeteerOpts &#x3D; this.options.puppeteer;
-        if (puppeteerOpts &amp;amp;&amp;amp; (puppeteerOpts.browserWSEndpoint || puppeteerOpts.browserURL)) {
+        if (
+            puppeteerOpts &amp;amp;&amp;amp;
+            (puppeteerOpts.browserWSEndpoint || puppeteerOpts.browserURL)
+        ) {
             browser &#x3D; await puppeteer.connect(puppeteerOpts);
             page &#x3D; await browser.newPage();
         } else {
             const browserArgs &#x3D; [...(puppeteerOpts.args || [])];
-            if(this.options.userAgent !&#x3D;&#x3D; false &amp;amp;&amp;amp; !browserArgs.find(arg &#x3D;&gt; arg.includes(&#x27;--user-agent&#x27;))) {
+            if (
+                this.options.userAgent !&#x3D;&#x3D; false &amp;amp;&amp;amp;
+                !browserArgs.find((arg) &#x3D;&gt; arg.includes(&#x27;--user-agent&#x27;))
+            ) {
                 browserArgs.push(&#x60;--user-agent&#x3D;${this.options.userAgent}&#x60;);
             }
             // navigator.webdriver fix
             browserArgs.push(&#x27;--disable-blink-features&#x3D;AutomationControlled&#x27;);
 
-            browser &#x3D; await puppeteer.launch({...puppeteerOpts, args: browserArgs});
+            browser &#x3D; await puppeteer.launch({
+                ...puppeteerOpts,
+                args: browserArgs,
+            });
             page &#x3D; (await browser.pages())[0];
         }
 
         if (this.options.proxyAuthentication !&#x3D;&#x3D; undefined) {
             await page.authenticate(this.options.proxyAuthentication);
         }
-        if(this.options.userAgent !&#x3D;&#x3D; false) {
+        if (this.options.userAgent !&#x3D;&#x3D; false) {
             await page.setUserAgent(this.options.userAgent);
         }
         if (this.options.bypassCSP) await page.setBypassCSP(true);
@@ -376,35 +509,21 @@ class Client extends EventEmitter {
 
         await this.authStrategy.afterBrowserInitialized();
         await this.initWebVersionCache();
-        
+
         if (this.options.evalOnNewDoc !&#x3D;&#x3D; undefined) {
             await page.evaluateOnNewDocument(this.options.evalOnNewDoc);
         }
-        
-        // ocVersion (isOfficialClient patch)
-        // remove after 2.3000.x hard release
-        await page.evaluateOnNewDocument(() &#x3D;&gt; {
-            const originalError &#x3D; Error;
-            window.originalError &#x3D; originalError;
-            //eslint-disable-next-line no-global-assign
-            Error &#x3D; function (message) {
-                const error &#x3D; new originalError(message);
-                const originalStack &#x3D; error.stack;
-                if (error.stack.includes(&#x27;moduleRaid&#x27;)) error.stack &#x3D; originalStack + &#x27;\n    at https://web.whatsapp.com/vendors~lazy_loaded_low_priority_components.05e98054dbd60f980427.js:2:44&#x27;;
-                return error;
-            };
-        });
-        
+
         await page.goto(WhatsWebURL, {
             waitUntil: &#x27;load&#x27;,
             timeout: 0,
-            referer: &#x27;https://whatsapp.com/&#x27;
+            referer: &#x27;https://whatsapp.com/&#x27;,
         });
 
         await this.inject();
 
         this.pupPage.on(&#x27;framenavigated&#x27;, async (frame) &#x3D;&gt; {
-            if(frame.url().includes(&#x27;post_logout&#x3D;1&#x27;) || this.lastLoggedOut) {
+            if (frame.url().includes(&#x27;post_logout&#x3D;1&#x27;) || this.lastLoggedOut) {
                 this.emit(Events.DISCONNECTED, &#x27;LOGOUT&#x27;);
                 await this.authStrategy.logout();
                 await this.authStrategy.beforeBrowserInitialized();
@@ -422,28 +541,70 @@ class Client extends EventEmitter {
      * @param {number} [intervalMs &#x3D; 180000] - The interval in milliseconds on how frequent to generate pairing code (WhatsApp default to 3 minutes)
      * @returns {Promise&amp;lt;string&gt;} - Returns a pairing code in format &quot;ABCDEFGH&quot;
      */
-    async requestPairingCode(phoneNumber, showNotification &#x3D; true, intervalMs &#x3D; 180000) {
-        return await this.pupPage.evaluate(async (phoneNumber, showNotification, intervalMs) &#x3D;&gt; {
-            const getCode &#x3D; async () &#x3D;&gt; {
-                while (!window.AuthStore.PairingCodeLinkUtils) {
-                    await new Promise(resolve &#x3D;&gt; setTimeout(resolve, 250));
+    async requestPairingCode(
+        phoneNumber,
+        showNotification &#x3D; true,
+        intervalMs &#x3D; 180000,
+    ) {
+        await exposeFunctionIfAbsent(
+            this.pupPage,
+            &#x27;onCodeReceivedEvent&#x27;,
+            async (code) &#x3D;&gt; {
+                this.emit(Events.CODE_RECEIVED, code);
+                return code;
+            },
+        );
+        return await this.pupPage.evaluate(
+            async (phoneNumber, showNotification, intervalMs) &#x3D;&gt; {
+                const getCode &#x3D; async () &#x3D;&gt; {
+                    while (!window.AuthStore.PairingCodeLinkUtils) {
+                        await new Promise((resolve) &#x3D;&gt;
+                            setTimeout(resolve, 250),
+                        );
+                    }
+                    window.AuthStore.PairingCodeLinkUtils.setPairingType(
+                        &#x27;ALT_DEVICE_LINKING&#x27;,
+                    );
+                    await window.AuthStore.PairingCodeLinkUtils.initializeAltDeviceLinking();
+                    return window.AuthStore.PairingCodeLinkUtils.startAltLinkingFlow(
+                        phoneNumber,
+                        showNotification,
+                    );
+                };
+                if (window.codeInterval) {
+                    clearInterval(window.codeInterval); // remove existing interval
                 }
-                window.AuthStore.PairingCodeLinkUtils.setPairingType(&#x27;ALT_DEVICE_LINKING&#x27;);
-                await window.AuthStore.PairingCodeLinkUtils.initializeAltDeviceLinking();
-                return window.AuthStore.PairingCodeLinkUtils.startAltLinkingFlow(phoneNumber, showNotification);
-            };
+                window.codeInterval &#x3D; setInterval(async () &#x3D;&gt; {
+                    const state &#x3D;
+                        window.require(&#x27;WAWebSocketModel&#x27;).Socket.state;
+                    if (state !&#x3D; &#x27;UNPAIRED&#x27; &amp;amp;&amp;amp; state !&#x3D; &#x27;UNPAIRED_IDLE&#x27;) {
+                        clearInterval(window.codeInterval);
+                        return;
+                    }
+                    window.onCodeReceivedEvent(await getCode());
+                }, intervalMs);
+                return window.onCodeReceivedEvent(await getCode());
+            },
+            phoneNumber,
+            showNotification,
+            intervalMs,
+        );
+    }
+
+    /**
+     * Cancels an active pairing code session and returns to QR code mode
+     */
+    async cancelPairingCode() {
+        await this.pupPage.evaluate(async () &#x3D;&gt; {
             if (window.codeInterval) {
-                clearInterval(window.codeInterval); // remove existing interval
+                clearInterval(window.codeInterval);
+                window.codeInterval &#x3D; undefined;
             }
-            window.codeInterval &#x3D; setInterval(async () &#x3D;&gt; {
-                if (window.AuthStore.AppState.state !&#x3D; &#x27;UNPAIRED&#x27; &amp;amp;&amp;amp; window.AuthStore.AppState.state !&#x3D; &#x27;UNPAIRED_IDLE&#x27;) {
-                    clearInterval(window.codeInterval);
-                    return;
-                }
-                window.onCodeReceivedEvent(await getCode());
-            }, intervalMs);
-            return window.onCodeReceivedEvent(await getCode());
-        }, phoneNumber, showNotification, intervalMs);
+            window.require(&#x27;WAWebLaunchSocketUtils&#x27;).refreshQR();
+            await window
+                .require(&#x27;WAWebAltDeviceLinkingApi&#x27;)
+                .initializeQRLinking();
+        });
     }
 
     /**
@@ -452,32 +613,45 @@ class Client extends EventEmitter {
      * @property {boolean} reinject is this a reinject?
      */
     async attachEventListeners() {
-        await exposeFunctionIfAbsent(this.pupPage, &#x27;onAddMessageEvent&#x27;, msg &#x3D;&gt; {
-            if (msg.type &#x3D;&#x3D;&#x3D; &#x27;gp2&#x27;) {
-                const notification &#x3D; new GroupNotification(this, msg);
-                if ([&#x27;add&#x27;, &#x27;invite&#x27;, &#x27;linked_group_join&#x27;].includes(msg.subtype)) {
-                    /**
+        await exposeFunctionIfAbsent(
+            this.pupPage,
+            &#x27;onAddMessageEvent&#x27;,
+            (msg) &#x3D;&gt; {
+                if (msg.type &#x3D;&#x3D;&#x3D; &#x27;gp2&#x27;) {
+                    const notification &#x3D; new GroupNotification(this, msg);
+                    if (
+                        [&#x27;add&#x27;, &#x27;invite&#x27;, &#x27;linked_group_join&#x27;].includes(
+                            msg.subtype,
+                        )
+                    ) {
+                        /**
                          * Emitted when a user joins the chat via invite link or is added by an admin.
                          * @event Client#group_join
                          * @param {GroupNotification} notification GroupNotification with more information about the action
                          */
-                    this.emit(Events.GROUP_JOIN, notification);
-                } else if (msg.subtype &#x3D;&#x3D;&#x3D; &#x27;remove&#x27; || msg.subtype &#x3D;&#x3D;&#x3D; &#x27;leave&#x27;) {
-                    /**
+                        this.emit(Events.GROUP_JOIN, notification);
+                    } else if (
+                        msg.subtype &#x3D;&#x3D;&#x3D; &#x27;remove&#x27; ||
+                        msg.subtype &#x3D;&#x3D;&#x3D; &#x27;leave&#x27;
+                    ) {
+                        /**
                          * Emitted when a user leaves the chat or is removed by an admin.
                          * @event Client#group_leave
                          * @param {GroupNotification} notification GroupNotification with more information about the action
                          */
-                    this.emit(Events.GROUP_LEAVE, notification);
-                } else if (msg.subtype &#x3D;&#x3D;&#x3D; &#x27;promote&#x27; || msg.subtype &#x3D;&#x3D;&#x3D; &#x27;demote&#x27;) {
-                    /**
+                        this.emit(Events.GROUP_LEAVE, notification);
+                    } else if (
+                        msg.subtype &#x3D;&#x3D;&#x3D; &#x27;promote&#x27; ||
+                        msg.subtype &#x3D;&#x3D;&#x3D; &#x27;demote&#x27;
+                    ) {
+                        /**
                          * Emitted when a current user is promoted to an admin or demoted to a regular user.
                          * @event Client#group_admin_changed
                          * @param {GroupNotification} notification GroupNotification with more information about the action
                          */
-                    this.emit(Events.GROUP_ADMIN_CHANGED, notification);
-                } else if (msg.subtype &#x3D;&#x3D;&#x3D; &#x27;membership_approval_request&#x27;) {
-                    /**
+                        this.emit(Events.GROUP_ADMIN_CHANGED, notification);
+                    } else if (msg.subtype &#x3D;&#x3D;&#x3D; &#x27;membership_approval_request&#x27;) {
+                        /**
                          * Emitted when some user requested to join the group
                          * that has the membership approval mode turned on
                          * @event Client#group_membership_request
@@ -486,89 +660,106 @@ class Client extends EventEmitter {
                          * @param {string} notification.author The user ID that made a request
                          * @param {number} notification.timestamp The timestamp the request was made at
                          */
-                    this.emit(Events.GROUP_MEMBERSHIP_REQUEST, notification);
-                } else {
-                    /**
+                        this.emit(
+                            Events.GROUP_MEMBERSHIP_REQUEST,
+                            notification,
+                        );
+                    } else {
+                        /**
                          * Emitted when group settings are updated, such as subject, description or picture.
                          * @event Client#group_update
                          * @param {GroupNotification} notification GroupNotification with more information about the action
                          */
-                    this.emit(Events.GROUP_UPDATE, notification);
+                        this.emit(Events.GROUP_UPDATE, notification);
+                    }
+                    return;
                 }
-                return;
-            }
 
-            const message &#x3D; new Message(this, msg);
+                const message &#x3D; new Message(this, msg);
 
-            /**
+                /**
                  * Emitted when a new message is created, which may include the current user&#x27;s own messages.
                  * @event Client#message_create
                  * @param {Message} message The message that was created
                  */
-            this.emit(Events.MESSAGE_CREATE, message);
+                this.emit(Events.MESSAGE_CREATE, message);
 
-            if (msg.id.fromMe) return;
+                if (msg.id.fromMe) return;
 
-            /**
+                /**
                  * Emitted when a new message is received.
                  * @event Client#message
                  * @param {Message} message The message that was received
                  */
-            this.emit(Events.MESSAGE_RECEIVED, message);
-        });
+                this.emit(Events.MESSAGE_RECEIVED, message);
+            },
+        );
 
         let last_message;
 
-        await exposeFunctionIfAbsent(this.pupPage, &#x27;onChangeMessageTypeEvent&#x27;, (msg) &#x3D;&gt; {
+        await exposeFunctionIfAbsent(
+            this.pupPage,
+            &#x27;onChangeMessageTypeEvent&#x27;,
+            (msg) &#x3D;&gt; {
+                if (msg.type &#x3D;&#x3D;&#x3D; &#x27;revoked&#x27;) {
+                    const message &#x3D; new Message(this, msg);
+                    let revoked_msg;
+                    if (last_message &amp;amp;&amp;amp; msg.id.id &#x3D;&#x3D;&#x3D; last_message.id.id) {
+                        revoked_msg &#x3D; new Message(this, last_message);
 
-            if (msg.type &#x3D;&#x3D;&#x3D; &#x27;revoked&#x27;) {
-                const message &#x3D; new Message(this, msg);
-                let revoked_msg;
-                if (last_message &amp;amp;&amp;amp; msg.id.id &#x3D;&#x3D;&#x3D; last_message.id.id) {
-                    revoked_msg &#x3D; new Message(this, last_message);
+                        if (message.protocolMessageKey)
+                            revoked_msg.id &#x3D; { ...message.protocolMessageKey };
+                    }
 
-                    if (message.protocolMessageKey)
-                        revoked_msg.id &#x3D; { ...message.protocolMessageKey };                    
-                }
-
-                /**
+                    /**
                      * Emitted when a message is deleted for everyone in the chat.
                      * @event Client#message_revoke_everyone
                      * @param {Message} message The message that was revoked, in its current state. It will not contain the original message&#x27;s data.
-                     * @param {?Message} revoked_msg The message that was revoked, before it was revoked. It will contain the message&#x27;s original data. 
+                     * @param {?Message} revoked_msg The message that was revoked, before it was revoked. It will contain the message&#x27;s original data.
                      * Note that due to the way this data is captured, it may be possible that this param will be undefined.
                      */
-                this.emit(Events.MESSAGE_REVOKED_EVERYONE, message, revoked_msg);
-            }
+                    this.emit(
+                        Events.MESSAGE_REVOKED_EVERYONE,
+                        message,
+                        revoked_msg,
+                    );
+                }
+            },
+        );
 
-        });
+        await exposeFunctionIfAbsent(
+            this.pupPage,
+            &#x27;onChangeMessageEvent&#x27;,
+            (msg) &#x3D;&gt; {
+                if (msg.type !&#x3D;&#x3D; &#x27;revoked&#x27;) {
+                    last_message &#x3D; msg;
+                }
 
-        await exposeFunctionIfAbsent(this.pupPage, &#x27;onChangeMessageEvent&#x27;, (msg) &#x3D;&gt; {
-
-            if (msg.type !&#x3D;&#x3D; &#x27;revoked&#x27;) {
-                last_message &#x3D; msg;
-            }
-
-            /**
+                /**
                  * The event notification that is received when one of
                  * the group participants changes their phone number.
                  */
-            const isParticipant &#x3D; msg.type &#x3D;&#x3D;&#x3D; &#x27;gp2&#x27; &amp;amp;&amp;amp; msg.subtype &#x3D;&#x3D;&#x3D; &#x27;modify&#x27;;
+                const isParticipant &#x3D;
+                    msg.type &#x3D;&#x3D;&#x3D; &#x27;gp2&#x27; &amp;amp;&amp;amp; msg.subtype &#x3D;&#x3D;&#x3D; &#x27;modify&#x27;;
 
-            /**
+                /**
                  * The event notification that is received when one of
                  * the contacts changes their phone number.
                  */
-            const isContact &#x3D; msg.type &#x3D;&#x3D;&#x3D; &#x27;notification_template&#x27; &amp;amp;&amp;amp; msg.subtype &#x3D;&#x3D;&#x3D; &#x27;change_number&#x27;;
+                const isContact &#x3D;
+                    msg.type &#x3D;&#x3D;&#x3D; &#x27;notification_template&#x27; &amp;amp;&amp;amp;
+                    msg.subtype &#x3D;&#x3D;&#x3D; &#x27;change_number&#x27;;
 
-            if (isParticipant || isContact) {
-                /** @type {GroupNotification} object does not provide enough information about this event, so a @type {Message} object is used. */
-                const message &#x3D; new Message(this, msg);
+                if (isParticipant || isContact) {
+                    /** @type {GroupNotification} object does not provide enough information about this event, so a @type {Message} object is used. */
+                    const message &#x3D; new Message(this, msg);
 
-                const newId &#x3D; isParticipant ? msg.recipients[0] : msg.to;
-                const oldId &#x3D; isParticipant ? msg.author : msg.templateParams.find(id &#x3D;&gt; id !&#x3D;&#x3D; newId);
+                    const newId &#x3D; isParticipant ? msg.recipients[0] : msg.to;
+                    const oldId &#x3D; isParticipant
+                        ? msg.author
+                        : msg.templateParams.find((id) &#x3D;&gt; id !&#x3D;&#x3D; newId);
 
-                /**
+                    /**
                      * Emitted when a contact or a group participant changes their phone number.
                      * @event Client#contact_changed
                      * @param {Message} message Message with more information about the event.
@@ -577,98 +768,132 @@ class Client extends EventEmitter {
                      * @param {String} newId The user&#x27;s new id after the change.
                      * @param {Boolean} isContact Indicates if a contact or a group participant changed their phone number.
                      */
-                this.emit(Events.CONTACT_CHANGED, message, oldId, newId, isContact);
-            }
-        });
+                    this.emit(
+                        Events.CONTACT_CHANGED,
+                        message,
+                        oldId,
+                        newId,
+                        isContact,
+                    );
+                }
+            },
+        );
 
-        await exposeFunctionIfAbsent(this.pupPage, &#x27;onRemoveMessageEvent&#x27;, (msg) &#x3D;&gt; {
+        await exposeFunctionIfAbsent(
+            this.pupPage,
+            &#x27;onRemoveMessageEvent&#x27;,
+            (msg) &#x3D;&gt; {
+                if (!msg.isNewMsg) return;
 
-            if (!msg.isNewMsg) return;
+                const message &#x3D; new Message(this, msg);
 
-            const message &#x3D; new Message(this, msg);
-
-            /**
+                /**
                  * Emitted when a message is deleted by the current user.
                  * @event Client#message_revoke_me
                  * @param {Message} message The message that was revoked
                  */
-            this.emit(Events.MESSAGE_REVOKED_ME, message);
+                this.emit(Events.MESSAGE_REVOKED_ME, message);
+            },
+        );
 
-        });
+        await exposeFunctionIfAbsent(
+            this.pupPage,
+            &#x27;onMessageAckEvent&#x27;,
+            (msg, ack) &#x3D;&gt; {
+                const message &#x3D; new Message(this, msg);
 
-        await exposeFunctionIfAbsent(this.pupPage, &#x27;onMessageAckEvent&#x27;, (msg, ack) &#x3D;&gt; {
-
-            const message &#x3D; new Message(this, msg);
-
-            /**
+                /**
                  * Emitted when an ack event occurrs on message type.
                  * @event Client#message_ack
                  * @param {Message} message The message that was affected
                  * @param {MessageAck} ack The new ACK value
                  */
-            this.emit(Events.MESSAGE_ACK, message, ack);
+                this.emit(Events.MESSAGE_ACK, message, ack);
+            },
+        );
 
-        });
+        await exposeFunctionIfAbsent(
+            this.pupPage,
+            &#x27;onChatUnreadCountEvent&#x27;,
+            async (data) &#x3D;&gt; {
+                const chat &#x3D; await this.getChatById(data.id);
 
-        await exposeFunctionIfAbsent(this.pupPage, &#x27;onChatUnreadCountEvent&#x27;, async (data) &#x3D;&gt;{
-            const chat &#x3D; await this.getChatById(data.id);
-                
-            /**
+                /**
                  * Emitted when the chat unread count changes
                  */
-            this.emit(Events.UNREAD_COUNT, chat);
-        });
+                this.emit(Events.UNREAD_COUNT, chat);
+            },
+        );
 
-        await exposeFunctionIfAbsent(this.pupPage, &#x27;onMessageMediaUploadedEvent&#x27;, (msg) &#x3D;&gt; {
+        await exposeFunctionIfAbsent(
+            this.pupPage,
+            &#x27;onMessageMediaUploadedEvent&#x27;,
+            (msg) &#x3D;&gt; {
+                const message &#x3D; new Message(this, msg);
 
-            const message &#x3D; new Message(this, msg);
-
-            /**
+                /**
                  * Emitted when media has been uploaded for a message sent by the client.
                  * @event Client#media_uploaded
                  * @param {Message} message The message with media that was uploaded
                  */
-            this.emit(Events.MEDIA_UPLOADED, message);
-        });
+                this.emit(Events.MEDIA_UPLOADED, message);
+            },
+        );
 
-        await exposeFunctionIfAbsent(this.pupPage, &#x27;onAppStateChangedEvent&#x27;, async (state) &#x3D;&gt; {
-            /**
+        await exposeFunctionIfAbsent(
+            this.pupPage,
+            &#x27;onAppStateChangedEvent&#x27;,
+            async (state) &#x3D;&gt; {
+                /**
                  * Emitted when the connection state changes
                  * @event Client#change_state
                  * @param {WAState} state the new connection state
                  */
-            this.emit(Events.STATE_CHANGED, state);
+                this.emit(Events.STATE_CHANGED, state);
 
-            const ACCEPTED_STATES &#x3D; [WAState.CONNECTED, WAState.OPENING, WAState.PAIRING, WAState.TIMEOUT];
+                const ACCEPTED_STATES &#x3D; [
+                    WAState.CONNECTED,
+                    WAState.OPENING,
+                    WAState.PAIRING,
+                    WAState.TIMEOUT,
+                ];
 
-            if (this.options.takeoverOnConflict) {
-                ACCEPTED_STATES.push(WAState.CONFLICT);
+                if (this.options.takeoverOnConflict) {
+                    ACCEPTED_STATES.push(WAState.CONFLICT);
 
-                if (state &#x3D;&#x3D;&#x3D; WAState.CONFLICT) {
-                    setTimeout(() &#x3D;&gt; {
-                        this.pupPage.evaluate(() &#x3D;&gt; window.Store.AppState.takeover());
-                    }, this.options.takeoverTimeoutMs);
+                    if (state &#x3D;&#x3D;&#x3D; WAState.CONFLICT) {
+                        setTimeout(() &#x3D;&gt; {
+                            this.pupPage.evaluate(() &#x3D;&gt;
+                                window
+                                    .require(&#x27;WAWebSocketModel&#x27;)
+                                    .Socket.takeover(),
+                            );
+                        }, this.options.takeoverTimeoutMs);
+                    }
                 }
-            }
 
-            if (!ACCEPTED_STATES.includes(state)) {
-                /**
+                if (!ACCEPTED_STATES.includes(state)) {
+                    /**
                      * Emitted when the client has been disconnected
                      * @event Client#disconnected
                      * @param {WAState|&quot;LOGOUT&quot;} reason reason that caused the disconnect
                      */
-                await this.authStrategy.disconnect();
-                this.emit(Events.DISCONNECTED, state);
-                this.destroy();
-            }
-        });
+                    await this.authStrategy.disconnect();
+                    this.emit(Events.DISCONNECTED, state);
+                    this.destroy();
+                }
+            },
+        );
 
-        await exposeFunctionIfAbsent(this.pupPage, &#x27;onBatteryStateChangedEvent&#x27;, (state) &#x3D;&gt; {
-            const { battery, plugged } &#x3D; state;
+        await exposeFunctionIfAbsent(
+            this.pupPage,
+            &#x27;onBatteryStateChangedEvent&#x27;,
+            (state) &#x3D;&gt; {
+                const { battery, plugged } &#x3D; state;
 
-            if (battery &#x3D;&#x3D;&#x3D; undefined) return;
+                if (battery &#x3D;&#x3D;&#x3D; undefined) return;
 
-            /**
+                /**
                  * Emitted when the battery percentage for the attached device changes. Will not be sent if using multi-device.
                  * @event Client#change_battery
                  * @param {object} batteryInfo
@@ -676,30 +901,34 @@ class Client extends EventEmitter {
                  * @param {boolean} batteryInfo.plugged - Indicates if the phone is plugged in (true) or not (false)
                  * @deprecated
                  */
-            this.emit(Events.BATTERY_CHANGED, { battery, plugged });
-        });
+                this.emit(Events.BATTERY_CHANGED, { battery, plugged });
+            },
+        );
 
         await exposeFunctionIfAbsent(this.pupPage, &#x27;onIncomingCall&#x27;, (call) &#x3D;&gt; {
             /**
-                 * Emitted when a call is received
-                 * @event Client#incoming_call
-                 * @param {object} call
-                 * @param {number} call.id - Call id
-                 * @param {string} call.peerJid - Who called
-                 * @param {boolean} call.isVideo - if is video
-                 * @param {boolean} call.isGroup - if is group
-                 * @param {boolean} call.canHandleLocally - if we can handle in waweb
-                 * @param {boolean} call.outgoing - if is outgoing
-                 * @param {boolean} call.webClientShouldHandle - If Waweb should handle
-                 * @param {object} call.participants - Participants
-                 */
+             * Emitted when a call is received
+             * @event Client#incoming_call
+             * @param {object} call
+             * @param {number} call.id - Call id
+             * @param {string} call.peerJid - Who called
+             * @param {boolean} call.isVideo - if is video
+             * @param {boolean} call.isGroup - if is group
+             * @param {boolean} call.canHandleLocally - if we can handle in waweb
+             * @param {boolean} call.outgoing - if is outgoing
+             * @param {boolean} call.webClientShouldHandle - If Waweb should handle
+             * @param {object} call.participants - Participants
+             */
             const cll &#x3D; new Call(this, call);
             this.emit(Events.INCOMING_CALL, cll);
         });
 
-        await exposeFunctionIfAbsent(this.pupPage, &#x27;onReaction&#x27;, (reactions) &#x3D;&gt; {
-            for (const reaction of reactions) {
-                /**
+        await exposeFunctionIfAbsent(
+            this.pupPage,
+            &#x27;onReaction&#x27;,
+            (reactions) &#x3D;&gt; {
+                for (const reaction of reactions) {
+                    /**
                      * Emitted when a reaction is sent, received, updated or removed
                      * @event Client#message_reaction
                      * @param {object} reaction
@@ -714,188 +943,340 @@ class Client extends EventEmitter {
                      * @param {?number} reaction.ack - Ack
                      */
 
-                this.emit(Events.MESSAGE_REACTION, new Reaction(this, reaction));
-            }
-        });
+                    this.emit(
+                        Events.MESSAGE_REACTION,
+                        new Reaction(this, reaction),
+                    );
+                }
+            },
+        );
 
-        await exposeFunctionIfAbsent(this.pupPage, &#x27;onRemoveChatEvent&#x27;, async (chat) &#x3D;&gt; {
-            const _chat &#x3D; await this.getChatById(chat.id);
+        await exposeFunctionIfAbsent(
+            this.pupPage,
+            &#x27;onRemoveChatEvent&#x27;,
+            async (chat) &#x3D;&gt; {
+                const _chat &#x3D; await this.getChatById(chat.id);
 
-            /**
+                /**
                  * Emitted when a chat is removed
                  * @event Client#chat_removed
                  * @param {Chat} chat
                  */
-            this.emit(Events.CHAT_REMOVED, _chat);
-        });
-            
-        await exposeFunctionIfAbsent(this.pupPage, &#x27;onArchiveChatEvent&#x27;, async (chat, currState, prevState) &#x3D;&gt; {
-            const _chat &#x3D; await this.getChatById(chat.id);
-                
-            /**
+                this.emit(Events.CHAT_REMOVED, _chat);
+            },
+        );
+
+        await exposeFunctionIfAbsent(
+            this.pupPage,
+            &#x27;onArchiveChatEvent&#x27;,
+            async (chat, currState, prevState) &#x3D;&gt; {
+                const _chat &#x3D; await this.getChatById(chat.id);
+
+                /**
                  * Emitted when a chat is archived/unarchived
                  * @event Client#chat_archived
                  * @param {Chat} chat
                  * @param {boolean} currState
                  * @param {boolean} prevState
                  */
-            this.emit(Events.CHAT_ARCHIVED, _chat, currState, prevState);
-        });
+                this.emit(Events.CHAT_ARCHIVED, _chat, currState, prevState);
+            },
+        );
 
-        await exposeFunctionIfAbsent(this.pupPage, &#x27;onEditMessageEvent&#x27;, (msg, newBody, prevBody) &#x3D;&gt; {
-                
-            if(msg.type &#x3D;&#x3D;&#x3D; &#x27;revoked&#x27;){
-                return;
-            }
-            /**
+        await exposeFunctionIfAbsent(
+            this.pupPage,
+            &#x27;onEditMessageEvent&#x27;,
+            (msg, newBody, prevBody) &#x3D;&gt; {
+                if (msg.type &#x3D;&#x3D;&#x3D; &#x27;revoked&#x27;) {
+                    return;
+                }
+                /**
                  * Emitted when messages are edited
                  * @event Client#message_edit
                  * @param {Message} message
                  * @param {string} newBody
                  * @param {string} prevBody
                  */
-            this.emit(Events.MESSAGE_EDIT, new Message(this, msg), newBody, prevBody);
-        });
-            
-        await exposeFunctionIfAbsent(this.pupPage, &#x27;onAddMessageCiphertextEvent&#x27;, msg &#x3D;&gt; {
-                
-            /**
-                 * Emitted when messages are edited
+                this.emit(
+                    Events.MESSAGE_EDIT,
+                    new Message(this, msg),
+                    newBody,
+                    prevBody,
+                );
+            },
+        );
+
+        await exposeFunctionIfAbsent(
+            this.pupPage,
+            &#x27;onAddMessageCiphertextEvent&#x27;,
+            (msg) &#x3D;&gt; {
+                /**
+                 * Emitted when a message is received as ciphertext (not yet decrypted)
                  * @event Client#message_ciphertext
                  * @param {Message} message
                  */
-            this.emit(Events.MESSAGE_CIPHERTEXT, new Message(this, msg));
-        });
+                this.emit(Events.MESSAGE_CIPHERTEXT, new Message(this, msg));
+            },
+        );
 
-        await exposeFunctionIfAbsent(this.pupPage, &#x27;onPollVoteEvent&#x27;, (votes) &#x3D;&gt; {
-            for (const vote of votes) {
+        await exposeFunctionIfAbsent(
+            this.pupPage,
+            &#x27;onCiphertextFailedEvent&#x27;,
+            (msg) &#x3D;&gt; {
                 /**
-                 * Emitted when some poll option is selected or deselected,
-                 * shows a user&#x27;s current selected option(s) on the poll
-                 * @event Client#vote_update
+                 * Emitted when a ciphertext message failed to decrypt after recovery attempt
+                 * @event Client#message_ciphertext_failed
+                 * @param {Message} message
                  */
-                this.emit(Events.VOTE_UPDATE, new PollVote(this, vote));
-            }
-        });
+                this.emit(
+                    Events.MESSAGE_CIPHERTEXT_FAILED,
+                    new Message(this, msg),
+                );
+            },
+        );
+
+        await exposeFunctionIfAbsent(
+            this.pupPage,
+            &#x27;onPollVoteEvent&#x27;,
+            (votes) &#x3D;&gt; {
+                for (const vote of votes) {
+                    /**
+                     * Emitted when some poll option is selected or deselected,
+                     * shows a user&#x27;s current selected option(s) on the poll
+                     * @event Client#vote_update
+                     */
+                    this.emit(Events.VOTE_UPDATE, new PollVote(this, vote));
+                }
+            },
+        );
 
         await this.pupPage.evaluate(() &#x3D;&gt; {
-            window.Store.Msg.on(&#x27;change&#x27;, (msg) &#x3D;&gt; { window.onChangeMessageEvent(window.WWebJS.getMessageModel(msg)); });
-            window.Store.Msg.on(&#x27;change:type&#x27;, (msg) &#x3D;&gt; { window.onChangeMessageTypeEvent(window.WWebJS.getMessageModel(msg)); });
-            window.Store.Msg.on(&#x27;change:ack&#x27;, (msg, ack) &#x3D;&gt; { window.onMessageAckEvent(window.WWebJS.getMessageModel(msg), ack); });
-            window.Store.Msg.on(&#x27;change:isUnsentMedia&#x27;, (msg, unsent) &#x3D;&gt; { if (msg.id.fromMe &amp;amp;&amp;amp; !unsent) window.onMessageMediaUploadedEvent(window.WWebJS.getMessageModel(msg)); });
-            window.Store.Msg.on(&#x27;remove&#x27;, (msg) &#x3D;&gt; { if (msg.isNewMsg) window.onRemoveMessageEvent(window.WWebJS.getMessageModel(msg)); });
-            window.Store.Msg.on(&#x27;change:body change:caption&#x27;, (msg, newBody, prevBody) &#x3D;&gt; { window.onEditMessageEvent(window.WWebJS.getMessageModel(msg), newBody, prevBody); });
-            window.Store.AppState.on(&#x27;change:state&#x27;, (_AppState, state) &#x3D;&gt; { window.onAppStateChangedEvent(state); });
-            window.Store.Conn.on(&#x27;change:battery&#x27;, (state) &#x3D;&gt; { window.onBatteryStateChangedEvent(state); });
-            const callCollection &#x3D; (window.Store &amp;amp;&amp;amp; window.Store.Call) || (window.Store &amp;amp;&amp;amp; window.Store.WAWebCallCollection);
-            if (callCollection &amp;amp;&amp;amp; typeof callCollection.on &#x3D;&#x3D;&#x3D; &#x27;function&#x27;) {
-                callCollection.on(&#x27;add&#x27;, (call) &#x3D;&gt; { window.onIncomingCall(call); });
-            }
-            window.Store.Chat.on(&#x27;remove&#x27;, async (chat) &#x3D;&gt; { window.onRemoveChatEvent(await window.WWebJS.getChatModel(chat)); });
-            window.Store.Chat.on(&#x27;change:archive&#x27;, async (chat, currState, prevState) &#x3D;&gt; { window.onArchiveChatEvent(await window.WWebJS.getChatModel(chat), currState, prevState); });
-            window.Store.Msg.on(&#x27;add&#x27;, (msg) &#x3D;&gt; { 
-                if (msg.isNewMsg) {
-                    if(msg.type &#x3D;&#x3D;&#x3D; &#x27;ciphertext&#x27;) {
-                        // defer message event until ciphertext is resolved (type changed)
-                        msg.once(&#x27;change:type&#x27;, (_msg) &#x3D;&gt; window.onAddMessageEvent(window.WWebJS.getMessageModel(_msg)));
-                        window.onAddMessageCiphertextEvent(window.WWebJS.getMessageModel(msg));
-                    } else {
-                        window.onAddMessageEvent(window.WWebJS.getMessageModel(msg)); 
-                    }
-                }
+            const { Msg, Chat, WAWebCallCollection } &#x3D;
+                window.require(&#x27;WAWebCollections&#x27;);
+            const AppState &#x3D; window.require(&#x27;WAWebSocketModel&#x27;).Socket;
+
+            // Enable placeholder message resend (recovery for ciphertext messages)
+            const gatingUtils &#x3D; window.require(&#x27;WAWebSyncGatingUtils&#x27;);
+            gatingUtils.isPlaceholderMessageResendEnabled &#x3D; () &#x3D;&gt; true;
+
+            Msg.on(&#x27;change&#x27;, (msg) &#x3D;&gt; {
+                window.onChangeMessageEvent(window.WWebJS.getMessageModel(msg));
             });
-            window.Store.Chat.on(&#x27;change:unreadCount&#x27;, (chat) &#x3D;&gt; {window.onChatUnreadCountEvent(chat);});
+            Msg.on(&#x27;change:type&#x27;, (msg) &#x3D;&gt; {
+                window.onChangeMessageTypeEvent(
+                    window.WWebJS.getMessageModel(msg),
+                );
+            });
+            Msg.on(&#x27;change:ack&#x27;, (msg, ack) &#x3D;&gt; {
+                window.onMessageAckEvent(
+                    window.WWebJS.getMessageModel(msg),
+                    ack,
+                );
+            });
+            Msg.on(&#x27;change:isUnsentMedia&#x27;, (msg, unsent) &#x3D;&gt; {
+                if (msg.id.fromMe &amp;amp;&amp;amp; !unsent)
+                    window.onMessageMediaUploadedEvent(
+                        window.WWebJS.getMessageModel(msg),
+                    );
+            });
+            Msg.on(&#x27;remove&#x27;, (msg) &#x3D;&gt; {
+                if (msg.isNewMsg)
+                    window.onRemoveMessageEvent(
+                        window.WWebJS.getMessageModel(msg),
+                    );
+            });
+            Msg.on(&#x27;change:body change:caption&#x27;, (msg, newBody, prevBody) &#x3D;&gt; {
+                window.onEditMessageEvent(
+                    window.WWebJS.getMessageModel(msg),
+                    newBody,
+                    prevBody,
+                );
+            });
+            AppState.on(&#x27;change:state&#x27;, (_AppState, state) &#x3D;&gt; {
+                window.onAppStateChangedEvent(state);
+            });
+            window
+                .require(&#x27;WAWebConnModel&#x27;)
+                .Conn.on(&#x27;change:battery&#x27;, (state) &#x3D;&gt; {
+                    window.onBatteryStateChangedEvent(state);
+                });
+            if (
+                WAWebCallCollection &amp;amp;&amp;amp;
+                typeof WAWebCallCollection.on &#x3D;&#x3D;&#x3D; &#x27;function&#x27;
+            ) {
+                WAWebCallCollection.on(&#x27;add&#x27;, (call) &#x3D;&gt; {
+                    window.onIncomingCall(call);
+                });
+            }
+            Chat.on(&#x27;remove&#x27;, async (chat) &#x3D;&gt; {
+                window.onRemoveChatEvent(
+                    await window.WWebJS.getChatModel(chat),
+                );
+            });
+            Chat.on(&#x27;change:archive&#x27;, async (chat, currState, prevState) &#x3D;&gt; {
+                window.onArchiveChatEvent(
+                    await window.WWebJS.getChatModel(chat),
+                    currState,
+                    prevState,
+                );
+            });
+            const pendingResend &#x3D; new Set();
+            let resendFlush &#x3D; null;
 
-            if (window.compareWwebVersions(window.Debug.VERSION, &#x27;&gt;&#x3D;&#x27;, &#x27;2.3000.1014111620&#x27;)) {
-                const module &#x3D; window.Store.AddonReactionTable;
-                const ogMethod &#x3D; module.bulkUpsert;
-                module.bulkUpsert &#x3D; ((...args) &#x3D;&gt; {
-                    window.onReaction(args[0].map(reaction &#x3D;&gt; {
-                        const msgKey &#x3D; reaction.id;
-                        const parentMsgKey &#x3D; reaction.reactionParentKey;
-                        const timestamp &#x3D; reaction.reactionTimestamp / 1000;
-                        const sender &#x3D; reaction.author ?? reaction.from;
-                        const senderUserJid &#x3D; sender._serialized;
+            function requestResend(msg) {
+                pendingResend.add(msg);
+                if (resendFlush) return;
+                resendFlush &#x3D; setTimeout(() &#x3D;&gt; {
+                    resendFlush &#x3D; null;
+                    const msgs &#x3D; [...pendingResend];
+                    pendingResend.clear();
+                    if (msgs.length &#x3D;&#x3D;&#x3D; 0) return;
+                    window
+                        .require(
+                            &#x27;WAWebNonMessageDataRequestPlaceholderMessageResendUtils&#x27;,
+                        )
+                        .handlePlaceholderMsgsSeen(msgs, true);
+                }, 5000);
+            }
 
-                        return {...reaction, msgKey, parentMsgKey, senderUserJid, timestamp };
-                    }));
+            Msg.on(&#x27;add&#x27;, (msg) &#x3D;&gt; {
+                if (!msg.isNewMsg) return;
 
-                    return ogMethod(...args);
-                }).bind(module);
+                if (msg.type !&#x3D;&#x3D; &#x27;ciphertext&#x27;) {
+                    window.onAddMessageEvent(
+                        window.WWebJS.getMessageModel(msg),
+                    );
+                    return;
+                }
 
-                const pollVoteModule &#x3D; window.Store.AddonPollVoteTable;
-                const ogPollVoteMethod &#x3D; pollVoteModule.bulkUpsert;
+                window.onAddMessageCiphertextEvent(
+                    window.WWebJS.getMessageModel(msg),
+                );
 
-                pollVoteModule.bulkUpsert &#x3D; (async (...args) &#x3D;&gt; {
-                    const votes &#x3D; await Promise.all(args[0].map(async vote &#x3D;&gt; {
-                        const msgKey &#x3D; vote.id;
-                        const parentMsgKey &#x3D; vote.pollUpdateParentKey;
-                        const timestamp &#x3D; vote.t / 1000;
-                        const sender &#x3D; vote.author ?? vote.from;
-                        const senderUserJid &#x3D; sender._serialized;
+                if (msg.subtype &amp;amp;&amp;amp; msg.subtype.endsWith(&#x27;_unavailable_fanout&#x27;))
+                    return;
 
-                        let parentMessage &#x3D; window.Store.Msg.get(parentMsgKey._serialized);
-                        if (!parentMessage) {
-                            const fetched &#x3D; await window.Store.Msg.getMessagesById([parentMsgKey._serialized]);
-                            parentMessage &#x3D; fetched?.messages?.[0] || null;
-                        }
+                requestResend(msg);
 
-                        return {
-                            ...vote,
-                            msgKey,
-                            sender,
-                            parentMsgKey,
-                            senderUserJid,
-                            timestamp,
-                            parentMessage
-                        };
-                    }));
+                const failTimer &#x3D; setTimeout(() &#x3D;&gt; {
+                    if (msg.type !&#x3D;&#x3D; &#x27;ciphertext&#x27;) return;
+                    window.onCiphertextFailedEvent(
+                        window.WWebJS.getMessageModel(msg),
+                    );
+                }, 15000);
+
+                msg.once(&#x27;change:type&#x27;, (_msg) &#x3D;&gt; {
+                    clearTimeout(failTimer);
+                    pendingResend.delete(_msg);
+                    if (_msg.type &#x3D;&#x3D;&#x3D; &#x27;revoked&#x27;) return;
+                    window.onAddMessageEvent(
+                        window.WWebJS.getMessageModel(_msg),
+                    );
+                });
+            });
+            Chat.on(&#x27;change:unreadCount&#x27;, (chat) &#x3D;&gt; {
+                window.onChatUnreadCountEvent(chat);
+            });
+
+            window.WWebJS.injectToFunction(
+                {
+                    module: &#x27;WAWebAddonReactionTableMode&#x27;,
+                    function: &#x27;reactionTableMode.bulkUpsert&#x27;,
+                },
+                (module, origFunction, ...args) &#x3D;&gt; {
+                    window.onReaction(
+                        args[0].map((reaction) &#x3D;&gt; {
+                            const msgKey &#x3D; reaction.id;
+                            const parentMsgKey &#x3D; reaction.reactionParentKey;
+                            const timestamp &#x3D; reaction.reactionTimestamp / 1000;
+                            const sender &#x3D; reaction.author ?? reaction.from;
+                            const senderUserJid &#x3D; sender._serialized;
+
+                            return {
+                                ...reaction,
+                                msgKey,
+                                parentMsgKey,
+                                senderUserJid,
+                                timestamp,
+                            };
+                        }),
+                    );
+
+                    return origFunction.apply(module, args);
+                },
+            );
+
+            window.WWebJS.injectToFunction(
+                {
+                    module: &#x27;WAWebAddonPollVoteTableMode&#x27;,
+                    function: &#x27;pollVoteTableMode.bulkUpsert&#x27;,
+                },
+                async (module, origFunction, ...args) &#x3D;&gt; {
+                    const votes &#x3D; await Promise.all(
+                        args[0].map(async (vote) &#x3D;&gt; {
+                            const msgKey &#x3D; vote.id;
+                            const parentMsgKey &#x3D; vote.pollUpdateParentKey;
+                            const timestamp &#x3D; vote.t / 1000;
+                            const sender &#x3D; vote.author ?? vote.from;
+                            const senderUserJid &#x3D; sender._serialized;
+
+                            let parentMessage &#x3D; Msg.get(
+                                parentMsgKey._serialized,
+                            );
+                            if (!parentMessage) {
+                                const fetched &#x3D; await Msg.getMessagesById([
+                                    parentMsgKey._serialized,
+                                ]);
+                                parentMessage &#x3D; fetched?.messages?.[0] || null;
+                            }
+
+                            return {
+                                ...vote,
+                                msgKey,
+                                sender,
+                                parentMsgKey,
+                                senderUserJid,
+                                timestamp,
+                                parentMessage,
+                            };
+                        }),
+                    );
 
                     window.onPollVoteEvent(votes);
 
-                    return ogPollVoteMethod.apply(pollVoteModule, args);
-                }).bind(pollVoteModule);
-            } else {
-                const module &#x3D; window.Store.createOrUpdateReactionsModule;
-                const ogMethod &#x3D; module.createOrUpdateReactions;
-                module.createOrUpdateReactions &#x3D; ((...args) &#x3D;&gt; {
-                    window.onReaction(args[0].map(reaction &#x3D;&gt; {
-                        const msgKey &#x3D; window.Store.MsgKey.fromString(reaction.msgKey);
-                        const parentMsgKey &#x3D; window.Store.MsgKey.fromString(reaction.parentMsgKey);
-                        const timestamp &#x3D; reaction.timestamp / 1000;
-
-                        return {...reaction, msgKey, parentMsgKey, timestamp };
-                    }));
-
-                    return ogMethod(...args);
-                }).bind(module);
-            }
+                    return origFunction.apply(module, args);
+                },
+            );
         });
-    }    
+    }
 
     async initWebVersionCache() {
-        const { type: webCacheType, ...webCacheOptions } &#x3D; this.options.webVersionCache;
-        const webCache &#x3D; WebCacheFactory.createWebCache(webCacheType, webCacheOptions);
+        const { type: webCacheType, ...webCacheOptions } &#x3D;
+            this.options.webVersionCache;
+        const webCache &#x3D; WebCacheFactory.createWebCache(
+            webCacheType,
+            webCacheOptions,
+        );
 
         const requestedVersion &#x3D; this.options.webVersion;
         const versionContent &#x3D; await webCache.resolve(requestedVersion);
 
-        if(versionContent) {
+        if (versionContent) {
             await this.pupPage.setRequestInterception(true);
             this.pupPage.on(&#x27;request&#x27;, async (req) &#x3D;&gt; {
-                if(req.url() &#x3D;&#x3D;&#x3D; WhatsWebURL) {
+                if (req.url() &#x3D;&#x3D;&#x3D; WhatsWebURL) {
                     req.respond({
                         status: 200,
                         contentType: &#x27;text/html&#x27;,
-                        body: versionContent
-                    }); 
+                        body: versionContent,
+                    });
                 } else {
                     req.continue();
                 }
             });
         } else {
             this.pupPage.on(&#x27;response&#x27;, async (res) &#x3D;&gt; {
-                if(res.ok() &amp;amp;&amp;amp; res.url() &#x3D;&#x3D;&#x3D; WhatsWebURL) {
+                if (res.ok() &amp;amp;&amp;amp; res.url() &#x3D;&#x3D;&#x3D; WhatsWebURL) {
                     const indexHtml &#x3D; await res.text();
                     this.currentIndexHtml &#x3D; indexHtml;
                 }
@@ -920,18 +1301,17 @@ class Client extends EventEmitter {
      */
     async logout() {
         await this.pupPage.evaluate(() &#x3D;&gt; {
-            if (window.Store &amp;amp;&amp;amp; window.Store.AppState &amp;amp;&amp;amp; typeof window.Store.AppState.logout &#x3D;&#x3D;&#x3D; &#x27;function&#x27;) {
-                return window.Store.AppState.logout();
-            }
+            return window.require(&#x27;WAWebSocketModel&#x27;).Socket.logout();
         });
         await this.pupBrowser.close();
-        
+
         let maxDelay &#x3D; 0;
-        while (this.pupBrowser.isConnected() &amp;amp;&amp;amp; (maxDelay &amp;lt; 10)) { // waits a maximum of 1 second before calling the AuthStrategy
-            await new Promise(resolve &#x3D;&gt; setTimeout(resolve, 100));
-            maxDelay++; 
+        while (this.pupBrowser.isConnected() &amp;amp;&amp;amp; maxDelay &amp;lt; 10) {
+            // waits a maximum of 1 second before calling the AuthStrategy
+            await new Promise((resolve) &#x3D;&gt; setTimeout(resolve, 100));
+            maxDelay++;
         }
-        
+
         await this.authStrategy.logout();
     }
 
@@ -946,23 +1326,28 @@ class Client extends EventEmitter {
     }
 
     async setDeviceName(deviceName, browserName) {
-        (deviceName || browserName) &amp;amp;&amp;amp; await this.pupPage.evaluate((deviceName, browserName) &#x3D;&gt; {
-            const func &#x3D; window.require(&#x27;WAWebMiscBrowserUtils&#x27;).info;
-            window.require(&#x27;WAWebMiscBrowserUtils&#x27;).info &#x3D; () &#x3D;&gt; {
-                return {
-                    ...func(),
-                    ...(deviceName ? { os: deviceName } : {}),
-                    ...(browserName ? { name: browserName } : {})
-                };
-            };
-        }, deviceName, browserName);
+        (deviceName || browserName) &amp;amp;&amp;amp;
+            (await this.pupPage.evaluate(
+                (deviceName, browserName) &#x3D;&gt; {
+                    const func &#x3D; window.require(&#x27;WAWebMiscBrowserUtils&#x27;).info;
+                    window.require(&#x27;WAWebMiscBrowserUtils&#x27;).info &#x3D; () &#x3D;&gt; {
+                        return {
+                            ...func(),
+                            ...(deviceName ? { os: deviceName } : {}),
+                            ...(browserName ? { name: browserName } : {}),
+                        };
+                    };
+                },
+                deviceName,
+                browserName,
+            ));
     }
 
     /**
      * Mark as seen for the Chat
      *  @param {string} chatId
      *  @returns {Promise&amp;lt;boolean&gt;} result
-     * 
+     *
      */
     async sendSeen(chatId) {
         return await this.pupPage.evaluate(async (chatId) &#x3D;&gt; {
@@ -1002,50 +1387,84 @@ class Client extends EventEmitter {
      * @property {MessageMedia} [media] - Media to be sent
      * @property {any} [extra] - Extra options
      */
-    
+
     /**
      * Send a message to a specific chatId
      * @param {string} chatId
      * @param {string|MessageMedia|Location|Poll|Contact|Array&amp;lt;Contact&gt;|Buttons|List} content
      * @param {MessageSendOptions} [options] - Options used when sending the message
-     * 
+     *
      * @returns {Promise&amp;lt;Message&gt;} Message that was just sent
      */
     async sendMessage(chatId, content, options &#x3D; {}) {
         const isChannel &#x3D; /@\w*newsletter\b/.test(chatId);
         const isStatus &#x3D; /@\w*broadcast\b/.test(chatId);
 
-        if (isChannel &amp;amp;&amp;amp; [
-            options.sendMediaAsDocument, options.quotedMessageId,
-            options.parseVCards, options.isViewOnce,
-            content instanceof Location, content instanceof Contact,
-            content instanceof Buttons, content instanceof List,
-            Array.isArray(content) &amp;amp;&amp;amp; content.length &gt; 0 &amp;amp;&amp;amp; content[0] instanceof Contact
-        ].includes(true)) {
-            console.warn(&#x27;The message type is currently not supported for sending in channels,\nthe supported message types are: text, image, sticker, gif, video, voice and poll.&#x27;);
+        if (
+            isChannel &amp;amp;&amp;amp;
+            [
+                options.sendMediaAsDocument,
+                options.quotedMessageId,
+                options.parseVCards,
+                options.isViewOnce,
+                content instanceof Location,
+                content instanceof Contact,
+                content instanceof Buttons,
+                content instanceof List,
+                Array.isArray(content) &amp;amp;&amp;amp;
+                    content.length &gt; 0 &amp;amp;&amp;amp;
+                    content[0] instanceof Contact,
+            ].includes(true)
+        ) {
+            console.warn(
+                &#x27;The message type is currently not supported for sending in channels,\nthe supported message types are: text, image, sticker, gif, video, voice and poll.&#x27;,
+            );
             return null;
-
-        } else if (isStatus &amp;amp;&amp;amp; [
-            options.sendMediaAsDocument, options.quotedMessageId,
-            options.parseVCards, options.isViewOnce, options.sendMediaAsSticker,
-            content instanceof Location, content instanceof Contact,
-            content instanceof Poll, content instanceof Buttons, content instanceof List,
-            Array.isArray(content) &amp;amp;&amp;amp; content.length &gt; 0 &amp;amp;&amp;amp; content[0] instanceof Contact
-        ].includes(true)) {
-            console.warn(&#x27;The message type is currently not supported for sending in status broadcast,\nthe supported message types are: text, image, gif, audio and video.&#x27;);
+        } else if (
+            isStatus &amp;amp;&amp;amp;
+            [
+                options.sendMediaAsDocument,
+                options.quotedMessageId,
+                options.parseVCards,
+                options.isViewOnce,
+                options.sendMediaAsSticker,
+                content instanceof Location,
+                content instanceof Contact,
+                content instanceof Poll,
+                content instanceof Buttons,
+                content instanceof List,
+                Array.isArray(content) &amp;amp;&amp;amp;
+                    content.length &gt; 0 &amp;amp;&amp;amp;
+                    content[0] instanceof Contact,
+            ].includes(true)
+        ) {
+            console.warn(
+                &#x27;The message type is currently not supported for sending in status broadcast,\nthe supported message types are: text, image, gif, audio and video.&#x27;,
+            );
             return null;
         }
-    
+
         if (options.mentions) {
-            !Array.isArray(options.mentions) &amp;amp;&amp;amp; (options.mentions &#x3D; [options.mentions]);
-            if (options.mentions.some((possiblyContact) &#x3D;&gt; possiblyContact instanceof Contact)) {
-                console.warn(&#x27;Mentions with an array of Contact are now deprecated. See more at https://github.com/pedroslopez/whatsapp-web.js/pull/2166.&#x27;);
-                options.mentions &#x3D; options.mentions.map((a) &#x3D;&gt; a.id._serialized);
+            !Array.isArray(options.mentions) &amp;amp;&amp;amp;
+                (options.mentions &#x3D; [options.mentions]);
+            if (
+                options.mentions.some(
+                    (possiblyContact) &#x3D;&gt; possiblyContact instanceof Contact,
+                )
+            ) {
+                console.warn(
+                    &#x27;Mentions with an array of Contact are now deprecated. See more at https://github.com/pedroslopez/whatsapp-web.js/pull/2166.&#x27;,
+                );
+                options.mentions &#x3D; options.mentions.map(
+                    (a) &#x3D;&gt; a.id._serialized,
+                );
             }
         }
 
-        options.groupMentions &amp;amp;&amp;amp; !Array.isArray(options.groupMentions) &amp;amp;&amp;amp; (options.groupMentions &#x3D; [options.groupMentions]);
-        
+        options.groupMentions &amp;amp;&amp;amp;
+            !Array.isArray(options.groupMentions) &amp;amp;&amp;amp;
+            (options.groupMentions &#x3D; [options.groupMentions]);
+
         let internalOptions &#x3D; {
             linkPreview: options.linkPreview &#x3D;&#x3D;&#x3D; false ? undefined : true,
             sendAudioAsVoice: options.sendAudioAsVoice,
@@ -1054,6 +1473,7 @@ class Client extends EventEmitter {
             sendMediaAsDocument: options.sendMediaAsDocument,
             sendMediaAsHd: options.sendMediaAsHd,
             caption: options.caption,
+            isCaptionByUser: options.caption ? true : false,
             quotedMessageId: options.quotedMessageId,
             parseVCards: options.parseVCards !&#x3D;&#x3D; false,
             mentionedJidList: options.mentions || [],
@@ -1061,20 +1481,18 @@ class Client extends EventEmitter {
             invokedBotWid: options.invokedBotWid,
             ignoreQuoteErrors: options.ignoreQuoteErrors !&#x3D;&#x3D; false,
             waitUntilMsgSent: options.waitUntilMsgSent || false,
-            extraOptions: options.extra
+            extraOptions: options.extra,
         };
 
         const sendSeen &#x3D; options.sendSeen !&#x3D;&#x3D; false;
 
         if (content instanceof MessageMedia) {
             internalOptions.media &#x3D; content;
-            internalOptions.isViewOnce &#x3D; options.isViewOnce,
-            content &#x3D; &#x27;&#x27;;
+            ((internalOptions.isViewOnce &#x3D; options.isViewOnce), (content &#x3D; &#x27;&#x27;));
         } else if (options.media instanceof MessageMedia) {
             internalOptions.media &#x3D; options.media;
             internalOptions.caption &#x3D; content;
-            internalOptions.isViewOnce &#x3D; options.isViewOnce,
-            content &#x3D; &#x27;&#x27;;
+            ((internalOptions.isViewOnce &#x3D; options.isViewOnce), (content &#x3D; &#x27;&#x27;));
         } else if (content instanceof Location) {
             internalOptions.location &#x3D; content;
             content &#x3D; &#x27;&#x27;;
@@ -1087,48 +1505,97 @@ class Client extends EventEmitter {
         } else if (content instanceof Contact) {
             internalOptions.contactCard &#x3D; content.id._serialized;
             content &#x3D; &#x27;&#x27;;
-        } else if (Array.isArray(content) &amp;amp;&amp;amp; content.length &gt; 0 &amp;amp;&amp;amp; content[0] instanceof Contact) {
-            internalOptions.contactCardList &#x3D; content.map(contact &#x3D;&gt; contact.id._serialized);
+        } else if (
+            Array.isArray(content) &amp;amp;&amp;amp;
+            content.length &gt; 0 &amp;amp;&amp;amp;
+            content[0] instanceof Contact
+        ) {
+            internalOptions.contactCardList &#x3D; content.map(
+                (contact) &#x3D;&gt; contact.id._serialized,
+            );
             content &#x3D; &#x27;&#x27;;
         } else if (content instanceof Buttons) {
-            console.warn(&#x27;Buttons are now deprecated. See more at https://www.youtube.com/watch?v&#x3D;hv1R1rLeVVE.&#x27;);
-            if (content.type !&#x3D;&#x3D; &#x27;chat&#x27;) { internalOptions.attachment &#x3D; content.body; }
+            console.warn(
+                &#x27;Buttons are now deprecated. See more at https://www.youtube.com/watch?v&#x3D;hv1R1rLeVVE.&#x27;,
+            );
+            if (content.type !&#x3D;&#x3D; &#x27;chat&#x27;) {
+                internalOptions.attachment &#x3D; content.body;
+            }
             internalOptions.buttons &#x3D; content;
             content &#x3D; &#x27;&#x27;;
         } else if (content instanceof List) {
-            console.warn(&#x27;Lists are now deprecated. See more at https://www.youtube.com/watch?v&#x3D;hv1R1rLeVVE.&#x27;);
+            console.warn(
+                &#x27;Lists are now deprecated. See more at https://www.youtube.com/watch?v&#x3D;hv1R1rLeVVE.&#x27;,
+            );
             internalOptions.list &#x3D; content;
             content &#x3D; &#x27;&#x27;;
         }
 
         if (internalOptions.sendMediaAsSticker &amp;amp;&amp;amp; internalOptions.media) {
             internalOptions.media &#x3D; await Util.formatToWebpSticker(
-                internalOptions.media, {
+                internalOptions.media,
+                {
                     name: options.stickerName,
                     author: options.stickerAuthor,
-                    categories: options.stickerCategories
-                }, this.pupPage
+                    categories: options.stickerCategories,
+                },
+                this.pupPage,
             );
         }
 
-        const sentMsg &#x3D; await this.pupPage.evaluate(async (chatId, content, options, sendSeen) &#x3D;&gt; {
-            const chat &#x3D; await window.WWebJS.getChat(chatId, { getAsModel: false });
+        const sentMsg &#x3D; await this.pupPage.evaluate(
+            async (chatId, content, options, sendSeen) &#x3D;&gt; {
+                const chat &#x3D; await window.WWebJS.getChat(chatId, {
+                    getAsModel: false,
+                });
 
-            if (!chat) return null;
+                if (!chat) return null;
 
-            if (sendSeen) {
-                await window.WWebJS.sendSeen(chatId);
-            }
+                if (sendSeen) {
+                    await window.WWebJS.sendSeen(chatId);
+                }
 
-            const msg &#x3D; await window.WWebJS.sendMessage(chat, content, options);
-            return msg
-                ? window.WWebJS.getMessageModel(msg)
-                : undefined;
-        }, chatId, content, internalOptions, sendSeen);
+                const msg &#x3D; await window.WWebJS.sendMessage(
+                    chat,
+                    content,
+                    options,
+                );
+                return msg ? window.WWebJS.getMessageModel(msg) : undefined;
+            },
+            chatId,
+            content,
+            internalOptions,
+            sendSeen,
+        );
 
-        return sentMsg
-            ? new Message(this, sentMsg)
-            : undefined;
+        return sentMsg ? new Message(this, sentMsg) : undefined;
+    }
+
+    /**
+     * Send an emoji reaction to a specific message
+     * @param {string} messageId - Id of the message to add the reaction.
+     * @param {string} reaction  - Emoji to react with. Send an empty string to remove the reaction.
+     * @return {Promise}
+     */
+    async sendReaction(messageId, reaction) {
+        await this.pupPage.evaluate(
+            async (messageId, reaction) &#x3D;&gt; {
+                if (!messageId) return null;
+                const msg &#x3D;
+                    window.require(&#x27;WAWebCollections&#x27;).Msg.get(messageId) ||
+                    (
+                        await window
+                            .require(&#x27;WAWebCollections&#x27;)
+                            .Msg.getMessagesById([messageId])
+                    )?.messages?.[0];
+                if (!msg) return null;
+                await window
+                    .require(&#x27;WAWebSendReactionMsgAction&#x27;)
+                    .sendReactionToMsg(msg, reaction);
+            },
+            messageId,
+            reaction,
+        );
     }
 
     /**
@@ -1140,33 +1607,45 @@ class Client extends EventEmitter {
      * Sends a channel admin invitation to a user, allowing them to become an admin of the channel
      * @param {string} chatId The ID of a user to send the channel admin invitation to
      * @param {string} channelId The ID of a channel for which the invitation is being sent
-     * @param {SendChannelAdminInviteOptions} options 
+     * @param {SendChannelAdminInviteOptions} options
      * @returns {Promise&amp;lt;boolean&gt;} Returns true if an invitation was sent successfully, false otherwise
      */
     async sendChannelAdminInvite(chatId, channelId, options &#x3D; {}) {
-        const response &#x3D; await this.pupPage.evaluate(async (chatId, channelId, options) &#x3D;&gt; {
-            const channelWid &#x3D; window.Store.WidFactory.createWid(channelId);
-            const chatWid &#x3D; window.Store.WidFactory.createWid(chatId);
-            const chat &#x3D; window.Store.Chat.get(chatWid) || (await window.Store.Chat.find(chatWid));
+        const response &#x3D; await this.pupPage.evaluate(
+            async (chatId, channelId, options) &#x3D;&gt; {
+                const { createWid } &#x3D; window.require(&#x27;WAWebWidFactory&#x27;);
+                const channelWid &#x3D; createWid(channelId);
+                const chatWid &#x3D; createWid(chatId);
+                const chat &#x3D;
+                    window.require(&#x27;WAWebCollections&#x27;).Chat.get(chatWid) ||
+                    (await window
+                        .require(&#x27;WAWebCollections&#x27;)
+                        .Chat.find(chatWid));
 
-            if (!chatWid.isUser()) {
-                return false;
-            }
-            
-            return await window.Store.SendChannelMessage.sendNewsletterAdminInviteMessage(
-                chat,
-                {
-                    newsletterWid: channelWid,
-                    invitee: chatWid,
-                    inviteMessage: options.comment,
-                    base64Thumb: await window.WWebJS.getProfilePicThumbToBase64(channelWid)
+                if (!chatWid.isUser()) {
+                    return false;
                 }
-            );
-        }, chatId, channelId, options);
+
+                return await window
+                    .require(&#x27;WAWebNewsletterSendMsgAction&#x27;)
+                    .sendNewsletterAdminInviteMessage(chat, {
+                        newsletterWid: channelWid,
+                        invitee: chatWid,
+                        inviteMessage: options.comment,
+                        base64Thumb:
+                            await window.WWebJS.getProfilePicThumbToBase64(
+                                channelWid,
+                            ),
+                    });
+            },
+            chatId,
+            channelId,
+            options,
+        );
 
         return response.messageSendResult &#x3D;&#x3D;&#x3D; &#x27;OK&#x27;;
     }
-    
+
     /**
      * Searches for messages
      * @param {string} query
@@ -1177,12 +1656,22 @@ class Client extends EventEmitter {
      * @returns {Promise&amp;lt;Message[]&gt;}
      */
     async searchMessages(query, options &#x3D; {}) {
-        const messages &#x3D; await this.pupPage.evaluate(async (query, page, count, remote) &#x3D;&gt; {
-            const { messages } &#x3D; await window.Store.Msg.search(query, page, count, remote);
-            return messages.map(msg &#x3D;&gt; window.WWebJS.getMessageModel(msg));
-        }, query, options.page, options.limit, options.chatId);
+        const messages &#x3D; await this.pupPage.evaluate(
+            async (query, page, count, remote) &#x3D;&gt; {
+                const { messages } &#x3D; await window
+                    .require(&#x27;WAWebCollections&#x27;)
+                    .Msg.search(query, page, count, remote);
+                return messages.map((msg) &#x3D;&gt;
+                    window.WWebJS.getMessageModel(msg),
+                );
+            },
+            query,
+            options.page,
+            options.limit,
+            options.chatId,
+        );
 
-        return messages.map(msg &#x3D;&gt; new Message(this, msg));
+        return messages.map((msg) &#x3D;&gt; new Message(this, msg));
     }
 
     /**
@@ -1194,7 +1683,7 @@ class Client extends EventEmitter {
             return await window.WWebJS.getChats();
         });
 
-        return chats.map(chat &#x3D;&gt; ChatFactory.create(this, chat));
+        return chats.map((chat) &#x3D;&gt; ChatFactory.create(this, chat));
     }
 
     /**
@@ -1211,16 +1700,14 @@ class Client extends EventEmitter {
 
     /**
      * Gets chat or channel instance by ID
-     * @param {string} chatId 
+     * @param {string} chatId
      * @returns {Promise&amp;lt;Chat|Channel&gt;}
      */
     async getChatById(chatId) {
-        const chat &#x3D; await this.pupPage.evaluate(async chatId &#x3D;&gt; {
+        const chat &#x3D; await this.pupPage.evaluate(async (chatId) &#x3D;&gt; {
             return await window.WWebJS.getChat(chatId);
         }, chatId);
-        return chat
-            ? ChatFactory.create(this, chat)
-            : undefined;
+        return chat ? ChatFactory.create(this, chat) : undefined;
     }
 
     /**
@@ -1232,7 +1719,8 @@ class Client extends EventEmitter {
         const channel &#x3D; await this.pupPage.evaluate(async (inviteCode) &#x3D;&gt; {
             let channelMetadata;
             try {
-                channelMetadata &#x3D; await window.WWebJS.getChannelMetadata(inviteCode);
+                channelMetadata &#x3D;
+                    await window.WWebJS.getChannelMetadata(inviteCode);
             } catch (err) {
                 if (err.name &#x3D;&#x3D;&#x3D; &#x27;ServerStatusCodeError&#x27;) return null;
                 throw err;
@@ -1240,9 +1728,7 @@ class Client extends EventEmitter {
             return await window.WWebJS.getChat(channelMetadata.id);
         }, inviteCode);
 
-        return channel
-            ? ChatFactory.create(this, channel)
-            : undefined;
+        return channel ? ChatFactory.create(this, channel) : undefined;
     }
 
     /**
@@ -1254,7 +1740,7 @@ class Client extends EventEmitter {
             return window.WWebJS.getContacts();
         });
 
-        return contacts.map(contact &#x3D;&gt; ContactFactory.create(this, contact));
+        return contacts.map((contact) &#x3D;&gt; ContactFactory.create(this, contact));
     }
 
     /**
@@ -1263,7 +1749,7 @@ class Client extends EventEmitter {
      * @returns {Promise&amp;lt;Contact&gt;}
      */
     async getContactById(contactId) {
-        let contact &#x3D; await this.pupPage.evaluate(contactId &#x3D;&gt; {
+        let contact &#x3D; await this.pupPage.evaluate((contactId) &#x3D;&gt; {
             return window.WWebJS.getContact(contactId);
         }, contactId);
 
@@ -1276,20 +1762,24 @@ class Client extends EventEmitter {
      * @returns {Promise&amp;lt;Message&gt;}
      */
     async getMessageById(messageId) {
-        const msg &#x3D; await this.pupPage.evaluate(async messageId &#x3D;&gt; {
-            let msg &#x3D; window.Store.Msg.get(messageId);
-            if(msg) return window.WWebJS.getMessageModel(msg);
+        const msg &#x3D; await this.pupPage.evaluate(async (messageId) &#x3D;&gt; {
+            let msg &#x3D; window.require(&#x27;WAWebCollections&#x27;).Msg.get(messageId);
+            if (msg) return window.WWebJS.getMessageModel(msg);
 
             const params &#x3D; messageId.split(&#x27;_&#x27;);
-            if (params.length !&#x3D;&#x3D; 3 &amp;amp;&amp;amp; params.length !&#x3D;&#x3D; 4) throw new Error(&#x27;Invalid serialized message id specified&#x27;);
+            if (params.length !&#x3D;&#x3D; 3 &amp;amp;&amp;amp; params.length !&#x3D;&#x3D; 4)
+                throw new Error(&#x27;Invalid serialized message id specified&#x27;);
 
-            let messagesObject &#x3D; await window.Store.Msg.getMessagesById([messageId]);
-            if (messagesObject &amp;amp;&amp;amp; messagesObject.messages.length) msg &#x3D; messagesObject.messages[0];
-            
-            if(msg) return window.WWebJS.getMessageModel(msg);
+            let messagesObject &#x3D; await window
+                .require(&#x27;WAWebCollections&#x27;)
+                .Msg.getMessagesById([messageId]);
+            if (messagesObject &amp;amp;&amp;amp; messagesObject.messages.length)
+                msg &#x3D; messagesObject.messages[0];
+
+            if (msg) return window.WWebJS.getMessageModel(msg);
         }, messageId);
 
-        if(msg) return new Message(this, msg);
+        if (msg) return new Message(this, msg);
         return null;
     }
 
@@ -1300,24 +1790,37 @@ class Client extends EventEmitter {
      */
     async getPinnedMessages(chatId) {
         const pinnedMsgs &#x3D; await this.pupPage.evaluate(async (chatId) &#x3D;&gt; {
-            const chatWid &#x3D; window.Store.WidFactory.createWid(chatId);
-            const chat &#x3D; window.Store.Chat.get(chatWid) ?? await window.Store.Chat.find(chatWid);
+            const chatWid &#x3D; window.require(&#x27;WAWebWidFactory&#x27;).createWid(chatId);
+            const chat &#x3D;
+                window.require(&#x27;WAWebCollections&#x27;).Chat.get(chatWid) ??
+                (await window.require(&#x27;WAWebCollections&#x27;).Chat.find(chatWid));
             if (!chat) return [];
-            
-            const msgs &#x3D; await window.Store.PinnedMsgUtils.getTable().equals([&#x27;chatId&#x27;], chatWid.toString());
+
+            const msgs &#x3D; await window
+                .require(&#x27;WAWebPinInChatSchema&#x27;)
+                .getTable()
+                .equals([&#x27;chatId&#x27;], chatWid.toString());
 
             const pinnedMsgs &#x3D; (
                 await Promise.all(
-                    msgs.filter(msg &#x3D;&gt; msg.pinType &#x3D;&#x3D; 1).map(async (msg) &#x3D;&gt; {
-                        const res &#x3D; await window.Store.Msg.getMessagesById([msg.parentMsgKey]);
-                        return res?.messages?.[0];
-                    })
+                    msgs
+                        .filter((msg) &#x3D;&gt; msg.pinType &#x3D;&#x3D; 1)
+                        .map(async (msg) &#x3D;&gt; {
+                            const res &#x3D; await window
+                                .require(&#x27;WAWebCollections&#x27;)
+                                .Msg.getMessagesById([msg.parentMsgKey]);
+                            return res?.messages?.[0];
+                        }),
                 )
             ).filter(Boolean);
 
             return !pinnedMsgs.length
                 ? []
-                : await Promise.all(pinnedMsgs.map((msg) &#x3D;&gt; window.WWebJS.getMessageModel(msg)));
+                : await Promise.all(
+                      pinnedMsgs.map((msg) &#x3D;&gt;
+                          window.WWebJS.getMessageModel(msg),
+                      ),
+                  );
         }, chatId);
 
         return pinnedMsgs.map((msg) &#x3D;&gt; new Message(this, msg));
@@ -1325,12 +1828,14 @@ class Client extends EventEmitter {
 
     /**
      * Returns an object with information about the invite code&#x27;s group
-     * @param {string} inviteCode 
+     * @param {string} inviteCode
      * @returns {Promise&amp;lt;object&gt;} Invite information
      */
     async getInviteInfo(inviteCode) {
-        return await this.pupPage.evaluate(inviteCode &#x3D;&gt; {
-            return window.Store.GroupInvite.queryGroupInvite(inviteCode);
+        return await this.pupPage.evaluate((inviteCode) &#x3D;&gt; {
+            return window
+                .require(&#x27;WAWebGroupQueryJob&#x27;)
+                .queryGroupInvite(inviteCode);
         }, inviteCode);
     }
 
@@ -1340,8 +1845,10 @@ class Client extends EventEmitter {
      * @returns {Promise&amp;lt;string&gt;} Id of the joined Chat
      */
     async acceptInvite(inviteCode) {
-        const res &#x3D; await this.pupPage.evaluate(async inviteCode &#x3D;&gt; {
-            return await window.Store.GroupInvite.joinGroupViaInvite(inviteCode);
+        const res &#x3D; await this.pupPage.evaluate(async (inviteCode) &#x3D;&gt; {
+            return await window
+                .require(&#x27;WAWebGroupInviteJob&#x27;)
+                .joinGroupViaInvite(inviteCode);
         }, inviteCode);
 
         return res.gid._serialized;
@@ -1355,7 +1862,9 @@ class Client extends EventEmitter {
     async acceptChannelAdminInvite(channelId) {
         return await this.pupPage.evaluate(async (channelId) &#x3D;&gt; {
             try {
-                await window.Store.ChannelUtils.acceptNewsletterAdminInvite(channelId);
+                await window
+                    .require(&#x27;WAWebMexAcceptNewsletterAdminInviteJob&#x27;)
+                    .acceptNewsletterAdminInvite(channelId);
                 return true;
             } catch (err) {
                 if (err.name &#x3D;&#x3D;&#x3D; &#x27;ServerStatusCodeError&#x27;) return false;
@@ -1371,16 +1880,24 @@ class Client extends EventEmitter {
      * @returns {Promise&amp;lt;boolean&gt;} Returns true if the operation completed successfully, false otherwise
      */
     async revokeChannelAdminInvite(channelId, userId) {
-        return await this.pupPage.evaluate(async (channelId, userId) &#x3D;&gt; {
-            try {
-                const userWid &#x3D; window.Store.WidFactory.createWid(userId);
-                await window.Store.ChannelUtils.revokeNewsletterAdminInvite(channelId, userWid);
-                return true;
-            } catch (err) {
-                if (err.name &#x3D;&#x3D;&#x3D; &#x27;ServerStatusCodeError&#x27;) return false;
-                throw err;
-            }
-        }, channelId, userId);
+        return await this.pupPage.evaluate(
+            async (channelId, userId) &#x3D;&gt; {
+                try {
+                    const userWid &#x3D; window
+                        .require(&#x27;WAWebWidFactory&#x27;)
+                        .createWid(userId);
+                    await window
+                        .require(&#x27;WAWebMexRevokeNewsletterAdminInviteJob&#x27;)
+                        .revokeNewsletterAdminInvite(channelId, userWid);
+                    return true;
+                } catch (err) {
+                    if (err.name &#x3D;&#x3D;&#x3D; &#x27;ServerStatusCodeError&#x27;) return false;
+                    throw err;
+                }
+            },
+            channelId,
+            userId,
+        );
     }
 
     /**
@@ -1390,16 +1907,24 @@ class Client extends EventEmitter {
      * @returns {Promise&amp;lt;boolean&gt;} Returns true if the operation completed successfully, false otherwise
      */
     async demoteChannelAdmin(channelId, userId) {
-        return await this.pupPage.evaluate(async (channelId, userId) &#x3D;&gt; {
-            try {
-                const userWid &#x3D; window.Store.WidFactory.createWid(userId);
-                await window.Store.ChannelUtils.demoteNewsletterAdmin(channelId, userWid);
-                return true;
-            } catch (err) {
-                if (err.name &#x3D;&#x3D;&#x3D; &#x27;ServerStatusCodeError&#x27;) return false;
-                throw err;
-            }
-        }, channelId, userId);
+        return await this.pupPage.evaluate(
+            async (channelId, userId) &#x3D;&gt; {
+                try {
+                    const userWid &#x3D; window
+                        .require(&#x27;WAWebWidFactory&#x27;)
+                        .createWid(userId);
+                    await window
+                        .require(&#x27;WAWebDemoteNewsletterAdminAction&#x27;)
+                        .demoteNewsletterAdmin(channelId, userWid);
+                    return true;
+                } catch (err) {
+                    if (err.name &#x3D;&#x3D;&#x3D; &#x27;ServerStatusCodeError&#x27;) return false;
+                    throw err;
+                }
+            },
+            channelId,
+            userId,
+        );
     }
 
     /**
@@ -1408,12 +1933,20 @@ class Client extends EventEmitter {
      * @returns {Promise&amp;lt;Object&gt;}
      */
     async acceptGroupV4Invite(inviteInfo) {
-        if (!inviteInfo.inviteCode) throw &#x27;Invalid invite code, try passing the message.inviteV4 object&#x27;;
+        if (!inviteInfo.inviteCode)
+            throw &#x27;Invalid invite code, try passing the message.inviteV4 object&#x27;;
         if (inviteInfo.inviteCodeExp &#x3D;&#x3D; 0) throw &#x27;Expired invite code&#x27;;
-        return this.pupPage.evaluate(async inviteInfo &#x3D;&gt; {
+        return this.pupPage.evaluate(async (inviteInfo) &#x3D;&gt; {
             let { groupId, fromId, inviteCode, inviteCodeExp } &#x3D; inviteInfo;
-            let userWid &#x3D; window.Store.WidFactory.createWid(fromId);
-            return await window.Store.GroupInviteV4.joinGroupViaInviteV4(inviteCode, String(inviteCodeExp), groupId, userWid);
+            let userWid &#x3D; window.require(&#x27;WAWebWidFactory&#x27;).createWid(fromId);
+            return await window
+                .require(&#x27;WAWebGroupInviteV4Job&#x27;)
+                .joinGroupViaInviteV4(
+                    inviteCode,
+                    String(inviteCodeExp),
+                    groupId,
+                    userWid,
+                );
         }, inviteInfo);
     }
 
@@ -1422,35 +1955,39 @@ class Client extends EventEmitter {
      * @param {string} status New status message
      */
     async setStatus(status) {
-        await this.pupPage.evaluate(async status &#x3D;&gt; {
-            return await window.Store.StatusUtils.setMyStatus(status);
+        await this.pupPage.evaluate(async (status) &#x3D;&gt; {
+            return await window
+                .require(&#x27;WAWebContactStatusBridge&#x27;)
+                .setMyStatus(status);
         }, status);
     }
 
     /**
-     * Sets the current user&#x27;s display name. 
+     * Sets the current user&#x27;s display name.
      * This is the name shown to WhatsApp users that have not added you as a contact beside your number in groups and in your profile.
      * @param {string} displayName New display name
      * @returns {Promise&amp;lt;Boolean&gt;}
      */
     async setDisplayName(displayName) {
-        const couldSet &#x3D; await this.pupPage.evaluate(async displayName &#x3D;&gt; {
-            if(!window.Store.Conn.canSetMyPushname()) return false;
-            await window.Store.Settings.setPushname(displayName);
+        const couldSet &#x3D; await this.pupPage.evaluate(async (displayName) &#x3D;&gt; {
+            if (!window.require(&#x27;WAWebConnModel&#x27;).Conn.canSetMyPushname())
+                return false;
+            await window
+                .require(&#x27;WAWebSetPushnameConnAction&#x27;)
+                .setPushname(displayName);
             return true;
         }, displayName);
 
         return couldSet;
     }
-    
+
     /**
      * Gets the current connection state for the client
-     * @returns {WAState} 
+     * @returns {WAState}
      */
     async getState() {
         return await this.pupPage.evaluate(() &#x3D;&gt; {
-            if(!window.Store) return null;
-            return window.Store.AppState.state;
+            return window.require(&#x27;WAWebSocketModel&#x27;).Socket.state ?? null;
         });
     }
 
@@ -1459,7 +1996,9 @@ class Client extends EventEmitter {
      */
     async sendPresenceAvailable() {
         return await this.pupPage.evaluate(() &#x3D;&gt; {
-            return window.Store.PresenceUtils.sendPresenceAvailable();
+            return window
+                .require(&#x27;WAWebPresenceChatAction&#x27;)
+                .sendPresenceAvailable();
         });
     }
 
@@ -1468,7 +2007,9 @@ class Client extends EventEmitter {
      */
     async sendPresenceUnavailable() {
         return await this.pupPage.evaluate(() &#x3D;&gt; {
-            return window.Store.PresenceUtils.sendPresenceUnavailable();
+            return window
+                .require(&#x27;WAWebPresenceChatAction&#x27;)
+                .sendPresenceUnavailable();
         });
     }
 
@@ -1477,9 +2018,11 @@ class Client extends EventEmitter {
      * @returns {boolean}
      */
     async archiveChat(chatId) {
-        return await this.pupPage.evaluate(async chatId &#x3D;&gt; {
-            let chat &#x3D; await window.WWebJS.getChat(chatId, { getAsModel: false });
-            await window.Store.Cmd.archiveChat(chat, true);
+        return await this.pupPage.evaluate(async (chatId) &#x3D;&gt; {
+            let chat &#x3D; await window.WWebJS.getChat(chatId, {
+                getAsModel: false,
+            });
+            await window.require(&#x27;WAWebCmd&#x27;).Cmd.archiveChat(chat, true);
             return true;
         }, chatId);
     }
@@ -1489,9 +2032,11 @@ class Client extends EventEmitter {
      * @returns {boolean}
      */
     async unarchiveChat(chatId) {
-        return await this.pupPage.evaluate(async chatId &#x3D;&gt; {
-            let chat &#x3D; await window.WWebJS.getChat(chatId, { getAsModel: false });
-            await window.Store.Cmd.archiveChat(chat, false);
+        return await this.pupPage.evaluate(async (chatId) &#x3D;&gt; {
+            let chat &#x3D; await window.WWebJS.getChat(chatId, {
+                getAsModel: false,
+            });
+            await window.require(&#x27;WAWebCmd&#x27;).Cmd.archiveChat(chat, false);
             return false;
         }, chatId);
     }
@@ -1501,20 +2046,24 @@ class Client extends EventEmitter {
      * @returns {Promise&amp;lt;boolean&gt;} New pin state. Could be false if the max number of pinned chats was reached.
      */
     async pinChat(chatId) {
-        return this.pupPage.evaluate(async chatId &#x3D;&gt; {
-            let chat &#x3D; await window.WWebJS.getChat(chatId, { getAsModel: false });
+        return this.pupPage.evaluate(async (chatId) &#x3D;&gt; {
+            let chat &#x3D; await window.WWebJS.getChat(chatId, {
+                getAsModel: false,
+            });
             if (chat.pin) {
                 return true;
             }
             const MAX_PIN_COUNT &#x3D; 3;
-            const chatModels &#x3D; window.Store.Chat.getModelsArray();
+            const chatModels &#x3D; window
+                .require(&#x27;WAWebCollections&#x27;)
+                .Chat.getModelsArray();
             if (chatModels.length &gt; MAX_PIN_COUNT) {
                 let maxPinned &#x3D; chatModels[MAX_PIN_COUNT - 1].pin;
                 if (maxPinned) {
                     return false;
                 }
             }
-            await window.Store.Cmd.pinChat(chat, true);
+            await window.require(&#x27;WAWebCmd&#x27;).Cmd.pinChat(chat, true);
             return true;
         }, chatId);
     }
@@ -1524,12 +2073,14 @@ class Client extends EventEmitter {
      * @returns {Promise&amp;lt;boolean&gt;} New pin state
      */
     async unpinChat(chatId) {
-        return this.pupPage.evaluate(async chatId &#x3D;&gt; {
-            let chat &#x3D; await window.WWebJS.getChat(chatId, { getAsModel: false });
+        return this.pupPage.evaluate(async (chatId) &#x3D;&gt; {
+            let chat &#x3D; await window.WWebJS.getChat(chatId, {
+                getAsModel: false,
+            });
             if (!chat.pin) {
                 return false;
             }
-            await window.Store.Cmd.pinChat(chat, false);
+            await window.require(&#x27;WAWebCmd&#x27;).Cmd.pinChat(chat, false);
             return false;
         }, chatId);
     }
@@ -1561,14 +2112,29 @@ class Client extends EventEmitter {
      * @param {number} unmuteDateTs Timestamp at which the chat will be unmuted
      * @returns {Promise&amp;lt;{isMuted: boolean, muteExpiration: number}&gt;}
      */
-    async _muteUnmuteChat (chatId, action, unmuteDateTs) {
-        return this.pupPage.evaluate(async (chatId, action, unmuteDateTs) &#x3D;&gt; {
-            const chat &#x3D; window.Store.Chat.get(chatId) ?? await window.Store.Chat.find(chatId);
-            action &#x3D;&#x3D;&#x3D; &#x27;MUTE&#x27;
-                ? await chat.mute.mute({ expiration: unmuteDateTs, sendDevice: true })
-                : await chat.mute.unmute({ sendDevice: true });
-            return { isMuted: chat.mute.expiration !&#x3D;&#x3D; 0, muteExpiration: chat.mute.expiration };
-        }, chatId, action, unmuteDateTs || -1);
+    async _muteUnmuteChat(chatId, action, unmuteDateTs) {
+        return this.pupPage.evaluate(
+            async (chatId, action, unmuteDateTs) &#x3D;&gt; {
+                const chat &#x3D;
+                    window.require(&#x27;WAWebCollections&#x27;).Chat.get(chatId) ??
+                    (await window
+                        .require(&#x27;WAWebCollections&#x27;)
+                        .Chat.find(chatId));
+                action &#x3D;&#x3D;&#x3D; &#x27;MUTE&#x27;
+                    ? await chat.mute.mute({
+                          expiration: unmuteDateTs,
+                          sendDevice: true,
+                      })
+                    : await chat.mute.unmute({ sendDevice: true });
+                return {
+                    isMuted: chat.mute.expiration !&#x3D;&#x3D; 0,
+                    muteExpiration: chat.mute.expiration,
+                };
+            },
+            chatId,
+            action,
+            unmuteDateTs || -1,
+        );
     }
 
     /**
@@ -1576,9 +2142,11 @@ class Client extends EventEmitter {
      * @param {string} chatId ID of the chat that will be marked as unread
      */
     async markChatUnread(chatId) {
-        await this.pupPage.evaluate(async chatId &#x3D;&gt; {
-            let chat &#x3D; await window.WWebJS.getChat(chatId, { getAsModel: false });
-            await window.Store.Cmd.markChatUnread(chat, true);
+        await this.pupPage.evaluate(async (chatId) &#x3D;&gt; {
+            let chat &#x3D; await window.WWebJS.getChat(chatId, {
+                getAsModel: false,
+            });
+            await window.require(&#x27;WAWebCmd&#x27;).Cmd.markChatUnread(chat, true);
         }, chatId);
     }
 
@@ -1588,18 +2156,18 @@ class Client extends EventEmitter {
      * @returns {Promise&amp;lt;string&gt;}
      */
     async getProfilePicUrl(contactId) {
-        const profilePic &#x3D; await this.pupPage.evaluate(async contactId &#x3D;&gt; {
+        const profilePic &#x3D; await this.pupPage.evaluate(async (contactId) &#x3D;&gt; {
             try {
-                const chatWid &#x3D; window.Store.WidFactory.createWid(contactId);
-                return window.compareWwebVersions(window.Debug.VERSION, &#x27;&amp;lt;&#x27;, &#x27;2.3000.0&#x27;)
-                    ? await window.Store.ProfilePic.profilePicFind(chatWid)
-                    : await window.Store.ProfilePic.requestProfilePicFromServer(chatWid);
+                const chat &#x3D; await window.WWebJS.getChat(contactId);
+                return await window
+                    .require(&#x27;WAWebContactProfilePicThumbBridge&#x27;)
+                    .requestProfilePicFromServer(chat);
             } catch (err) {
-                if(err.name &#x3D;&#x3D;&#x3D; &#x27;ServerStatusCodeError&#x27;) return undefined;
+                if (err.name &#x3D;&#x3D;&#x3D; &#x27;ServerStatusCodeError&#x27;) return undefined;
                 throw err;
             }
         }, contactId);
-        
+
         return profilePic ? profilePic.eurl : undefined;
     }
 
@@ -1610,17 +2178,26 @@ class Client extends EventEmitter {
      */
     async getCommonGroups(contactId) {
         const commonGroups &#x3D; await this.pupPage.evaluate(async (contactId) &#x3D;&gt; {
-            let contact &#x3D; window.Store.Contact.get(contactId);
+            let contact &#x3D; window
+                .require(&#x27;WAWebCollections&#x27;)
+                .Contact.get(contactId);
             if (!contact) {
-                const wid &#x3D; window.Store.WidFactory.createWid(contactId);
-                const chatConstructor &#x3D; window.Store.Contact.getModelsArray().find(c&#x3D;&gt;!c.isGroup).constructor;
-                contact &#x3D; new chatConstructor({id: wid});
+                const wid &#x3D; window
+                    .require(&#x27;WAWebWidFactory&#x27;)
+                    .createWid(contactId);
+                const chatConstructor &#x3D; window
+                    .require(&#x27;WAWebCollections&#x27;)
+                    .Contact.getModelsArray()
+                    .find((c) &#x3D;&gt; !c.isGroup).constructor;
+                contact &#x3D; new chatConstructor({ id: wid });
             }
 
             if (contact.commonGroups) {
                 return contact.commonGroups.serialize();
             }
-            const status &#x3D; await window.Store.findCommonGroups(contact);
+            const status &#x3D; await window
+                .require(&#x27;WAWebFindCommonGroupsContactAction&#x27;)
+                .findCommonGroups(contact);
             if (status) {
                 return contact.commonGroups.serialize();
             }
@@ -1635,10 +2212,10 @@ class Client extends EventEmitter {
 
     /**
      * Force reset of connection state for the client
-    */
+     */
     async resetState() {
         await this.pupPage.evaluate(() &#x3D;&gt; {
-            window.Store.AppState.reconnect(); 
+            window.require(&#x27;WAWebSocketModel&#x27;).Socket.reconnect();
         });
     }
 
@@ -1652,7 +2229,7 @@ class Client extends EventEmitter {
     }
 
     /**
-     * Get the registered WhatsApp ID for a number. 
+     * Get the registered WhatsApp ID for a number.
      * Will return null if the number is not registered on WhatsApp.
      * @param {string} number Number or ID (&quot;@c.us&quot; will be automatically appended if not specified)
      * @returns {Promise&amp;lt;Object|null&gt;}
@@ -1662,9 +2239,11 @@ class Client extends EventEmitter {
             number +&#x3D; &#x27;@c.us&#x27;;
         }
 
-        return await this.pupPage.evaluate(async number &#x3D;&gt; {
-            const wid &#x3D; window.Store.WidFactory.createWid(number);
-            const result &#x3D; await window.Store.QueryExist(wid);
+        return await this.pupPage.evaluate(async (number) &#x3D;&gt; {
+            const wid &#x3D; window.require(&#x27;WAWebWidFactory&#x27;).createWid(number);
+            const result &#x3D; await window
+                .require(&#x27;WAWebQueryExistsJob&#x27;)
+                .queryWidExists(wid);
             if (!result || result.wid &#x3D;&#x3D;&#x3D; undefined) return null;
             return result.wid;
         }, number);
@@ -1676,11 +2255,15 @@ class Client extends EventEmitter {
      * @returns {Promise&amp;lt;string&gt;}
      */
     async getFormattedNumber(number) {
-        if (!number.endsWith(&#x27;@s.whatsapp.net&#x27;)) number &#x3D; number.replace(&#x27;c.us&#x27;, &#x27;s.whatsapp.net&#x27;);
-        if (!number.includes(&#x27;@s.whatsapp.net&#x27;)) number &#x3D; &#x60;${number}@s.whatsapp.net&#x60;;
+        if (!number.endsWith(&#x27;@s.whatsapp.net&#x27;))
+            number &#x3D; number.replace(&#x27;c.us&#x27;, &#x27;s.whatsapp.net&#x27;);
+        if (!number.includes(&#x27;@s.whatsapp.net&#x27;))
+            number &#x3D; &#x60;${number}@s.whatsapp.net&#x60;;
 
-        return await this.pupPage.evaluate(async numberId &#x3D;&gt; {
-            return window.Store.NumberInfo.formattedPhoneNumber(numberId);
+        return await this.pupPage.evaluate(async (numberId) &#x3D;&gt; {
+            return window
+                .require(&#x27;WAWebPhoneUtils&#x27;)
+                .formattedPhoneNumber(numberId);
         }, number);
     }
 
@@ -1692,8 +2275,8 @@ class Client extends EventEmitter {
     async getCountryCode(number) {
         number &#x3D; number.replace(&#x27; &#x27;, &#x27;&#x27;).replace(&#x27;+&#x27;, &#x27;&#x27;).replace(&#x27;@c.us&#x27;, &#x27;&#x27;);
 
-        return await this.pupPage.evaluate(async numberId &#x3D;&gt; {
-            return window.Store.NumberInfo.findCC(numberId);
+        return await this.pupPage.evaluate(async (numberId) &#x3D;&gt; {
+            return window.require(&#x27;WAPhoneFindCC&#x27;).findCC(numberId);
         }, number);
     }
 
@@ -1739,92 +2322,137 @@ class Client extends EventEmitter {
      */
     async createGroup(title, participants &#x3D; [], options &#x3D; {}) {
         !Array.isArray(participants) &amp;amp;&amp;amp; (participants &#x3D; [participants]);
-        participants.map(p &#x3D;&gt; (p instanceof Contact) ? p.id._serialized : p);
+        participants.map((p) &#x3D;&gt; (p instanceof Contact ? p.id._serialized : p));
 
-        return await this.pupPage.evaluate(async (title, participants, options) &#x3D;&gt; {
-            const {
-                messageTimer &#x3D; 0,
-                parentGroupId,
-                autoSendInviteV4 &#x3D; true,
-                comment &#x3D; &#x27;&#x27;,
-            } &#x3D; options;
-            const participantData &#x3D; {}, participantWids &#x3D; [], failedParticipants &#x3D; [];
-            let createGroupResult, parentGroupWid;
+        return await this.pupPage.evaluate(
+            async (title, participants, options) &#x3D;&gt; {
+                const {
+                    messageTimer &#x3D; 0,
+                    parentGroupId,
+                    autoSendInviteV4 &#x3D; true,
+                    comment &#x3D; &#x27;&#x27;,
+                } &#x3D; options;
+                const participantData &#x3D; {},
+                    participantWids &#x3D; [],
+                    failedParticipants &#x3D; [];
+                let createGroupResult, parentGroupWid;
 
-            const addParticipantResultCodes &#x3D; {
-                default: &#x27;An unknown error occupied while adding a participant&#x27;,
-                200: &#x27;The participant was added successfully&#x27;,
-                403: &#x27;The participant can be added by sending private invitation only&#x27;,
-                404: &#x27;The phone number is not registered on WhatsApp&#x27;
-            };
+                const addParticipantResultCodes &#x3D; {
+                    default:
+                        &#x27;An unknown error occupied while adding a participant&#x27;,
+                    200: &#x27;The participant was added successfully&#x27;,
+                    403: &#x27;The participant can be added by sending private invitation only&#x27;,
+                    404: &#x27;The phone number is not registered on WhatsApp&#x27;,
+                };
 
-            for (const participant of participants) {
-                const pWid &#x3D; window.Store.WidFactory.createWid(participant);
-                if ((await window.Store.QueryExist(pWid))?.wid) {
-                    participantWids.push({ phoneNumber: pWid });
-                }
-                else failedParticipants.push(participant);
-            }
-
-            parentGroupId &amp;amp;&amp;amp; (parentGroupWid &#x3D; window.Store.WidFactory.createWid(parentGroupId));
-
-            try {
-                createGroupResult &#x3D; await window.Store.GroupUtils.createGroup(
-                    {
-                        &#x27;addressingModeOverride&#x27;: &#x27;lid&#x27;,
-                        &#x27;memberAddMode&#x27;: options.memberAddMode ?? false,
-                        &#x27;membershipApprovalMode&#x27;: options.membershipApprovalMode ?? false,
-                        &#x27;announce&#x27;: options.announce ?? false,
-                        &#x27;restrict&#x27;: options.isRestrict !&#x3D;&#x3D; undefined ? !options.isRestrict : false,
-                        &#x27;ephemeralDuration&#x27;: messageTimer,
-                        &#x27;parentGroupId&#x27;: parentGroupWid,
-                        &#x27;title&#x27;: title,
-                    },
-                    participantWids
-                );
-            } catch (err) {
-                return &#x27;CreateGroupError: An unknown error occupied while creating a group&#x27;;
-            }
-
-            for (const participant of createGroupResult.participants) {
-                let isInviteV4Sent &#x3D; false;
-                participant.wid.server &#x3D;&#x3D; &#x27;lid&#x27; &amp;amp;&amp;amp; (participant.wid &#x3D; window.Store.LidUtils.getPhoneNumber(participant.wid));
-                const participantId &#x3D; participant.wid._serialized;
-                const statusCode &#x3D; participant.error || 200;
-
-                if (autoSendInviteV4 &amp;amp;&amp;amp; statusCode &#x3D;&#x3D;&#x3D; 403) {
-                    window.Store.Contact.gadd(participant.wid, { silent: true });
-                    const addParticipantResult &#x3D; await window.Store.GroupInviteV4.sendGroupInviteMessage(
-                        window.Store.Chat.get(participant.wid) || await window.Store.Chat.find(participant.wid),
-                        createGroupResult.wid._serialized,
-                        createGroupResult.subject,
-                        participant.invite_code,
-                        participant.invite_code_exp,
-                        comment,
-                        await window.WWebJS.getProfilePicThumbToBase64(createGroupResult.wid)
-                    );
-                    isInviteV4Sent &#x3D; addParticipantResult.messageSendResult &#x3D;&#x3D;&#x3D; &#x27;OK&#x27;;
+                for (const participant of participants) {
+                    const pWid &#x3D; window
+                        .require(&#x27;WAWebWidFactory&#x27;)
+                        .createWid(participant);
+                    if (
+                        (
+                            await window
+                                .require(&#x27;WAWebQueryExistsJob&#x27;)
+                                .queryWidExists(pWid)
+                        )?.wid
+                    ) {
+                        participantWids.push({ phoneNumber: pWid });
+                    } else failedParticipants.push(participant);
                 }
 
-                participantData[participantId] &#x3D; {
-                    statusCode: statusCode,
-                    message: addParticipantResultCodes[statusCode] || addParticipantResultCodes.default,
-                    isGroupCreator: participant.type &#x3D;&#x3D;&#x3D; &#x27;superadmin&#x27;,
-                    isInviteV4Sent: isInviteV4Sent
-                };
-            }
+                parentGroupId &amp;amp;&amp;amp;
+                    (parentGroupWid &#x3D; window
+                        .require(&#x27;WAWebWidFactory&#x27;)
+                        .createWid(parentGroupId));
 
-            for (const f of failedParticipants) {
-                participantData[f] &#x3D; {
-                    statusCode: 404,
-                    message: addParticipantResultCodes[404],
-                    isGroupCreator: false,
-                    isInviteV4Sent: false
-                };
-            }
+                try {
+                    createGroupResult &#x3D; await window
+                        .require(&#x27;WAWebGroupCreateJob&#x27;)
+                        .createGroup(
+                            {
+                                addressingModeOverride: &#x27;lid&#x27;,
+                                memberAddMode: options.memberAddMode ?? false,
+                                membershipApprovalMode:
+                                    options.membershipApprovalMode ?? false,
+                                announce: options.announce ?? false,
+                                restrict:
+                                    options.isRestrict !&#x3D;&#x3D; undefined
+                                        ? !options.isRestrict
+                                        : false,
+                                ephemeralDuration: messageTimer,
+                                parentGroupId: parentGroupWid,
+                                title: title,
+                            },
+                            participantWids,
+                        );
+                } catch (err) {
+                    return &#x27;CreateGroupError: An unknown error occupied while creating a group&#x27;;
+                }
 
-            return { title: title, gid: createGroupResult.wid, participants: participantData };
-        }, title, participants, options);
+                for (const participant of createGroupResult.participants) {
+                    let isInviteV4Sent &#x3D; false;
+                    participant.wid.server &#x3D;&#x3D; &#x27;lid&#x27; &amp;amp;&amp;amp;
+                        (participant.wid &#x3D; window
+                            .require(&#x27;WAWebApiContact&#x27;)
+                            .getPhoneNumber(participant.wid));
+                    const participantId &#x3D; participant.wid._serialized;
+                    const statusCode &#x3D; participant.error || 200;
+
+                    if (autoSendInviteV4 &amp;amp;&amp;amp; statusCode &#x3D;&#x3D;&#x3D; 403) {
+                        window
+                            .require(&#x27;WAWebCollections&#x27;)
+                            .Contact.gadd(participant.wid, { silent: true });
+                        const addParticipantResult &#x3D; await window
+                            .require(&#x27;WAWebChatSendMessages&#x27;)
+                            .sendGroupInviteMessage(
+                                window
+                                    .require(&#x27;WAWebCollections&#x27;)
+                                    .Chat.get(participant.wid) ||
+                                    (await window
+                                        .require(&#x27;WAWebCollections&#x27;)
+                                        .Chat.find(participant.wid)),
+                                createGroupResult.wid._serialized,
+                                createGroupResult.subject,
+                                participant.invite_code,
+                                participant.invite_code_exp,
+                                comment,
+                                await window.WWebJS.getProfilePicThumbToBase64(
+                                    createGroupResult.wid,
+                                ),
+                            );
+                        isInviteV4Sent &#x3D;
+                            addParticipantResult.messageSendResult &#x3D;&#x3D;&#x3D; &#x27;OK&#x27;;
+                    }
+
+                    participantData[participantId] &#x3D; {
+                        statusCode: statusCode,
+                        message:
+                            addParticipantResultCodes[statusCode] ||
+                            addParticipantResultCodes.default,
+                        isGroupCreator: participant.type &#x3D;&#x3D;&#x3D; &#x27;superadmin&#x27;,
+                        isInviteV4Sent: isInviteV4Sent,
+                    };
+                }
+
+                for (const f of failedParticipants) {
+                    participantData[f] &#x3D; {
+                        statusCode: 404,
+                        message: addParticipantResultCodes[404],
+                        isGroupCreator: false,
+                        isInviteV4Sent: false,
+                    };
+                }
+
+                return {
+                    title: title,
+                    gid: createGroupResult.wid,
+                    participants: participantData,
+                };
+            },
+            title,
+            participants,
+            options,
+        );
     }
 
     /**
@@ -1849,46 +2477,61 @@ class Client extends EventEmitter {
     /**
      * Creates a new channel
      * @param {string} title The channel name
-     * @param {CreateChannelOptions} options 
+     * @param {CreateChannelOptions} options
      * @returns {Promise&amp;lt;CreateChannelResult|string&gt;} Returns an object that handles the result for the channel creation or an error message as a string
      */
     async createChannel(title, options &#x3D; {}) {
-        return await this.pupPage.evaluate(async (title, options) &#x3D;&gt; {
-            let response, { description &#x3D; null, picture &#x3D; null } &#x3D; options;
+        return await this.pupPage.evaluate(
+            async (title, options) &#x3D;&gt; {
+                let response,
+                    { description &#x3D; null, picture &#x3D; null } &#x3D; options;
 
-            if (!window.Store.ChannelUtils.isNewsletterCreationEnabled()) {
-                return &#x27;CreateChannelError: A channel creation is not enabled&#x27;;
-            }
-
-            if (picture) {
-                picture &#x3D; await window.WWebJS.cropAndResizeImage(picture, {
-                    asDataUrl: true,
-                    mimetype: &#x27;image/jpeg&#x27;,
-                    size: 640,
-                    quality: 1
-                });
-            }
-
-            try {
-                response &#x3D; await window.Store.ChannelUtils.createNewsletterQuery({
-                    name: title,
-                    description: description,
-                    picture: picture,
-                });
-            } catch (err) {
-                if (err.name &#x3D;&#x3D;&#x3D; &#x27;ServerStatusCodeError&#x27;) {
-                    return &#x27;CreateChannelError: An error occupied while creating a channel&#x27;;
+                if (
+                    !window
+                        .require(&#x27;WAWebNewsletterGatingUtils&#x27;)
+                        .isNewsletterCreationEnabled()
+                ) {
+                    return &#x27;CreateChannelError: A channel creation is not enabled&#x27;;
                 }
-                throw err;
-            }
 
-            return {
-                title: title,
-                nid: window.Store.JidToWid.newsletterJidToWid(response.idJid),
-                inviteLink: &#x60;https://whatsapp.com/channel/${response.newsletterInviteLinkMetadataMixin.inviteCode}&#x60;,
-                createdAtTs: response.newsletterCreationTimeMetadataMixin.creationTimeValue
-            };
-        }, title, options);
+                if (picture) {
+                    picture &#x3D; await window.WWebJS.cropAndResizeImage(picture, {
+                        asDataUrl: true,
+                        mimetype: &#x27;image/jpeg&#x27;,
+                        size: 640,
+                        quality: 1,
+                    });
+                }
+
+                try {
+                    response &#x3D; await window
+                        .require(&#x27;WAWebNewsletterCreateQueryJob&#x27;)
+                        .createNewsletterQuery({
+                            name: title,
+                            description: description,
+                            picture: picture,
+                        });
+                } catch (err) {
+                    if (err.name &#x3D;&#x3D;&#x3D; &#x27;ServerStatusCodeError&#x27;) {
+                        return &#x27;CreateChannelError: An error occupied while creating a channel&#x27;;
+                    }
+                    throw err;
+                }
+
+                return {
+                    title: title,
+                    nid: window
+                        .require(&#x27;WAWebJidToWid&#x27;)
+                        .newsletterJidToWid(response.idJid),
+                    inviteLink: &#x60;https://whatsapp.com/channel/${response.newsletterInviteLinkMetadataMixin.inviteCode}&#x60;,
+                    createdAtTs:
+                        response.newsletterCreationTimeMetadataMixin
+                            .creationTimeValue,
+                };
+            },
+            title,
+            options,
+        );
     }
 
     /**
@@ -1898,7 +2541,10 @@ class Client extends EventEmitter {
      */
     async subscribeToChannel(channelId) {
         return await this.pupPage.evaluate(async (channelId) &#x3D;&gt; {
-            return await window.WWebJS.subscribeToUnsubscribeFromChannel(channelId, &#x27;Subscribe&#x27;);
+            return await window.WWebJS.subscribeToUnsubscribeFromChannel(
+                channelId,
+                &#x27;Subscribe&#x27;,
+            );
         }, channelId);
     }
 
@@ -1915,9 +2561,17 @@ class Client extends EventEmitter {
      * @returns {Promise&amp;lt;boolean&gt;} Returns true if the operation completed successfully, false otherwise
      */
     async unsubscribeFromChannel(channelId, options) {
-        return await this.pupPage.evaluate(async (channelId, options) &#x3D;&gt; {
-            return await window.WWebJS.subscribeToUnsubscribeFromChannel(channelId, &#x27;Unsubscribe&#x27;, options);
-        }, channelId, options);
+        return await this.pupPage.evaluate(
+            async (channelId, options) &#x3D;&gt; {
+                return await window.WWebJS.subscribeToUnsubscribeFromChannel(
+                    channelId,
+                    &#x27;Unsubscribe&#x27;,
+                    options,
+                );
+            },
+            channelId,
+            options,
+        );
     }
 
     /**
@@ -1935,26 +2589,51 @@ class Client extends EventEmitter {
      * @returns {Promise&amp;lt;boolean&gt;} Returns true if the operation completed successfully, false otherwise
      */
     async transferChannelOwnership(channelId, newOwnerId, options &#x3D; {}) {
-        return await this.pupPage.evaluate(async (channelId, newOwnerId, options) &#x3D;&gt; {
-            const channel &#x3D; await window.WWebJS.getChat(channelId, { getAsModel: false });
-            const newOwner &#x3D; window.Store.Contact.get(newOwnerId) || (await window.Store.Contact.find(newOwnerId));
-            if (!channel.newsletterMetadata) {
-                await window.Store.NewsletterMetadataCollection.update(channel.id);
-            }
-
-            try {
-                await window.Store.ChannelUtils.changeNewsletterOwnerAction(channel, newOwner);
-
-                if (options.shouldDismissSelfAsAdmin) {
-                    const meContact &#x3D; window.Store.ContactCollection.getMeContact();
-                    meContact &amp;amp;&amp;amp; (await window.Store.ChannelUtils.demoteNewsletterAdminAction(channel, meContact));
+        return await this.pupPage.evaluate(
+            async (channelId, newOwnerId, options) &#x3D;&gt; {
+                const channel &#x3D; await window.WWebJS.getChat(channelId, {
+                    getAsModel: false,
+                });
+                const newOwner &#x3D;
+                    window
+                        .require(&#x27;WAWebCollections&#x27;)
+                        .Contact.get(newOwnerId) ||
+                    (await window
+                        .require(&#x27;WAWebCollections&#x27;)
+                        .Contact.find(newOwnerId));
+                if (!channel.newsletterMetadata) {
+                    await window
+                        .require(&#x27;WAWebCollections&#x27;)
+                        .NewsletterMetadataCollection.update(channel.id);
                 }
-            } catch (error) {
-                return false;
-            }
 
-            return true;
-        }, channelId, newOwnerId, options);
+                try {
+                    await window
+                        .require(&#x27;WAWebChangeNewsletterOwnerAction&#x27;)
+                        .changeNewsletterOwnerAction(channel, newOwner);
+
+                    if (options.shouldDismissSelfAsAdmin) {
+                        const meContact &#x3D; window
+                            .require(&#x27;WAWebContactCollection&#x27;)
+                            .getMeContact();
+                        meContact &amp;amp;&amp;amp;
+                            (await window
+                                .require(&#x27;WAWebNewsletterDemoteAdminJob&#x27;)
+                                .demoteNewsletterAdminAction(
+                                    channel,
+                                    meContact,
+                                ));
+                    }
+                } catch (error) {
+                    return false;
+                }
+
+                return true;
+            },
+            channelId,
+            newOwnerId,
+            options,
+        );
     }
 
     /**
@@ -1977,48 +2656,78 @@ class Client extends EventEmitter {
      * @returns {Promise&amp;lt;Array&amp;lt;Channel&gt;&gt;} Returns an array of Channel objects or an empty array if no channels were found
      */
     async searchChannels(searchOptions &#x3D; {}) {
-        return await this.pupPage.evaluate(async ({
-            searchText &#x3D; &#x27;&#x27;,
-            countryCodes &#x3D; [window.Store.ChannelUtils.currentRegion],
-            skipSubscribedNewsletters &#x3D; false,
-            view &#x3D; 0,
-            limit &#x3D; 50
-        }) &#x3D;&gt; {
-            searchText &#x3D; searchText.trim();
-            const currentRegion &#x3D; window.Store.ChannelUtils.currentRegion;
-            if (![0, 1, 2, 3].includes(view)) view &#x3D; 0;
+        return await this.pupPage.evaluate(
+            async ({
+                searchText &#x3D; &#x27;&#x27;,
+                countryCodes &#x3D; [],
+                skipSubscribedNewsletters &#x3D; false,
+                view &#x3D; 0,
+                limit &#x3D; 50,
+            }) &#x3D;&gt; {
+                searchText &#x3D; searchText.trim();
+                const currentRegion &#x3D; window.require(&#x27;WAWebL10N&#x27;).getRegion();
+                if (countryCodes.length &#x3D;&#x3D;&#x3D; 0) countryCodes[0] &#x3D; currentRegion;
+                if (![0, 1, 2, 3].includes(view)) view &#x3D; 0;
 
-            countryCodes &#x3D; countryCodes.length &#x3D;&#x3D;&#x3D; 1 &amp;amp;&amp;amp; countryCodes[0] &#x3D;&#x3D;&#x3D; currentRegion
-                ? countryCodes
-                : countryCodes.filter((code) &#x3D;&gt; Object.keys(window.Store.ChannelUtils.countryCodesIso).includes(code));
+                const { countryCodesIso } &#x3D; window.require(
+                    &#x27;WAWebCountriesNativeCountryNames&#x27;,
+                );
 
-            const viewTypeMapping &#x3D; {
-                0: &#x27;RECOMMENDED&#x27;,
-                1: &#x27;TRENDING&#x27;,
-                2: &#x27;POPULAR&#x27;,
-                3: &#x27;NEW&#x27;
-            };
+                countryCodes &#x3D;
+                    countryCodes.length &#x3D;&#x3D;&#x3D; 1 &amp;amp;&amp;amp;
+                    countryCodes[0] &#x3D;&#x3D;&#x3D; currentRegion
+                        ? countryCodes
+                        : countryCodes.filter((code) &#x3D;&gt;
+                              Object.keys(countryCodesIso).includes(code),
+                          );
 
-            searchOptions &#x3D; {
-                searchText: searchText,
-                countryCodes: countryCodes,
-                skipSubscribedNewsletters: skipSubscribedNewsletters,
-                view: viewTypeMapping[view],
-                categories: [],
-                cursorToken: &#x27;&#x27;
-            };
-            
-            const originalFunction &#x3D; window.Store.ChannelUtils.getNewsletterDirectoryPageSize;
-            limit !&#x3D;&#x3D; 50 &amp;amp;&amp;amp; (window.Store.ChannelUtils.getNewsletterDirectoryPageSize &#x3D; () &#x3D;&gt; limit);
+                const viewTypeMapping &#x3D; {
+                    0: &#x27;RECOMMENDED&#x27;,
+                    1: &#x27;TRENDING&#x27;,
+                    2: &#x27;POPULAR&#x27;,
+                    3: &#x27;NEW&#x27;,
+                };
 
-            const channels &#x3D; (await window.Store.ChannelUtils.fetchNewsletterDirectories(searchOptions)).newsletters;
+                searchOptions &#x3D; {
+                    searchText: searchText,
+                    countryCodes: countryCodes,
+                    skipSubscribedNewsletters: skipSubscribedNewsletters,
+                    view: viewTypeMapping[view],
+                    categories: [],
+                    cursorToken: &#x27;&#x27;,
+                };
 
-            limit !&#x3D;&#x3D; 50 &amp;amp;&amp;amp; (window.Store.ChannelUtils.getNewsletterDirectoryPageSize &#x3D; originalFunction);
+                const originalFunction &#x3D; window.require(
+                    &#x27;WAWebNewsletterGatingUtils&#x27;,
+                ).getNewsletterDirectoryPageSize;
+                limit !&#x3D;&#x3D; 50 &amp;amp;&amp;amp;
+                    (window.require(
+                        &#x27;WAWebNewsletterGatingUtils&#x27;,
+                    ).getNewsletterDirectoryPageSize &#x3D; () &#x3D;&gt; limit);
 
-            return channels
-                ? await Promise.all(channels.map((channel) &#x3D;&gt; window.WWebJS.getChatModel(channel, { isChannel: true })))
-                : [];
-        }, searchOptions);
+                const channels &#x3D; (
+                    await window
+                        .require(&#x27;WAWebNewsletterDirectorySearchAction&#x27;)
+                        .fetchNewsletterDirectories(searchOptions)
+                ).newsletters;
+
+                limit !&#x3D;&#x3D; 50 &amp;amp;&amp;amp;
+                    (window.require(
+                        &#x27;WAWebNewsletterGatingUtils&#x27;,
+                    ).getNewsletterDirectoryPageSize &#x3D; originalFunction);
+
+                return channels
+                    ? await Promise.all(
+                          channels.map((channel) &#x3D;&gt;
+                              window.WWebJS.getChatModel(channel, {
+                                  isChannel: true,
+                              }),
+                          ),
+                      )
+                    : [];
+            },
+            searchOptions,
+        );
     }
 
     /**
@@ -2027,11 +2736,15 @@ class Client extends EventEmitter {
      * @returns {Promise&amp;lt;boolean&gt;} Returns true if the operation completed successfully, false otherwise
      */
     async deleteChannel(channelId) {
-        return await this.client.pupPage.evaluate(async (channelId) &#x3D;&gt; {
-            const channel &#x3D; await window.WWebJS.getChat(channelId, { getAsModel: false });
+        return await this.pupPage.evaluate(async (channelId) &#x3D;&gt; {
+            const channel &#x3D; await window.WWebJS.getChat(channelId, {
+                getAsModel: false,
+            });
             if (!channel) return false;
             try {
-                await window.Store.ChannelUtils.deleteNewsletterAction(channel);
+                await window
+                    .require(&#x27;WAWebNewsletterDeleteAction&#x27;)
+                    .deleteNewsletterAction(channel);
                 return true;
             } catch (err) {
                 if (err.name &#x3D;&#x3D;&#x3D; &#x27;ServerStatusCodeError&#x27;) return false;
@@ -2049,7 +2762,7 @@ class Client extends EventEmitter {
             return window.WWebJS.getLabels();
         });
 
-        return labels.map(data &#x3D;&gt; new Label(this, data));
+        return labels.map((data) &#x3D;&gt; new Label(this, data));
     }
 
     /**
@@ -2060,7 +2773,7 @@ class Client extends EventEmitter {
         const broadcasts &#x3D; await this.pupPage.evaluate(async () &#x3D;&gt; {
             return window.WWebJS.getAllStatuses();
         });
-        return broadcasts.map(data &#x3D;&gt; new Broadcast(this, data));
+        return broadcasts.map((data) &#x3D;&gt; new Broadcast(this, data));
     }
 
     /**
@@ -2072,9 +2785,11 @@ class Client extends EventEmitter {
         const broadcast &#x3D; await this.pupPage.evaluate(async (userId) &#x3D;&gt; {
             let status;
             try {
-                status &#x3D; window.Store.Status.get(userId);
+                status &#x3D; window.require(&#x27;WAWebCollections&#x27;).Status.get(userId);
                 if (!status) {
-                    status &#x3D; await window.Store.Status.find(userId);
+                    status &#x3D; await window
+                        .require(&#x27;WAWebCollections&#x27;)
+                        .Status.find(userId);
                 }
             } catch {
                 status &#x3D; null;
@@ -2092,17 +2807,26 @@ class Client extends EventEmitter {
      */
     async revokeStatusMessage(messageId) {
         return await this.pupPage.evaluate(async (msgId) &#x3D;&gt; {
-            const status &#x3D; window.Store.Status.getMyStatus();
+            const status &#x3D; window
+                .require(&#x27;WAWebCollections&#x27;)
+                .Status.getMyStatus();
             if (!status) return;
 
             const msg &#x3D;
-                window.Store.Msg.get(msgId) || (await window.Store.Msg.getMessagesById([msgId]))?.messages?.[0];
+                window.require(&#x27;WAWebCollections&#x27;).Msg.get(msgId) ||
+                (
+                    await window
+                        .require(&#x27;WAWebCollections&#x27;)
+                        .Msg.getMessagesById([msgId])
+                )?.messages?.[0];
             if (!msg) return;
 
             if (!msg.id.fromMe || !msg.id.remote.isStatus())
                 throw &#x27;Invalid usage! Can only revoke the message its from own status broadcast&#x27;;
 
-            return await window.Store.StatusUtils.sendStatusRevokeMsgAction(status, msg);
+            return await window
+                .require(&#x27;WAWebRevokeStatusAction&#x27;)
+                .sendStatusRevokeMsgAction(status, msg);
         }, messageId);
     }
 
@@ -2120,7 +2844,7 @@ class Client extends EventEmitter {
     }
 
     /**
-     * Get all Labels assigned to a chat 
+     * Get all Labels assigned to a chat
      * @param {string} chatId
      * @returns {Promise&amp;lt;Array&amp;lt;Label&gt;&gt;}
      */
@@ -2129,7 +2853,7 @@ class Client extends EventEmitter {
             return window.WWebJS.getChatLabels(chatId);
         }, chatId);
 
-        return labels.map(data &#x3D;&gt; new Label(this, data));
+        return labels.map((data) &#x3D;&gt; new Label(this, data));
     }
 
     /**
@@ -2139,7 +2863,7 @@ class Client extends EventEmitter {
      */
     async getChatsByLabelId(labelId) {
         const chatIds &#x3D; await this.pupPage.evaluate(async (labelId) &#x3D;&gt; {
-            const label &#x3D; window.Store.Label.get(labelId);
+            const label &#x3D; window.require(&#x27;WAWebCollections&#x27;).Label.get(labelId);
             const labelItems &#x3D; label.labelItemCollection.getModelsArray();
             return labelItems.reduce((result, item) &#x3D;&gt; {
                 if (item.parentType &#x3D;&#x3D;&#x3D; &#x27;Chat&#x27;) {
@@ -2149,7 +2873,7 @@ class Client extends EventEmitter {
             }, []);
         }, labelId);
 
-        return Promise.all(chatIds.map(id &#x3D;&gt; this.getChatById(id)));
+        return Promise.all(chatIds.map((id) &#x3D;&gt; this.getChatById(id)));
     }
 
     /**
@@ -2158,11 +2882,18 @@ class Client extends EventEmitter {
      */
     async getBlockedContacts() {
         const blockedContacts &#x3D; await this.pupPage.evaluate(() &#x3D;&gt; {
-            let chatIds &#x3D; window.Store.Blocklist.getModelsArray().map(a &#x3D;&gt; a.id._serialized);
-            return Promise.all(chatIds.map(id &#x3D;&gt; window.WWebJS.getContact(id)));
+            let chatIds &#x3D; window
+                .require(&#x27;WAWebCollections&#x27;)
+                .Blocklist.getModelsArray()
+                .map((a) &#x3D;&gt; a.id._serialized);
+            return Promise.all(
+                chatIds.map((id) &#x3D;&gt; window.WWebJS.getContact(id)),
+            );
         });
 
-        return blockedContacts.map(contact &#x3D;&gt; ContactFactory.create(this.client, contact));
+        return blockedContacts.map((contact) &#x3D;&gt;
+            ContactFactory.create(this.client, contact),
+        );
     }
 
     /**
@@ -2171,9 +2902,13 @@ class Client extends EventEmitter {
      * @returns {Promise&amp;lt;boolean&gt;} Returns true if the picture was properly updated.
      */
     async setProfilePicture(media) {
-        const success &#x3D; await this.pupPage.evaluate((chatid, media) &#x3D;&gt; {
-            return window.WWebJS.setPicture(chatid, media);
-        }, this.info.wid._serialized, media);
+        const success &#x3D; await this.pupPage.evaluate(
+            (chatid, media) &#x3D;&gt; {
+                return window.WWebJS.setPicture(chatid, media);
+            },
+            this.info.wid._serialized,
+            media,
+        );
 
         return success;
     }
@@ -2189,7 +2924,7 @@ class Client extends EventEmitter {
 
         return success;
     }
-    
+
     /**
      * Change labels in chats
      * @param {Array&amp;lt;number|string&gt;} labelIds
@@ -2197,26 +2932,42 @@ class Client extends EventEmitter {
      * @returns {Promise&amp;lt;void&gt;}
      */
     async addOrRemoveLabels(labelIds, chatIds) {
+        return this.pupPage.evaluate(
+            async (labelIds, chatIds) &#x3D;&gt; {
+                if (
+                    [&#x27;smba&#x27;, &#x27;smbi&#x27;].indexOf(
+                        window.require(&#x27;WAWebConnModel&#x27;).Conn.platform,
+                    ) &#x3D;&#x3D;&#x3D; -1
+                ) {
+                    throw &#x27;[LT01] Only Whatsapp business&#x27;;
+                }
+                const labels &#x3D; window.WWebJS.getLabels().filter(
+                    (e) &#x3D;&gt; labelIds.find((l) &#x3D;&gt; l &#x3D;&#x3D; e.id) !&#x3D;&#x3D; undefined,
+                );
+                const chats &#x3D; window
+                    .require(&#x27;WAWebCollections&#x27;)
+                    .Chat.filter((e) &#x3D;&gt; chatIds.includes(e.id._serialized));
 
-        return this.pupPage.evaluate(async (labelIds, chatIds) &#x3D;&gt; {
-            if ([&#x27;smba&#x27;, &#x27;smbi&#x27;].indexOf(window.Store.Conn.platform) &#x3D;&#x3D;&#x3D; -1) {
-                throw &#x27;[LT01] Only Whatsapp business&#x27;;
-            }
-            const labels &#x3D; window.WWebJS.getLabels().filter(e &#x3D;&gt; labelIds.find(l &#x3D;&gt; l &#x3D;&#x3D; e.id) !&#x3D;&#x3D; undefined);
-            const chats &#x3D; window.Store.Chat.filter(e &#x3D;&gt; chatIds.includes(e.id._serialized));
+                let actions &#x3D; labels.map((label) &#x3D;&gt; ({
+                    id: label.id,
+                    type: &#x27;add&#x27;,
+                }));
 
-            let actions &#x3D; labels.map(label &#x3D;&gt; ({id: label.id, type: &#x27;add&#x27;}));
-
-            chats.forEach(chat &#x3D;&gt; {
-                (chat.labels || []).forEach(n &#x3D;&gt; {
-                    if (!actions.find(e &#x3D;&gt; e.id &#x3D;&#x3D; n)) {
-                        actions.push({id: n, type: &#x27;remove&#x27;});
-                    }
+                chats.forEach((chat) &#x3D;&gt; {
+                    (chat.labels || []).forEach((n) &#x3D;&gt; {
+                        if (!actions.find((e) &#x3D;&gt; e.id &#x3D;&#x3D; n)) {
+                            actions.push({ id: n, type: &#x27;remove&#x27; });
+                        }
+                    });
                 });
-            });
 
-            return await window.Store.Label.addOrRemoveLabels(actions, chats);
-        }, labelIds, chatIds);
+                return await window
+                    .require(&#x27;WAWebCollections&#x27;)
+                    .Label.addOrRemoveLabels(actions, chats);
+            },
+            labelIds,
+            chatIds,
+        );
     }
 
     /**
@@ -2236,8 +2987,12 @@ class Client extends EventEmitter {
      */
     async getGroupMembershipRequests(groupId) {
         return await this.pupPage.evaluate(async (groupId) &#x3D;&gt; {
-            const groupWid &#x3D; window.Store.WidFactory.createWid(groupId);
-            return await window.Store.MembershipRequestUtils.getMembershipApprovalRequests(groupWid);
+            const groupWid &#x3D; window
+                .require(&#x27;WAWebWidFactory&#x27;)
+                .createWid(groupId);
+            return await window
+                .require(&#x27;WAWebApiMembershipApprovalRequestStore&#x27;)
+                .getMembershipApprovalRequests(groupWid);
         }, groupId);
     }
 
@@ -2263,10 +3018,19 @@ class Client extends EventEmitter {
      * @returns {Promise&amp;lt;Array&amp;lt;MembershipRequestActionResult&gt;&gt;} Returns an array of requester IDs whose membership requests were approved and an error for each requester, if any occurred during the operation. If there are no requests, an empty array will be returned
      */
     async approveGroupMembershipRequests(groupId, options &#x3D; {}) {
-        return await this.pupPage.evaluate(async (groupId, options) &#x3D;&gt; {
-            const { requesterIds &#x3D; null, sleep &#x3D; [250, 500] } &#x3D; options;
-            return await window.WWebJS.membershipRequestAction(groupId, &#x27;Approve&#x27;, requesterIds, sleep);
-        }, groupId, options);
+        return await this.pupPage.evaluate(
+            async (groupId, options) &#x3D;&gt; {
+                const { requesterIds &#x3D; null, sleep &#x3D; [250, 500] } &#x3D; options;
+                return await window.WWebJS.membershipRequestAction(
+                    groupId,
+                    &#x27;Approve&#x27;,
+                    requesterIds,
+                    sleep,
+                );
+            },
+            groupId,
+            options,
+        );
     }
 
     /**
@@ -2276,24 +3040,36 @@ class Client extends EventEmitter {
      * @returns {Promise&amp;lt;Array&amp;lt;MembershipRequestActionResult&gt;&gt;} Returns an array of requester IDs whose membership requests were rejected and an error for each requester, if any occurred during the operation. If there are no requests, an empty array will be returned
      */
     async rejectGroupMembershipRequests(groupId, options &#x3D; {}) {
-        return await this.pupPage.evaluate(async (groupId, options) &#x3D;&gt; {
-            const { requesterIds &#x3D; null, sleep &#x3D; [250, 500] } &#x3D; options;
-            return await window.WWebJS.membershipRequestAction(groupId, &#x27;Reject&#x27;, requesterIds, sleep);
-        }, groupId, options);
+        return await this.pupPage.evaluate(
+            async (groupId, options) &#x3D;&gt; {
+                const { requesterIds &#x3D; null, sleep &#x3D; [250, 500] } &#x3D; options;
+                return await window.WWebJS.membershipRequestAction(
+                    groupId,
+                    &#x27;Reject&#x27;,
+                    requesterIds,
+                    sleep,
+                );
+            },
+            groupId,
+            options,
+        );
     }
-
 
     /**
      * Setting  autoload download audio
      * @param {boolean} flag true/false
      */
     async setAutoDownloadAudio(flag) {
-        await this.pupPage.evaluate(async flag &#x3D;&gt; {
-            const autoDownload &#x3D; window.Store.Settings.getAutoDownloadAudio();
+        await this.pupPage.evaluate(async (flag) &#x3D;&gt; {
+            const autoDownload &#x3D; window
+                .require(&#x27;WAWebUserPrefsGeneral&#x27;)
+                .getAutoDownloadAudio();
             if (autoDownload &#x3D;&#x3D;&#x3D; flag) {
                 return flag;
             }
-            await window.Store.Settings.setAutoDownloadAudio(flag);
+            await window
+                .require(&#x27;WAWebUserPrefsGeneral&#x27;)
+                .setAutoDownloadAudio(flag);
             return flag;
         }, flag);
     }
@@ -2303,12 +3079,16 @@ class Client extends EventEmitter {
      * @param {boolean} flag true/false
      */
     async setAutoDownloadDocuments(flag) {
-        await this.pupPage.evaluate(async flag &#x3D;&gt; {
-            const autoDownload &#x3D; window.Store.Settings.getAutoDownloadDocuments();
+        await this.pupPage.evaluate(async (flag) &#x3D;&gt; {
+            const autoDownload &#x3D; window
+                .require(&#x27;WAWebUserPrefsGeneral&#x27;)
+                .getAutoDownloadDocuments();
             if (autoDownload &#x3D;&#x3D;&#x3D; flag) {
                 return flag;
             }
-            await window.Store.Settings.setAutoDownloadDocuments(flag);
+            await window
+                .require(&#x27;WAWebUserPrefsGeneral&#x27;)
+                .setAutoDownloadDocuments(flag);
             return flag;
         }, flag);
     }
@@ -2318,12 +3098,16 @@ class Client extends EventEmitter {
      * @param {boolean} flag true/false
      */
     async setAutoDownloadPhotos(flag) {
-        await this.pupPage.evaluate(async flag &#x3D;&gt; {
-            const autoDownload &#x3D; window.Store.Settings.getAutoDownloadPhotos();
+        await this.pupPage.evaluate(async (flag) &#x3D;&gt; {
+            const autoDownload &#x3D; window
+                .require(&#x27;WAWebUserPrefsGeneral&#x27;)
+                .getAutoDownloadPhotos();
             if (autoDownload &#x3D;&#x3D;&#x3D; flag) {
                 return flag;
             }
-            await window.Store.Settings.setAutoDownloadPhotos(flag);
+            await window
+                .require(&#x27;WAWebUserPrefsGeneral&#x27;)
+                .setAutoDownloadPhotos(flag);
             return flag;
         }, flag);
     }
@@ -2333,12 +3117,16 @@ class Client extends EventEmitter {
      * @param {boolean} flag true/false
      */
     async setAutoDownloadVideos(flag) {
-        await this.pupPage.evaluate(async flag &#x3D;&gt; {
-            const autoDownload &#x3D; window.Store.Settings.getAutoDownloadVideos();
+        await this.pupPage.evaluate(async (flag) &#x3D;&gt; {
+            const autoDownload &#x3D; window
+                .require(&#x27;WAWebUserPrefsGeneral&#x27;)
+                .getAutoDownloadVideos();
             if (autoDownload &#x3D;&#x3D;&#x3D; flag) {
                 return flag;
             }
-            await window.Store.Settings.setAutoDownloadVideos(flag);
+            await window
+                .require(&#x27;WAWebUserPrefsGeneral&#x27;)
+                .setAutoDownloadVideos(flag);
             return flag;
         }, flag);
     }
@@ -2350,16 +3138,20 @@ class Client extends EventEmitter {
      * @returns {Promise&amp;lt;boolean&gt;}
      */
     async setBackgroundSync(flag) {
-        return await this.pupPage.evaluate(async flag &#x3D;&gt; {
-            const backSync &#x3D; window.Store.Settings.getGlobalOfflineNotifications();
+        return await this.pupPage.evaluate(async (flag) &#x3D;&gt; {
+            const backSync &#x3D; window
+                .require(&#x27;WAWebUserPrefsNotifications&#x27;)
+                .getGlobalOfflineNotifications();
             if (backSync &#x3D;&#x3D;&#x3D; flag) {
                 return flag;
             }
-            await window.Store.Settings.setGlobalOfflineNotifications(flag);
+            await window
+                .require(&#x27;WAWebUserPrefsNotifications&#x27;)
+                .setGlobalOfflineNotifications(flag);
             return flag;
         }, flag);
     }
-    
+
     /**
      * Get user device count by ID
      * Each WaWeb Connection counts as one device, and the phone (if exists) counts as one
@@ -2369,8 +3161,17 @@ class Client extends EventEmitter {
      */
     async getContactDeviceCount(userId) {
         return await this.pupPage.evaluate(async (userId) &#x3D;&gt; {
-            const devices &#x3D; await window.Store.DeviceList.getDeviceIds([window.Store.WidFactory.createWid(userId)]);
-            if (devices &amp;amp;&amp;amp; devices.length &amp;amp;&amp;amp; devices[0] !&#x3D; null &amp;amp;&amp;amp; typeof devices[0].devices &#x3D;&#x3D; &#x27;object&#x27;) {
+            const devices &#x3D; await window
+                .require(&#x27;WAWebApiDeviceList&#x27;)
+                .getDeviceIds([
+                    window.require(&#x27;WAWebWidFactory&#x27;).createWid(userId),
+                ]);
+            if (
+                devices &amp;amp;&amp;amp;
+                devices.length &amp;amp;&amp;amp;
+                devices[0] !&#x3D; null &amp;amp;&amp;amp;
+                typeof devices[0].devices &#x3D;&#x3D; &#x27;object&#x27;
+            ) {
                 return devices[0].devices.length;
             }
             return 0;
@@ -2384,18 +3185,22 @@ class Client extends EventEmitter {
      */
     async syncHistory(chatId) {
         return await this.pupPage.evaluate(async (chatId) &#x3D;&gt; {
-            const chatWid &#x3D; window.Store.WidFactory.createWid(chatId);
-            const chat &#x3D; window.Store.Chat.get(chatWid) ?? (await window.Store.Chat.find(chatWid));
+            const chatWid &#x3D; window.require(&#x27;WAWebWidFactory&#x27;).createWid(chatId);
+            const chat &#x3D;
+                window.require(&#x27;WAWebCollections&#x27;).Chat.get(chatWid) ??
+                (await window.require(&#x27;WAWebCollections&#x27;).Chat.find(chatWid));
             if (chat?.endOfHistoryTransferType &#x3D;&#x3D;&#x3D; 0) {
-                await window.Store.HistorySync.sendPeerDataOperationRequest(3, {
-                    chatId: chat.id
-                });
+                await window
+                    .require(&#x27;WAWebSendNonMessageDataRequest&#x27;)
+                    .sendPeerDataOperationRequest(3, {
+                        chatId: chat.id,
+                    });
                 return true;
             }
             return false;
         }, chatId);
     }
-  
+
     /**
      * Generates a WhatsApp call link (video call or voice call)
      * @param {Date} startTime The start time of the call
@@ -2404,17 +3209,27 @@ class Client extends EventEmitter {
      */
     async createCallLink(startTime, callType) {
         if (![&#x27;video&#x27;, &#x27;voice&#x27;].includes(callType)) {
-            throw new class CreateCallLinkError extends Error {
-                constructor(m) { super(m); }
-            }(&#x27;Invalid \&#x27;callType\&#x27; parameter value is provided. Valid values are: \&#x27;voice\&#x27; | \&#x27;video\&#x27;.&#x27;);
+            throw new (class CreateCallLinkError extends Error {
+                constructor(m) {
+                    super(m);
+                }
+            })(
+                &quot;Invalid &#x27;callType&#x27; parameter value is provided. Valid values are: &#x27;voice&#x27; | &#x27;video&#x27;.&quot;,
+            );
         }
 
         startTime &#x3D; Math.floor(startTime.getTime() / 1000);
-        
-        return await this.pupPage.evaluate(async (startTimeTs, callType) &#x3D;&gt; {
-            const response &#x3D; await window.Store.ScheduledEventMsgUtils.createEventCallLink(startTimeTs, callType);
-            return response ?? &#x27;&#x27;;
-        }, startTime, callType);
+
+        return await this.pupPage.evaluate(
+            async (startTimeTs, callType) &#x3D;&gt; {
+                const response &#x3D; await window
+                    .require(&#x27;WAWebGenerateEventCallLink&#x27;)
+                    .createEventCallLink(startTimeTs, callType);
+                return response ?? &#x27;&#x27;;
+            },
+            startTime,
+            callType,
+        );
     }
 
     /**
@@ -2426,35 +3241,59 @@ class Client extends EventEmitter {
     async sendResponseToScheduledEvent(response, eventMessageId) {
         if (![0, 1, 2, 3].includes(response)) return false;
 
-        return await this.pupPage.evaluate(async (response, msgId) &#x3D;&gt; {
-            const eventMsg &#x3D; window.Store.Msg.get(msgId) || (await window.Store.Msg.getMessagesById([msgId]))?.messages?.[0];
-            if (!eventMsg) return false;
+        return await this.pupPage.evaluate(
+            async (response, msgId) &#x3D;&gt; {
+                const eventMsg &#x3D;
+                    window.require(&#x27;WAWebCollections&#x27;).Msg.get(msgId) ||
+                    (
+                        await window
+                            .require(&#x27;WAWebCollections&#x27;)
+                            .Msg.getMessagesById([msgId])
+                    )?.messages?.[0];
+                if (!eventMsg) return false;
 
-            await window.Store.ScheduledEventMsgUtils.sendEventResponseMsg(response, eventMsg);
-            return true;
-        }, response, eventMessageId);
+                await window
+                    .require(&#x27;WAWebSendEventResponseMsgAction&#x27;)
+                    .sendEventResponseMsg(response, eventMsg);
+                return true;
+            },
+            response,
+            eventMessageId,
+        );
     }
-  
+
     /**
      * Save new contact to user&#x27;s addressbook or edit the existing one
      * @param {string} phoneNumber The contact&#x27;s phone number in a format &quot;17182222222&quot;, where &quot;1&quot; is a country code
-     * @param {string} firstName 
-     * @param {string} lastName 
+     * @param {string} firstName
+     * @param {string} lastName
      * @param {boolean} [syncToAddressbook &#x3D; false] If set to true, the contact will also be saved to the user&#x27;s address book on their phone. False by default
      * @returns {Promise&amp;lt;void&gt;}
      */
-    async saveOrEditAddressbookContact(phoneNumber, firstName, lastName, syncToAddressbook &#x3D; false)
-    {
-        return await this.pupPage.evaluate(async (phoneNumber, firstName, lastName, syncToAddressbook) &#x3D;&gt; {
-            return await window.Store.AddressbookContactUtils.saveContactAction({
-                &#x27;firstName&#x27; : firstName,
-                &#x27;lastName&#x27; : lastName,
-                &#x27;phoneNumber&#x27; : phoneNumber,
-                &#x27;prevPhoneNumber&#x27; : phoneNumber,
-                &#x27;syncToAddressbook&#x27;: syncToAddressbook,
-                &#x27;username&#x27; : undefined
-            });
-        }, phoneNumber, firstName, lastName, syncToAddressbook);
+    async saveOrEditAddressbookContact(
+        phoneNumber,
+        firstName,
+        lastName,
+        syncToAddressbook &#x3D; false,
+    ) {
+        return await this.pupPage.evaluate(
+            async (phoneNumber, firstName, lastName, syncToAddressbook) &#x3D;&gt; {
+                return await window
+                    .require(&#x27;WAWebSaveContactAction&#x27;)
+                    .saveContactAction({
+                        firstName: firstName,
+                        lastName: lastName,
+                        phoneNumber: phoneNumber,
+                        prevPhoneNumber: phoneNumber,
+                        syncToAddressbook: syncToAddressbook,
+                        username: undefined,
+                    });
+            },
+            phoneNumber,
+            firstName,
+            lastName,
+            syncToAddressbook,
+        );
     }
 
     /**
@@ -2462,11 +3301,14 @@ class Client extends EventEmitter {
      * @param {string} phoneNumber The contact&#x27;s phone number in a format &quot;17182222222&quot;, where &quot;1&quot; is a country code
      * @returns {Promise&amp;lt;void&gt;}
      */
-    async deleteAddressbookContact(phoneNumber)
-    {
+    async deleteAddressbookContact(phoneNumber) {
         return await this.pupPage.evaluate(async (phoneNumber) &#x3D;&gt; {
-            const wid &#x3D; window.Store.WidFactory.createWid(phoneNumber);
-            return await window.Store.AddressbookContactUtils.deleteContactAction({phoneNumber: wid});
+            const wid &#x3D; window
+                .require(&#x27;WAWebWidFactory&#x27;)
+                .createWid(phoneNumber);
+            return await window
+                .require(&#x27;WAWebDeleteContactAction&#x27;)
+                .deleteContactAction({ phoneNumber: wid });
         }, phoneNumber);
     }
 
@@ -2479,14 +3321,17 @@ class Client extends EventEmitter {
         return await this.pupPage.evaluate(async (userIds) &#x3D;&gt; {
             if (!Array.isArray(userIds)) userIds &#x3D; [userIds];
 
-            return await Promise.all(userIds.map(async (userId) &#x3D;&gt; {
-                const { lid, phone } &#x3D; await window.WWebJS.enforceLidAndPnRetrieval(userId);
+            return await Promise.all(
+                userIds.map(async (userId) &#x3D;&gt; {
+                    const { lid, phone } &#x3D;
+                        await window.WWebJS.enforceLidAndPnRetrieval(userId);
 
-                return {
-                    lid: lid?._serialized,
-                    pn: phone?._serialized
-                };
-            }));
+                    return {
+                        lid: lid?._serialized,
+                        pn: phone?._serialized,
+                    };
+                }),
+            );
         }, userIds);
     }
 
@@ -2498,15 +3343,28 @@ class Client extends EventEmitter {
      * @returns {Promise&amp;lt;void&gt;}
      */
     async addOrEditCustomerNote(userId, note) {
-        return await this.pupPage.evaluate(async (userId, note) &#x3D;&gt; {
-            if (!window.Store.BusinessGatingUtils.smbNotesV1Enabled()) return;
+        return await this.pupPage.evaluate(
+            async (userId, note) &#x3D;&gt; {
+                if (!window.require(&#x27;WAWebBizGatingUtils&#x27;).smbNotesV1Enabled())
+                    return;
 
-            return window.Store.CustomerNoteUtils.noteAddAction(
-                &#x27;unstructured&#x27;,
-                window.Store.WidToJid.widToUserJid(window.Store.WidFactory.createWid(userId)),
-                note
-            );
-        }, userId, note);
+                return window
+                    .require(&#x27;WAWebNoteAction&#x27;)
+                    .noteAddAction(
+                        &#x27;unstructured&#x27;,
+                        window
+                            .require(&#x27;WAWebWidToJid&#x27;)
+                            .widToUserJid(
+                                window
+                                    .require(&#x27;WAWebWidFactory&#x27;)
+                                    .createWid(userId),
+                            ),
+                        note,
+                    );
+            },
+            userId,
+            note,
+        );
     }
 
     /**
@@ -2524,71 +3382,88 @@ class Client extends EventEmitter {
      */
     async getCustomerNote(userId) {
         return await this.pupPage.evaluate(async (userId) &#x3D;&gt; {
-            if (!window.Store.BusinessGatingUtils.smbNotesV1Enabled()) return null;
+            if (!window.require(&#x27;WAWebBizGatingUtils&#x27;).smbNotesV1Enabled())
+                return null;
 
-            const note &#x3D; await window.Store.CustomerNoteUtils.retrieveOnlyNoteForChatJid(
-                window.Store.WidToJid.widToUserJid(window.Store.WidFactory.createWid(userId))
-            );
+            const note &#x3D; await window
+                .require(&#x27;WAWebNoteAction&#x27;)
+                .retrieveOnlyNoteForChatJid(
+                    window
+                        .require(&#x27;WAWebWidToJid&#x27;)
+                        .widToUserJid(
+                            window.require(&#x27;WAWebWidFactory&#x27;).createWid(userId),
+                        ),
+                );
 
             let serialized &#x3D; note?.serialize();
 
             if (!serialized) return null;
 
-            serialized.chatId &#x3D; window.Store.JidToWid.userJidToUserWid(serialized.chatJid)._serialized;
+            serialized.chatId &#x3D; window
+                .require(&#x27;WAWebJidToWid&#x27;)
+                .userJidToUserWid(serialized.chatJid)._serialized;
             delete serialized.chatJid;
 
             return serialized;
         }, userId);
     }
-    
+
     /**
      * Get Poll Votes
      * @param {string} messageId
-     * @return {Promise&amp;lt;Array&amp;lt;PollVote&gt;&gt;} 
+     * @return {Promise&amp;lt;Array&amp;lt;PollVote&gt;&gt;}
      */
     async getPollVotes(messageId) {
         const msg &#x3D; await this.getMessageById(messageId);
         if (!msg) return [];
-        if (msg.type !&#x3D; MessageTypes.POLL_CREATION) throw &#x27;Invalid usage! Can only be used with a pollCreation message&#x27;;
+        if (msg.type !&#x3D; MessageTypes.POLL_CREATION)
+            throw &#x27;Invalid usage! Can only be used with a pollCreation message&#x27;;
 
-        const pollVotes &#x3D; await this.pupPage.evaluate( async (msg) &#x3D;&gt; {
-            const msgKey &#x3D; window.Store.MsgKey.fromString(msg.id._serialized);
-            let pollVotes &#x3D; await window.Store.PollsVotesSchema.getTable().equals([&#x27;parentMsgKey&#x27;], msgKey.toString());
-            
-            return pollVotes.map(item &#x3D;&gt; {
+        const pollVotes &#x3D; await this.pupPage.evaluate(async (msg) &#x3D;&gt; {
+            const msgKey &#x3D; window
+                .require(&#x27;WAWebMsgKey&#x27;)
+                .fromString(msg.id._serialized);
+            let pollVotes &#x3D; await window
+                .require(&#x27;WAWebPollsVotesSchema&#x27;)
+                .getTable()
+                .equals([&#x27;parentMsgKey&#x27;], msgKey.toString());
+
+            return pollVotes.map((item) &#x3D;&gt; {
                 const typedArray &#x3D; new Uint8Array(item.selectedOptionLocalIds);
                 return {
                     ...item,
-                    selectedOptionLocalIds: Array.from(typedArray)
+                    selectedOptionLocalIds: Array.from(typedArray),
                 };
             });
         }, msg);
 
-        return pollVotes.map((pollVote) &#x3D;&gt; new PollVote(this.client, {...pollVote, parentMessage: msg}));
+        return pollVotes.map(
+            (pollVote) &#x3D;&gt;
+                new PollVote(this.client, { ...pollVote, parentMessage: msg }),
+        );
     }
 }
 
 module.exports &#x3D; Client;
 </code></pre>
-          </article>
-        </div>
-      </div>
-      <nav id="jsdoc-toc-nav" role="navigation"></nav>
-    </div>
-  </div>
-  <footer id="jsdoc-footer" class="jsdoc-footer">
-    <div id="jsdoc-footer-container">
-      <p>
-        Generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc</a> 3.6.11 on January 30, 2026.
-      </p>
-    </div>
-  </footer>
-  <script src="scripts/jquery.min.js"></script>
-  <script src="scripts/tree.jquery.js"></script>
-  <script src="scripts/prettify.js"></script>
-  <script src="scripts/jsdoc-toc.js"></script>
-  <script src="scripts/linenumber.js"></script>
-  <script src="scripts/scrollanchor.js"></script>
-</body>
-
+            </article>
+                                        </div>
+                                </div>
+                                <nav id="jsdoc-toc-nav" role="navigation"></nav>
+                        </div>
+                </div>
+                    <footer id="jsdoc-footer" class="jsdoc-footer">
+                            <div id="jsdoc-footer-container">
+                                    <p>
+                                      Generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc</a> 3.6.11 on April 6, 2026.
+                                    </p>
+                            </div>
+                    </footer>
+                <script src="scripts/jquery.min.js"></script>
+                <script src="scripts/tree.jquery.js"></script>
+                <script src="scripts/prettify.js"></script>
+                <script src="scripts/jsdoc-toc.js"></script>
+                <script src="scripts/linenumber.js"></script>
+                <script src="scripts/scrollanchor.js"></script>
+        </body>
 </html>
