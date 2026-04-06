@@ -564,82 +564,49 @@ class Message extends Base {
     async downloadMediaStream({ chunkSize = 10 * 1024 * 1024 } = {}) {
         if (!this.hasMedia) return undefined;
 
-        const page = this.client.pupPage;
-        const resultHandle = await page.evaluateHandle(
+        const resultHandle = await this.client.pupPage.evaluateHandle(
             (msgId) => window.WWebJS.resolveMediaBlob(msgId),
             this.id._serialized,
         );
 
-        const metadata = await resultHandle.evaluate((r) =>
+        const info = await resultHandle.evaluate((r) =>
             r
                 ? {
                       mimetype: r.mimetype,
                       filename: r.filename,
                       filesize: r.filesize,
+                      blobSize: r.blob.size,
                   }
                 : null,
         );
-        if (!metadata) {
+        if (!info) {
             await resultHandle.dispose();
             return undefined;
         }
 
         const blobHandle = await resultHandle.evaluateHandle((r) => r.blob);
         await resultHandle.dispose();
+        const { blobSize, ...metadata } = info;
 
-        let cdp, ioHandle;
-        try {
-            cdp = await page.createCDPSession();
-            const { uuid } = await cdp.send('IO.resolveBlob', {
-                objectId: blobHandle.remoteObject().objectId,
-            });
-            ioHandle = `blob:${uuid}`;
-        } catch (err) {
-            await Promise.all([
-                cdp?.detach().catch(() => {}),
-                blobHandle.dispose(),
-            ]);
-            throw err;
+        async function* readChunks() {
+            try {
+                for (let offset = 0; offset < blobSize; offset += chunkSize) {
+                    const base64 = await blobHandle.evaluate(
+                        async (blob, s, e) =>
+                            window.WWebJS.arrayBufferToBase64Async(
+                                await blob.slice(s, e).arrayBuffer(),
+                            ),
+                        offset,
+                        offset + chunkSize,
+                    );
+                    yield Buffer.from(base64, 'base64');
+                }
+            } finally {
+                await blobHandle.dispose();
+            }
         }
 
-        const cleanup = () =>
-            Promise.all([
-                cdp.send('IO.close', { handle: ioHandle }).catch(() => {}),
-                cdp.detach().catch(() => {}),
-                blobHandle.dispose(),
-            ]);
-
-        const stream = new Readable({
-            read() {
-                cdp.send('IO.read', { handle: ioHandle, size: chunkSize })
-                    .then(({ data, base64Encoded, eof }) => {
-                        this.push(
-                            Buffer.from(
-                                data,
-                                base64Encoded ? 'base64' : 'utf8',
-                            ),
-                        );
-                        if (eof) {
-                            this.push(null);
-                            cleanup();
-                        }
-                    })
-                    .catch((err) => {
-                        cleanup().then(
-                            () => this.destroy(err),
-                            () => this.destroy(err),
-                        );
-                    });
-            },
-            destroy(err, callback) {
-                cleanup().then(
-                    () => callback(err),
-                    () => callback(err),
-                );
-            },
-        });
-
-        return { stream, ...metadata };
+        return { stream: Readable.from(readChunks()), ...metadata };
     }
 
     /**

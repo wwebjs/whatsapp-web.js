@@ -1155,10 +1155,7 @@ exports.LoadUtils = () => {
         if (cached) {
             blob = cached;
         } else if (msg.mediaObject?.mediaBlob) {
-            const ab = await window
-                .require('WAWebMediaDataUtils')
-                .opaqueDataToArrayBuffer(msg.mediaObject.mediaBlob);
-            blob = new Blob([ab]);
+            blob = msg.mediaObject.mediaBlob.forceToBlob();
         }
 
         if (!blob) return null;
