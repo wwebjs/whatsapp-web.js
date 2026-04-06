@@ -1305,7 +1305,9 @@ declare namespace WAWebJS {
         /** Downloads and returns the attached message media */
         downloadMedia: () => Promise<MessageMedia | undefined>;
         /** Downloads the attached message media as a Node.js Readable stream */
-        downloadMediaStream: () => Promise<MessageMediaStream | undefined>;
+        downloadMediaStream: (
+            options?: MediaStreamOptions,
+        ) => Promise<MessageMediaStream | undefined>;
         /** Returns the Chat this message was sent in */
         getChat: () => Promise<Chat>;
         /** Returns the Contact this message was sent from */
@@ -1655,6 +1657,12 @@ declare namespace WAWebJS {
             url: string,
             options?: MediaFromURLOptions,
         ) => Promise<MessageMedia>;
+    }
+
+    /** Options for downloadMediaStream */
+    export interface MediaStreamOptions {
+        /** Size in bytes of each chunk read from the browser (default 10MB) */
+        chunkSize?: number;
     }
 
     /** Result of downloadMediaStream: a Readable stream with media metadata */
