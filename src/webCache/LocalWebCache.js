@@ -22,7 +22,7 @@ class LocalWebCache extends WebCache {
 
         try {
             return fs.readFileSync(filePath, 'utf-8');
-        } catch (err) {
+        } catch (ignoredError) {
             if (this.strict)
                 throw new VersionResolveError(
                     `Couldn't load version ${version} from the cache`,

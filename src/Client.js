@@ -2371,7 +2371,7 @@ class Client extends EventEmitter {
                             },
                             participantWids,
                         );
-                } catch (err) {
+                } catch (ignoredError) {
                     return 'CreateGroupError: An unknown error occupied while creating a group';
                 }
 
@@ -2610,7 +2610,7 @@ class Client extends EventEmitter {
                                     meContact,
                                 ));
                     }
-                } catch (error) {
+                } catch (ignoredError) {
                     return false;
                 }
 
