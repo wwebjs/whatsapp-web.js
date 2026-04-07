@@ -103,7 +103,7 @@ class Message extends Base {
          * @type {string}
          */
         this.deviceType =
-            typeof data.id.id === 'string' && data.id.id.length > 21
+            typeof data.id.id === 'string' && data.id.id.length > 25
                 ? 'android'
                 : typeof data.id.id === 'string' &&
                     data.id.id.substring(0, 2) === '3A'
