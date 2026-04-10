@@ -549,20 +549,48 @@ class Message extends Base {
             ) {
                 return null;
             }
-            if (msg.mediaData.mediaStage != 'RESOLVED') {
-                // try to resolve media
-                await msg.downloadMedia({
-                    downloadEvenIfExpensive: true,
-                    rmrReason: 1,
-                });
-            }
 
-            if (
-                msg.mediaData.mediaStage.includes('ERROR') ||
-                msg.mediaData.mediaStage === 'FETCHING'
-            ) {
-                // media could not be downloaded
-                return undefined;
+            // Use WA Web's own type mapper — returns newsletter-prefixed types
+            // (e.g. "newsletter-image") for newsletter messages, regular types otherwise.
+            const mediaType = window
+                .require('WAWebMmsMediaTypes')
+                .getMsgMediaType(msg);
+            const needsCrypto = window
+                .require('WAWebMediaCryptoEligibilityUtils')
+                .isMediaCryptoExpectedForMediaType(mediaType);
+
+            // For encrypted media: directPath + mediaKey required.
+            // For unencrypted media (newsletters): directPath alone is sufficient.
+            const canDirectDownload = needsCrypto
+                ? msg.directPath && msg.mediaKey
+                : !!msg.directPath;
+
+            const isNonChatJid = /@(broadcast|newsletter)\b/.test(
+                msg.id.remote._serialized || msg.id.remote,
+            );
+
+            if (msg.mediaData.mediaStage != 'RESOLVED') {
+                // Only call internal resolve for regular chat messages.
+                // For status@broadcast and @newsletter messages the internal
+                // resolve fails because getMaybeChat() returns null.
+                if (!canDirectDownload && !isNonChatJid) {
+                    await msg.downloadMedia({
+                        downloadEvenIfExpensive: true,
+                        rmrReason: 1,
+                    });
+                }
+
+                // Bail if we can't attempt a direct download.
+                if (!canDirectDownload) {
+                    if (isNonChatJid) return undefined;
+                    if (
+                        !msg.mediaData ||
+                        msg.mediaData.mediaStage.includes('ERROR') ||
+                        msg.mediaData.mediaStage === 'FETCHING'
+                    ) {
+                        return undefined;
+                    }
+                }
             }
 
             try {
@@ -582,7 +610,7 @@ class Message extends Base {
                         filehash: msg.filehash,
                         mediaKey: msg.mediaKey,
                         mediaKeyTimestamp: msg.mediaKeyTimestamp,
-                        type: msg.type,
+                        type: mediaType,
                         signal: new AbortController().signal,
                         downloadQpl: mockQpl,
                     });
