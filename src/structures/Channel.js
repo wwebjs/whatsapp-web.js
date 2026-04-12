@@ -356,6 +356,7 @@ class Channel extends Base {
                     const WAWebMsgKey = window.require('WAWebMsgKey');
                     const MsgStore = window.require('WAWebCollections').Msg;
 
+                    // msgFindByDirection is the newer API; fall back to msgFindBefore on older WA Web versions
                     const findBefore = async (anchorKey, count) => {
                         if (
                             typeof msgFindLocal.msgFindByDirection ===
@@ -445,7 +446,11 @@ class Channel extends Base {
                                 result?.status === 404 &&
                                 (!rawMessages || !rawMessages.length)
                             ) {
-                                msgs = [];
+                                // anchor not in local DB — fall back to in-memory msgs (same as the !anchorSerialized branch above)
+                                msgs.sort((a, b) => (a.t > b.t ? 1 : -1));
+                                msgs = msgs.slice(
+                                    -Math.min(limit, msgs.length),
+                                );
                             } else {
                                 let loaded = toMsgModels(rawMessages);
                                 const anchorMsg =
@@ -453,6 +458,7 @@ class Channel extends Base {
                                 let merged = [
                                     ...loaded,
                                     ...(anchorMsg ? [anchorMsg] : []),
+                                    // include in-memory msgs so recent (not-yet-persisted) messages aren't dropped
                                     ...msgs,
                                 ];
                                 merged = merged.filter(
