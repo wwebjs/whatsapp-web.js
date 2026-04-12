@@ -21,7 +21,7 @@ concurrency:
 jobs:
     label-sync:
         runs-on: ubuntu-latest
-        if: github.repository_owner == 'pedroslopez'
+        if: github.repository_owner == 'wwebjs'
         steps:
             - uses: actions/checkout@v6
             - uses: crazy-max/ghaction-github-labeler@v5

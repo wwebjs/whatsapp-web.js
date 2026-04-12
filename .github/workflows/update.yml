@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
     update:
-        if: github.repository_owner == 'pedroslopez'
+        if: github.repository_owner == 'wwebjs'
         runs-on: ubuntu-latest
         defaults:
             run:
@@ -51,4 +51,4 @@ jobs:
 
                       Tests should be run against this new version before merging.
                   labels: whatsapp change
-                  reviewers: pedroslopez
+                  reviewers: wwebjs

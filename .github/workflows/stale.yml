@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
     stale:
-        if: github.repository_owner == 'pedroslopez'
+        if: github.repository_owner == 'wwebjs'
         runs-on: ubuntu-latest
         steps:
             - name: Mark stale issues and PRs

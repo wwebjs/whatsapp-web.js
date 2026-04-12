@@ -40,4 +40,4 @@ To test your changes within your own project:
 5. If everything works as expected, you’ve successfully implemented your changes without breaking the library.
 
 [discord]: https://discord.wwebjs.dev/
-[issue-tracker]: https://github.com/pedroslopez/whatsapp-web.js/issues
+[issue-tracker]: https://github.com/wwebjs/whatsapp-web.js/issues

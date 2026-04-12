@@ -22,7 +22,7 @@ concurrency:
 jobs:
     release:
         runs-on: ubuntu-latest
-        if: github.repository == 'pedroslopez/whatsapp-web.js'
+        if: github.repository == 'wwebjs/whatsapp-web.js'
         permissions:
             contents: write
             id-token: write

@@ -1422,7 +1422,7 @@ class Client extends EventEmitter {
                 )
             ) {
                 console.warn(
-                    'Mentions with an array of Contact are now deprecated. See more at https://github.com/pedroslopez/whatsapp-web.js/pull/2166.',
+                    'Mentions with an array of Contact are now deprecated. See more at https://github.com/wwebjssapp-web.js/pull/2166.',
                 );
                 options.mentions = options.mentions.map(
                     (a) => a.id._serialized,
