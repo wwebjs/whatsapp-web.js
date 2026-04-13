@@ -353,7 +353,7 @@ class Channel extends Base {
                     while (msgs.length < searchOptions.limit) {
                         const loadedMessages = await window
                             .require('WAWebChatLoadMessages')
-                            .loadEarlierMsgs(channel);
+                            .loadEarlierMsgs({ chat: channel });
                         if (!loadedMessages || !loadedMessages.length) break;
                         msgs = [...loadedMessages.filter(msgFilter), ...msgs];
                     }
