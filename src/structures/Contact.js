@@ -148,6 +148,26 @@ class Contact extends Base {
     }
 
     /**
+     * Fetches the current presence (online/typing/recording/last-seen) for
+     * this contact. Lazily subscribes — subsequent changes emit
+     * {@link Client#event:presence_update}.
+     * @param {object} [options]
+     * @returns {Promise<ChatPresence|null>}
+     */
+    async getPresence(options) {
+        return this.client.getChatPresence(this.id._serialized, options);
+    }
+
+    /**
+     * Synchronously returns the cached presence for this contact without
+     * triggering a subscription. See {@link Client#getChatPresenceSnapshot}.
+     * @returns {Promise<ChatPresence|null>}
+     */
+    async getPresenceSnapshot() {
+        return this.client.getChatPresenceSnapshot(this.id._serialized);
+    }
+
+    /**
      * Blocks this contact from WhatsApp
      * @returns {Promise<boolean>}
      */

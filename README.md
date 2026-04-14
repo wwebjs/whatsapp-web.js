@@ -106,6 +106,7 @@ For more details on saving and restoring sessions, check out the [Authentication
 | Create polls                                     | ✅                                           |
 | Channels                                         | ✅                                           |
 | Vote in polls                                    | ✅                                           |
+| Get contact presence (online/typing/last seen)   | ✅                                           |
 | Communities                                      | 🔜                                           |
 
 Something missing? Make an issue and let us know!

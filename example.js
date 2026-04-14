@@ -381,6 +381,17 @@ client.on('message', async (msg) => {
         const chat = await msg.getChat();
         // stops typing or recording in the chat
         chat.clearState();
+    } else if (msg.body === '!presence') {
+        const chat = await msg.getChat();
+        // fetches the peer's current presence. Subscribes on the first call —
+        // subsequent 'presence_update' events will stream as the peer toggles
+        // online/offline or starts typing.
+        const presence = await chat.getPresence();
+        msg.reply(
+            presence
+                ? `Online: ${presence.isOnline}\nState: ${presence.chatstate}\nLast seen: ${presence.lastSeen ?? 'n/a'}`
+                : 'No presence data available.',
+        );
     } else if (msg.body === '!jumpto') {
         if (msg.hasQuotedMsg) {
             const quotedMsg = await msg.getQuotedMessage();
@@ -782,4 +793,18 @@ client.on('message_reaction', async (reaction) => {
 client.on('vote_update', (vote) => {
     /** The vote that was affected: */
     console.log(vote);
+});
+
+client.on('presence_update', (presence) => {
+    /** The chat whose presence changed. Only fires after a subscription was
+     * created via client.getChatPresence(), chat.getPresence(), or
+     * client.getChatById(id, { includePresence: true }). */
+    console.log(
+        'PRESENCE',
+        presence.id,
+        'online=',
+        presence.isOnline,
+        'state=',
+        presence.chatstate,
+    );
 });

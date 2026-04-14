@@ -1225,6 +1225,135 @@ exports.LoadUtils = () => {
         return true;
     };
 
+    window.WWebJS.presence = {};
+
+    window.WWebJS.presence.serialize = (model) => {
+        const idWid = model.id;
+        const isGroup = !!(idWid && idWid.isGroup);
+        const cs = model.chatstate;
+        const csType = cs ? cs.type : null;
+        const csT = cs ? cs.t : null;
+        const csDeny = cs ? cs.deny === true : false;
+
+        if (isGroup) {
+            return {
+                id: idWid._serialized,
+                isGroup: true,
+                isOnline: model.isOnline === true,
+                chatstate: null,
+                lastSeen: null,
+                deny: false,
+                typingParticipants: (model.typingUserIds || []).map(
+                    (w) => (w && w._serialized) || w,
+                ),
+                recordingParticipants: (model.recordingUserIds || []).map(
+                    (w) => (w && w._serialized) || w,
+                ),
+                hasData: !!model.hasData,
+                isSubscribed: !!model.isSubscribed,
+            };
+        }
+
+        return {
+            id: idWid._serialized,
+            isGroup: false,
+            isOnline: model.isOnline,
+            chatstate: csType,
+            lastSeen: csType === 'unavailable' && !csDeny ? csT || null : null,
+            deny: csDeny,
+            typingParticipants: [],
+            recordingParticipants: [],
+            hasData: !!model.hasData,
+            isSubscribed: !!model.isSubscribed,
+        };
+    };
+
+    // Synchronous peek — no subscribe, no wait.
+    window.WWebJS.presence.getSnapshot = (chatId) => {
+        const { PresenceCollection } = window.require(
+            'WAWebPresenceCollection',
+        );
+        const wid = window.require('WAWebWidFactory').createWid(chatId);
+        const model = PresenceCollection.get(wid);
+        return model ? window.WWebJS.presence.serialize(model) : null;
+    };
+
+    // Lazy subscribe via PresenceCollection.find(). Internally resolves the
+    // LID-migrated chat identifier and sends a subscribe stanza. Re-invoking
+    // also acts as a renewal since _subscribe() performs no client-side dedup.
+    window.WWebJS.presence.fetch = async (chatId, options) => {
+        const opts = options || {};
+        const waitForData =
+            opts.waitForData === undefined ? true : !!opts.waitForData;
+        const timeoutMs =
+            typeof opts.timeoutMs === 'number' ? opts.timeoutMs : 1500;
+
+        const { PresenceCollection } = window.require(
+            'WAWebPresenceCollection',
+        );
+        const wid = window.require('WAWebWidFactory').createWid(chatId);
+        await PresenceCollection.find(wid);
+        const model = PresenceCollection.get(wid);
+        if (!model) return null;
+
+        if (waitForData && !model.hasData) {
+            await new Promise((resolve) => {
+                let done = false;
+                const finish = () => {
+                    if (done) return;
+                    done = true;
+                    model.off('change:hasData', finish);
+                    clearTimeout(timer);
+                    resolve();
+                };
+                const timer = setTimeout(finish, timeoutMs);
+                model.on('change:hasData', finish);
+            });
+        }
+        return window.WWebJS.presence.serialize(model);
+    };
+
+    // Binds listeners on every PresenceModel AND its nested chatstate sub-model.
+    // Rationale: change:type / change:t / change:deny fire ONLY on the nested
+    // sub-model, while hasData / isOnline / typingUserIds / recordingUserIds
+    // fire on the parent. Both are needed for complete coverage.
+    window.WWebJS.presence.bindEvents = () => {
+        if (window.WWebJS.presence._bound) return;
+        const { PresenceCollection } = window.require(
+            'WAWebPresenceCollection',
+        );
+
+        const emit = (model) => {
+            if (typeof window.onPresenceChangedEvent !== 'function') return;
+            try {
+                window.onPresenceChangedEvent(
+                    window.WWebJS.presence.serialize(model),
+                );
+            } catch (_) {
+                /* node side detached */
+            }
+        };
+
+        const bindModel = (model) => {
+            if (!model || model._wwebjsPresenceBound) return;
+            model._wwebjsPresenceBound = true;
+            model.on(
+                'change:hasData change:isOnline change:forceDisplay change:typingUserIds change:recordingUserIds',
+                () => emit(model),
+            );
+            if (model.chatstate && typeof model.chatstate.on === 'function') {
+                model.chatstate.on('change:type change:t change:deny', () =>
+                    emit(model),
+                );
+            }
+        };
+
+        (PresenceCollection.models || []).forEach(bindModel);
+        PresenceCollection.on('add', bindModel);
+
+        window.WWebJS.presence._bound = true;
+    };
+
     window.WWebJS.getLabelModel = (label) => {
         let res = label.serialize();
         res.hexColor = label.hexColor;

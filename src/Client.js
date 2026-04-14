@@ -32,6 +32,7 @@ const {
     List,
     Reaction,
     Broadcast,
+    ChatPresence,
     ScheduledEvent,
 } = require('./structures');
 const NoAuth = require('./authStrategies/NoAuth');
@@ -1019,6 +1020,22 @@ class Client extends EventEmitter {
             },
         );
 
+        await exposeFunctionIfAbsent(
+            this.pupPage,
+            'onPresenceChangedEvent',
+            (data) => {
+                /**
+                 * Emitted when a chat's presence state changes (online/offline/typing/recording).
+                 * Only emitted for chats whose presence has been subscribed to — trigger a
+                 * subscription via {@link Client#getChatPresence}, {@link Chat#getPresence}
+                 * or by passing `includePresence: true` to {@link Client#getChatById}.
+                 * @event Client#presence_update
+                 * @param {ChatPresence} presence
+                 */
+                this.emit(Events.PRESENCE_UPDATE, new ChatPresence(this, data));
+            },
+        );
+
         await this.pupPage.evaluate(() => {
             const { Msg, Chat, WAWebCallCollection } =
                 window.require('WAWebCollections');
@@ -1216,6 +1233,8 @@ class Client extends EventEmitter {
                     return origFunction.apply(module, args);
                 },
             );
+
+            window.WWebJS.presence.bindEvents();
         });
     }
 
@@ -1670,13 +1689,22 @@ class Client extends EventEmitter {
     /**
      * Gets chat or channel instance by ID
      * @param {string} chatId
+     * @param {object} [options]
+     * @param {boolean} [options.includePresence=false] when true and the chat
+     * is a 1:1 user chat, also subscribe to presence and attach the current
+     * {@link ChatPresence} as `chat.presence`. Triggers a short wait for the
+     * first presence push (see {@link Client#getChatPresence}).
      * @returns {Promise<Chat|Channel>}
      */
-    async getChatById(chatId) {
+    async getChatById(chatId, { includePresence = false } = {}) {
         const chat = await this.pupPage.evaluate(async (chatId) => {
             return await window.WWebJS.getChat(chatId);
         }, chatId);
-        return chat ? ChatFactory.create(this, chat) : undefined;
+        const instance = chat ? ChatFactory.create(this, chat) : undefined;
+        if (instance && includePresence && !instance.isGroup) {
+            instance.presence = await this.getChatPresence(chatId);
+        }
+        return instance;
     }
 
     /**
@@ -1715,14 +1743,21 @@ class Client extends EventEmitter {
     /**
      * Get contact instance by ID
      * @param {string} contactId
+     * @param {object} [options]
+     * @param {boolean} [options.includePresence=false] when true, also subscribe
+     * to presence and attach the current {@link ChatPresence} as `contact.presence`.
      * @returns {Promise<Contact>}
      */
-    async getContactById(contactId) {
+    async getContactById(contactId, { includePresence = false } = {}) {
         let contact = await this.pupPage.evaluate((contactId) => {
             return window.WWebJS.getContact(contactId);
         }, contactId);
 
-        return ContactFactory.create(this, contact);
+        const instance = ContactFactory.create(this, contact);
+        if (instance && includePresence) {
+            instance.presence = await this.getChatPresence(contactId);
+        }
+        return instance;
     }
 
     /**
@@ -1980,6 +2015,45 @@ class Client extends EventEmitter {
                 .require('WAWebPresenceChatAction')
                 .sendPresenceUnavailable();
         });
+    }
+
+    /**
+     * Fetches the current presence (online/offline/typing/recording) for a chat.
+     *
+     * Lazily subscribes to presence updates on WhatsApp Web — subsequent changes
+     * emit the {@link Client#event:presence_update} event. Repeated calls renew
+     * the subscription, since WhatsApp Web has no client-side subscription cache.
+     *
+     * For groups, `isOnline` is `true` when any member is available and
+     * `typingParticipants` / `recordingParticipants` list active members.
+     *
+     * @param {string} chatId serialized chat id (e.g. '1234567890@c.us')
+     * @param {object} [options]
+     * @param {boolean} [options.waitForData=true] wait for the first presence push before resolving
+     * @param {number} [options.timeoutMs=1500] max wait time (ms) for the first push
+     * @returns {Promise<ChatPresence|null>}
+     */
+    async getChatPresence(chatId, options = {}) {
+        const data = await this.pupPage.evaluate(
+            (id, opts) => window.WWebJS.presence.fetch(id, opts),
+            chatId,
+            options,
+        );
+        return data ? new ChatPresence(this, data) : null;
+    }
+
+    /**
+     * Synchronously returns the locally cached presence for a chat without
+     * triggering a subscription. Returns `null` if no presence model exists yet.
+     * @param {string} chatId serialized chat id
+     * @returns {Promise<ChatPresence|null>}
+     */
+    async getChatPresenceSnapshot(chatId) {
+        const data = await this.pupPage.evaluate(
+            (id) => window.WWebJS.presence.getSnapshot(id),
+            chatId,
+        );
+        return data ? new ChatPresence(this, data) : null;
     }
 
     /**

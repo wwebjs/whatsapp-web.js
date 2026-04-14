@@ -97,7 +97,10 @@ declare namespace WAWebJS {
         getBlockedContacts(): Promise<Contact[]>;
 
         /** Gets chat or channel instance by ID */
-        getChatById(chatId: string): Promise<Chat>;
+        getChatById(
+            chatId: string,
+            options?: { includePresence?: boolean },
+        ): Promise<Chat>;
 
         /** Gets a {@link Channel} instance by invite code */
         getChannelByInviteCode(inviteCode: string): Promise<Channel>;
@@ -109,7 +112,10 @@ declare namespace WAWebJS {
         getChannels(): Promise<Channel[]>;
 
         /** Get contact instance by ID */
-        getContactById(contactId: string): Promise<Contact>;
+        getContactById(
+            contactId: string,
+            options?: { includePresence?: boolean },
+        ): Promise<Contact>;
 
         /** Get message by ID */
         getMessageById(messageId: string): Promise<Message>;
@@ -198,7 +204,7 @@ declare namespace WAWebJS {
         ): Promise<string>;
 
         /** Cancels an active pairing code session and returns to QR code mode */
-        cancelPairingCode(): Promise<void>
+        cancelPairingCode(): Promise<void>;
 
         /** Force reset of connection state for the client */
         resetState(): Promise<void>;
@@ -211,10 +217,7 @@ declare namespace WAWebJS {
         ): Promise<Message>;
 
         /** Send a reaction to a specific messageId */
-        sendReaction(
-            messageId: string,
-            reaction: string,
-        ): Promise<void>;
+        sendReaction(messageId: string, reaction: string): Promise<void>;
 
         /** Sends a channel admin invitation to a user, allowing them to become an admin of the channel */
         sendChannelAdminInvite(
@@ -234,6 +237,22 @@ declare namespace WAWebJS {
 
         /** Marks the client as offline */
         sendPresenceUnavailable(): Promise<void>;
+
+        /**
+         * Fetches the current presence (online/offline/typing/recording) for a
+         * chat. Lazily subscribes to presence updates so subsequent changes
+         * emit the `presence_update` event.
+         */
+        getChatPresence(
+            chatId: string,
+            options?: { waitForData?: boolean; timeoutMs?: number },
+        ): Promise<ChatPresence | null>;
+
+        /**
+         * Synchronously returns the locally cached presence for a chat
+         * without triggering a subscription.
+         */
+        getChatPresenceSnapshot(chatId: string): Promise<ChatPresence | null>;
 
         /** Mark as seen for the Chat */
         sendSeen(chatId: string): Promise<boolean>;
@@ -661,6 +680,17 @@ declare namespace WAWebJS {
          * shows a user's current selected option(s) on the poll
          */
         on(event: 'vote_update', listener: (vote: PollVote) => void): this;
+
+        /**
+         * Emitted when a chat's presence state changes (online/offline/typing/recording).
+         * Only fires for chats whose presence has been subscribed to via
+         * {@link Client.getChatPresence}, {@link Chat.getPresence} or the
+         * `includePresence` option on {@link Client.getChatById}.
+         */
+        on(
+            event: 'presence_update',
+            listener: (presence: ChatPresence) => void,
+        ): this;
     }
 
     /** Current connection information */
@@ -1039,6 +1069,7 @@ declare namespace WAWebJS {
         REMOTE_SESSION_SAVED = 'remote_session_saved',
         INCOMING_CALL = 'call',
         VOTE_UPDATE = 'vote_update',
+        PRESENCE_UPDATE = 'presence_update',
     }
 
     /** Group notification types */
@@ -1758,12 +1789,88 @@ declare namespace WAWebJS {
 
         /** Gets the Contact's current status broadcast. */
         getBroadcast: () => Promise<Broadcast>;
+
+        /**
+         * Fetch the current presence (online/typing/recording/last-seen) for
+         * this contact. Lazily subscribes — subsequent changes emit `presence_update`.
+         */
+        getPresence: (options?: {
+            waitForData?: boolean;
+            timeoutMs?: number;
+        }) => Promise<ChatPresence | null>;
+
+        /**
+         * Synchronously return the locally cached presence for this contact
+         * without triggering a subscription.
+         */
+        getPresenceSnapshot: () => Promise<ChatPresence | null>;
+
+        /**
+         * Current presence attached to the contact when fetched via
+         * {@link Client.getContactById} with `includePresence: true`.
+         */
+        presence?: ChatPresence | null;
     }
 
     export interface ContactId {
         server: string;
         user: string;
         _serialized: string;
+    }
+
+    /**
+     * Possible chatstate values reported by {@link ChatPresence.chatstate}.
+     * `recording_audio` and `composing` may auto-revert to `available` or
+     * `unavailable` 25 seconds after the last stanza — this is WhatsApp Web's
+     * own behavior and will produce a second `presence_update` event.
+     */
+    export type ChatPresenceState =
+        | 'available'
+        | 'composing'
+        | 'recording_audio'
+        | 'paused'
+        | 'unavailable';
+
+    /** Presence state of a chat or contact on WhatsApp. */
+    export interface ChatPresence {
+        /** Serialized chat id this presence refers to. */
+        id: string;
+        /** Whether this presence belongs to a group chat. */
+        isGroup: boolean;
+        /**
+         * Whether the peer is currently online.
+         * 1:1 chats may report `undefined` before the first push or when
+         * privacy-blocked. Groups report `true` if any member is available.
+         */
+        isOnline?: boolean;
+        /**
+         * Current 1:1 chatstate. Always `null` for groups — use
+         * {@link ChatPresence.typingParticipants} /
+         * {@link ChatPresence.recordingParticipants} instead.
+         */
+        chatstate: ChatPresenceState | null;
+        /**
+         * Last-seen unix timestamp in seconds. Only set when
+         * `chatstate === 'unavailable'` and the peer has not privacy-blocked
+         * last-seen visibility.
+         */
+        lastSeen: number | null;
+        /**
+         * True when the peer has explicitly denied last-seen/online visibility
+         * via privacy settings.
+         */
+        deny: boolean;
+        /** Group only: serialized ids of participants currently typing. */
+        typingParticipants: string[];
+        /** Group only: serialized ids of participants currently recording audio. */
+        recordingParticipants: string[];
+        /** True once the server has pushed at least one presence update. */
+        hasData: boolean;
+        /**
+         * True once a subscription stanza has been delivered and acknowledged.
+         * Sticky — does not reset on its own.
+         */
+        isSubscribed: boolean;
     }
 
     export interface BusinessCategory {
@@ -1920,6 +2027,24 @@ declare namespace WAWebJS {
         sendStateRecording: () => Promise<void>;
         /** Simulate typing in chat. This will last for 25 seconds. */
         sendStateTyping: () => Promise<void>;
+        /**
+         * Fetch the current presence (online/typing/recording/last-seen) for
+         * this chat. Lazily subscribes — subsequent changes emit `presence_update`.
+         */
+        getPresence: (options?: {
+            waitForData?: boolean;
+            timeoutMs?: number;
+        }) => Promise<ChatPresence | null>;
+        /**
+         * Synchronously return the locally cached presence for this chat
+         * without triggering a subscription.
+         */
+        getPresenceSnapshot: () => Promise<ChatPresence | null>;
+        /**
+         * Current presence attached to the chat when it was fetched via
+         * {@link Client.getChatById} with `includePresence: true`.
+         */
+        presence?: ChatPresence | null;
         /** un-archives this chat */
         unarchive: () => Promise<void>;
         /** Unmutes this chat */

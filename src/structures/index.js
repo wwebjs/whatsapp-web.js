@@ -2,6 +2,7 @@ module.exports = {
     Base: require('./Base'),
     BusinessContact: require('./BusinessContact'),
     Chat: require('./Chat'),
+    ChatPresence: require('./ChatPresence'),
     ClientInfo: require('./ClientInfo'),
     Contact: require('./Contact'),
     GroupChat: require('./GroupChat'),
