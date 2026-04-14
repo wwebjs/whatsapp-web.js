@@ -1229,7 +1229,7 @@ exports.LoadUtils = () => {
 
     window.WWebJS.presence.serialize = (model) => {
         const idWid = model.id;
-        const isGroup = !!(idWid && idWid.isGroup);
+        const isGroup = !!model.isGroup;
         const cs = model.chatstate;
         const csType = cs ? cs.type : null;
         const csT = cs ? cs.t : null;
@@ -1311,18 +1311,76 @@ exports.LoadUtils = () => {
         const model = PresenceCollection.get(wid);
         if (!model) return null;
 
-        if (waitForData && !model.hasData) {
+        if (waitForData) {
             await new Promise((resolve) => {
                 let done = false;
+
+                // Wait for a push that actually carries information we can
+                // surface: hasData plus either an online flag or a concrete
+                // chatstate. The first push after a fresh subscribe is
+                // typically the last-known state ('unavailable' + last seen),
+                // which flips hasData but leaves chatstate/isOnline in their
+                // default state — returning at that point would mislead the
+                // caller into thinking the user is offline.
+                const hasUsefulData = () => {
+                    if (!model.hasData) return false;
+                    if (model.isGroup) {
+                        return true;
+                    }
+                    if (model.isOnline === true) return true;
+                    const cs = model.chatstate;
+                    if (
+                        cs &&
+                        (cs.type === 'available' ||
+                            cs.type === 'typing' ||
+                            cs.type === 'recording_audio' ||
+                            cs.type === 'unavailable')
+                    ) {
+                        return true;
+                    }
+                    return false;
+                };
+
                 const finish = () => {
                     if (done) return;
                     done = true;
-                    model.off('change:hasData', finish);
+                    model.off(
+                        'change:hasData change:isOnline change:typingUserIds change:recordingUserIds',
+                        check,
+                    );
+                    if (
+                        model.chatstate &&
+                        typeof model.chatstate.off === 'function'
+                    ) {
+                        model.chatstate.off(
+                            'change:type change:t change:deny',
+                            check,
+                        );
+                    }
                     clearTimeout(timer);
                     resolve();
                 };
+
+                const check = () => {
+                    if (hasUsefulData()) finish();
+                };
+
                 const timer = setTimeout(finish, timeoutMs);
-                model.on('change:hasData', finish);
+                model.on(
+                    'change:hasData change:isOnline change:typingUserIds change:recordingUserIds',
+                    check,
+                );
+                if (
+                    model.chatstate &&
+                    typeof model.chatstate.on === 'function'
+                ) {
+                    model.chatstate.on(
+                        'change:type change:t change:deny',
+                        check,
+                    );
+                }
+
+                check();
             });
         }
         return window.WWebJS.presence.serialize(model);
