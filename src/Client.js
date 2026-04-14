@@ -2018,14 +2018,19 @@ class Client extends EventEmitter {
     }
 
     /**
-     * Fetches the current presence (online/offline/typing/recording) for a chat.
+     * Fetches the current presence (online/typing/recording/last-seen) for a chat.
      *
-     * Lazily subscribes to presence updates on WhatsApp Web — subsequent changes
-     * emit the {@link Client#event:presence_update} event. Repeated calls renew
-     * the subscription, since WhatsApp Web has no client-side subscription cache.
+     * For 1:1 chats, this lazily subscribes to presence updates via
+     * `PresenceCollection.find()` — subsequent changes emit
+     * {@link Client#event:presence_update}. Repeated calls renew the
+     * subscription since WhatsApp Web has no client-side subscription cache.
      *
-     * For groups, `isOnline` is `true` when any member is available and
-     * `typingParticipants` / `recordingParticipants` list active members.
+     * For group chats, `PresenceCollection.find()` does NOT send a subscribe
+     * stanza (WhatsApp Web only subscribes to individual users). The returned
+     * model reflects whatever WhatsApp Web has already pushed passively —
+     * typically only while the group is in an active session. `isOnline` is
+     * `true` when any member is available; `typingParticipants` /
+     * `recordingParticipants` list active members.
      *
      * @param {string} chatId serialized chat id (e.g. '1234567890@c.us')
      * @param {object} [options]

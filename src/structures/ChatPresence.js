@@ -36,16 +36,21 @@ class ChatPresence extends Base {
         this.isOnline = data.isOnline;
 
         /**
-         * Current chatstate for 1:1 chats. One of `'available'`, `'composing'`,
-         * `'recording_audio'`, `'paused'`, `'unavailable'`, or `null`.
+         * Current chatstate for 1:1 chats. One of `'available'`, `'typing'`,
+         * `'recording_audio'`, `'unavailable'`, or `null`.
          *
          * Always `null` for groups — use {@link ChatPresence#typingParticipants} and
          * {@link ChatPresence#recordingParticipants} instead.
          *
-         * NOTE: WhatsApp Web itself auto-reverts `'composing'`/`'recording_audio'` to
-         * `'available'` or `'unavailable'` 25 seconds after the last stanza. This emits a
-         * second `presence_update` event without any server push — this is WhatsApp's own
-         * client-side behavior, not a library quirk.
+         * NOTE: WhatsApp Web itself auto-reverts `'typing'`/`'recording_audio'` to
+         * `'available'` or `'unavailable'` 25 seconds after the last stanza (timer in
+         * `WAWebChangePresenceHandlerAction`). This emits a second `presence_update`
+         * event without any server push — this is WhatsApp's own client-side
+         * behavior, not a library quirk.
+         *
+         * `'composing'` / `'paused'` are wire-level WA protocol names that never appear
+         * here — the handler normalizes them to `'typing'` and `'available'` / `'unavailable'`
+         * before writing the model.
          * @type {?string}
          */
         this.chatstate = data.chatstate;

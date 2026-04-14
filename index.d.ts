@@ -1820,15 +1820,19 @@ declare namespace WAWebJS {
 
     /**
      * Possible chatstate values reported by {@link ChatPresence.chatstate}.
-     * `recording_audio` and `composing` may auto-revert to `available` or
-     * `unavailable` 25 seconds after the last stanza — this is WhatsApp Web's
-     * own behavior and will produce a second `presence_update` event.
+     * `'typing'` and `'recording_audio'` auto-revert to `'available'` /
+     * `'unavailable'` 25 seconds after the last stanza — this is WhatsApp
+     * Web's own behavior and produces a second `presence_update` event
+     * without a server push.
+     *
+     * Note: wire-level protocol names `composing` / `paused` never surface
+     * here; the handler normalizes them to `typing` and `available` /
+     * `unavailable` before writing the model.
      */
     export type ChatPresenceState =
         | 'available'
-        | 'composing'
+        | 'typing'
         | 'recording_audio'
-        | 'paused'
         | 'unavailable';
 
     /** Presence state of a chat or contact on WhatsApp. */

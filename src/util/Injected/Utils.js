@@ -1254,6 +1254,10 @@ exports.LoadUtils = () => {
             };
         }
 
+        // chatstate values observed in the model (after WA Web normalization):
+        // 'available' | 'typing' | 'recording_audio' | 'unavailable' | null
+        // Wire-level 'composing' / 'paused' / 'idle' never surface — the handler
+        // maps them to 'typing' and 'available' / 'unavailable' before writing.
         return {
             id: idWid._serialized,
             isGroup: false,
@@ -1281,6 +1285,12 @@ exports.LoadUtils = () => {
     // Lazy subscribe via PresenceCollection.find(). Internally resolves the
     // LID-migrated chat identifier and sends a subscribe stanza. Re-invoking
     // also acts as a renewal since _subscribe() performs no client-side dedup.
+    //
+    // NOTE: for group jids, PresenceCollection.find() does NOT send a subscribe
+    // stanza — WAWebPresenceCollection.findImpl only subscribes `isUser` jids.
+    // Group presence (typing/recording arrays, isOnline) still flows in when
+    // WhatsApp Web pushes it for active chats, but callers should not expect
+    // on-demand activation for groups.
     window.WWebJS.presence.fetch = async (chatId, options) => {
         const opts = options || {};
         const waitForData =

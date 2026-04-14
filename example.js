@@ -383,9 +383,11 @@ client.on('message', async (msg) => {
         chat.clearState();
     } else if (msg.body === '!presence') {
         const chat = await msg.getChat();
-        // fetches the peer's current presence. Subscribes on the first call —
-        // subsequent 'presence_update' events will stream as the peer toggles
-        // online/offline or starts typing.
+        // Fetches the peer's current presence. For 1:1 chats this subscribes
+        // on the first call and subsequent 'presence_update' events will
+        // stream as the peer goes online/offline (chatstate: 'available' /
+        // 'unavailable') or starts typing / recording (chatstate: 'typing' /
+        // 'recording_audio').
         const presence = await chat.getPresence();
         msg.reply(
             presence
