@@ -1251,6 +1251,7 @@ exports.LoadUtils = () => {
                 ),
                 hasData: !!model.hasData,
                 isSubscribed: !!model.isSubscribed,
+                stale: model.stale !== false,
             };
         }
 
@@ -1269,6 +1270,10 @@ exports.LoadUtils = () => {
             recordingParticipants: [],
             hasData: !!model.hasData,
             isSubscribed: !!model.isSubscribed,
+            // stale starts true and is set to false by WAWebChangePresenceHandlerAction
+            // on every server push, and back to true by clearAllPresence() on
+            // disconnect. hasData && !stale ⇒ fresh; hasData && stale ⇒ pre-reconnect.
+            stale: model.stale !== false,
         };
     };
 
@@ -1324,9 +1329,19 @@ exports.LoadUtils = () => {
     };
 
     // Binds listeners on every PresenceModel AND its nested chatstate sub-model.
-    // Rationale: change:type / change:t / change:deny fire ONLY on the nested
-    // sub-model, while hasData / isOnline / typingUserIds / recordingUserIds
-    // fire on the parent. Both are needed for complete coverage.
+    //
+    // Event coalescing: WAWebChangePresenceHandlerAction issues 2-3 separate
+    // Backbone .set() calls per server push (nested chatstate.set, parent
+    // set({hasData,isSubscribed,forceDisplay}), then set({stale:false})), plus
+    // the model's internal chatstate->isOnline listener fires its own
+    // change:isOnline. A naive per-key subscription would emit 3-5 times per
+    // push. Instead we listen to the coalesced 'change' events on both the
+    // parent and nested model, and debounce through a microtask so all
+    // synchronous mutations of one push collapse into one presence_update.
+    //
+    // Why both levels: nested chatstate sub-model change events (type, t, deny)
+    // do NOT bubble to the parent. Parent-only events (hasData, stale,
+    // typingUserIds, recordingUserIds) do not fire on the nested model.
     window.WWebJS.presence.bindEvents = () => {
         if (window.WWebJS.presence._bound) return;
         const { PresenceCollection } = window.require(
@@ -1347,19 +1362,46 @@ exports.LoadUtils = () => {
         const bindModel = (model) => {
             if (!model || model._wwebjsPresenceBound) return;
             model._wwebjsPresenceBound = true;
-            model.on(
-                'change:hasData change:isOnline change:forceDisplay change:typingUserIds change:recordingUserIds',
-                () => emit(model),
-            );
+
+            // Microtask debounce: any number of synchronous set() calls on
+            // parent or nested chatstate within the same task collapse into
+            // exactly one emit(model).
+            let scheduled = false;
+            const scheduleEmit = () => {
+                if (scheduled) return;
+                scheduled = true;
+                Promise.resolve().then(() => {
+                    scheduled = false;
+                    emit(model);
+                });
+            };
+            model._wwebjsPresenceSchedule = scheduleEmit;
+
+            model.on('change', scheduleEmit);
             if (model.chatstate && typeof model.chatstate.on === 'function') {
-                model.chatstate.on('change:type change:t change:deny', () =>
-                    emit(model),
-                );
+                model.chatstate.on('change', scheduleEmit);
             }
+        };
+
+        const unbindModel = (model) => {
+            if (!model || !model._wwebjsPresenceBound) return;
+            const handler = model._wwebjsPresenceSchedule;
+            if (handler) {
+                model.off('change', handler);
+                if (
+                    model.chatstate &&
+                    typeof model.chatstate.off === 'function'
+                ) {
+                    model.chatstate.off('change', handler);
+                }
+            }
+            model._wwebjsPresenceBound = false;
+            model._wwebjsPresenceSchedule = null;
         };
 
         (PresenceCollection.models || []).forEach(bindModel);
         PresenceCollection.on('add', bindModel);
+        PresenceCollection.on('remove', unbindModel);
 
         window.WWebJS.presence._bound = true;
     };

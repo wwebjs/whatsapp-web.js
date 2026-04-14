@@ -99,6 +99,19 @@ class ChatPresence extends Base {
          */
         this.isSubscribed = data.isSubscribed;
 
+        /**
+         * True when the cached presence data predates the most recent reconnect or
+         * session reset. Starts `true`, flips to `false` on every fresh server push,
+         * and is re-set to `true` by WhatsApp Web on disconnect (via
+         * `PresenceCollection.clearAllPresence()`). Use as a third freshness signal
+         * alongside `hasData`:
+         * - `hasData && !stale` → fresh and reliable
+         * - `hasData && stale` → data exists but is from before the last disconnect
+         * - `!hasData` → never received a push yet (subscription may still be pending)
+         * @type {boolean}
+         */
+        this.stale = data.stale;
+
         return super._patch(data);
     }
 }

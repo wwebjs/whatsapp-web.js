@@ -1875,6 +1875,14 @@ declare namespace WAWebJS {
          * Sticky — does not reset on its own.
          */
         isSubscribed: boolean;
+        /**
+         * True when the cached data predates the most recent reconnect or
+         * session reset. Starts `true`, flips to `false` on every fresh server
+         * push, and is re-set to `true` on disconnect. Third freshness signal:
+         * `hasData && !stale` means the data is current; `hasData && stale`
+         * means it's from before the last disconnect.
+         */
+        stale: boolean;
     }
 
     export interface BusinessCategory {

@@ -2022,8 +2022,12 @@ class Client extends EventEmitter {
      *
      * For 1:1 chats, this lazily subscribes to presence updates via
      * `PresenceCollection.find()` — subsequent changes emit
-     * {@link Client#event:presence_update}. Repeated calls renew the
-     * subscription since WhatsApp Web has no client-side subscription cache.
+     * {@link Client#event:presence_update}. Repeated calls re-send the
+     * subscribe stanza (useful as a manual renewal). WhatsApp Web also
+     * renews already-subscribed models automatically when the session
+     * transitions from inactive to active (see
+     * `WAWebPresenceCollection.reSubscribeWhenActive`), so manual renewal
+     * is typically only needed for idle sessions or after long gaps.
      *
      * For group chats, `PresenceCollection.find()` does NOT send a subscribe
      * stanza (WhatsApp Web only subscribes to individual users). The returned
@@ -2031,6 +2035,9 @@ class Client extends EventEmitter {
      * typically only while the group is in an active session. `isOnline` is
      * `true` when any member is available; `typingParticipants` /
      * `recordingParticipants` list active members.
+     *
+     * Check {@link ChatPresence#stale} to distinguish fresh data from
+     * pre-reconnect cached data.
      *
      * @param {string} chatId serialized chat id (e.g. '1234567890@c.us')
      * @param {object} [options]
