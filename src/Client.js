@@ -1027,8 +1027,7 @@ class Client extends EventEmitter {
                 /**
                  * Emitted when a chat's presence state changes (online/offline/typing/recording).
                  * Only emitted for chats whose presence has been subscribed to — trigger a
-                 * subscription via {@link Client#getChatPresence}, {@link Chat#getPresence}
-                 * or by passing `includePresence: true` to {@link Client#getChatById}.
+                 * subscription via {@link Client#getChatPresence} or {@link Chat#getPresence}.
                  * @event Client#presence_update
                  * @param {ChatPresence} presence
                  */
@@ -1689,22 +1688,13 @@ class Client extends EventEmitter {
     /**
      * Gets chat or channel instance by ID
      * @param {string} chatId
-     * @param {object} [options]
-     * @param {boolean} [options.includePresence=false] when true and the chat
-     * is a 1:1 user chat, also subscribe to presence and attach the current
-     * {@link ChatPresence} as `chat.presence`. Triggers a short wait for the
-     * first presence push (see {@link Client#getChatPresence}).
      * @returns {Promise<Chat|Channel>}
      */
-    async getChatById(chatId, { includePresence = false } = {}) {
+    async getChatById(chatId) {
         const chat = await this.pupPage.evaluate(async (chatId) => {
             return await window.WWebJS.getChat(chatId);
         }, chatId);
-        const instance = chat ? ChatFactory.create(this, chat) : undefined;
-        if (instance && includePresence && !instance.isGroup) {
-            instance.presence = await this.getChatPresence(chatId);
-        }
-        return instance;
+        return chat ? ChatFactory.create(this, chat) : undefined;
     }
 
     /**
@@ -1743,21 +1733,14 @@ class Client extends EventEmitter {
     /**
      * Get contact instance by ID
      * @param {string} contactId
-     * @param {object} [options]
-     * @param {boolean} [options.includePresence=false] when true, also subscribe
-     * to presence and attach the current {@link ChatPresence} as `contact.presence`.
      * @returns {Promise<Contact>}
      */
-    async getContactById(contactId, { includePresence = false } = {}) {
+    async getContactById(contactId) {
         let contact = await this.pupPage.evaluate((contactId) => {
             return window.WWebJS.getContact(contactId);
         }, contactId);
 
-        const instance = ContactFactory.create(this, contact);
-        if (instance && includePresence) {
-            instance.presence = await this.getChatPresence(contactId);
-        }
-        return instance;
+        return ContactFactory.create(this, contact);
     }
 
     /**
