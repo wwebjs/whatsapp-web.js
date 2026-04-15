@@ -1227,7 +1227,38 @@ exports.LoadUtils = () => {
 
     window.WWebJS.presence = {};
 
-    window.WWebJS.presence.serialize = (model) => {
+    // Resolve the wid we should subscribe presence for and guarantee a
+    // ChatCollection entry exists for it. On LID-migrated clients the
+    // ChatCollection is LID-keyed, so a raw PN wid hits nothing and
+    // PresenceCollection._subscribe silently skips; the inbound handler
+    // WAWebHandlePresence also drops incoming PN presence stanzas.
+    // WAWebFindChat.findOrCreateLatestChat does the full flow WA Web
+    // itself uses: LID resolution (with a contact sync on cache miss),
+    // chat lookup, and local chat creation when needed. chat.id is the
+    // wid we then feed to PresenceCollection.find().
+    window.WWebJS.presence.resolveSubscribeWid = async (wid) => {
+        try {
+            const FindChat = window.require('WAWebFindChat');
+            if (typeof FindChat?.findOrCreateLatestChat !== 'function') {
+                return wid;
+            }
+            try {
+                const res = await FindChat.findOrCreateLatestChat(
+                    wid,
+                    'wwebjs_presence_subscribe',
+                    null,
+                );
+                const chatId = res && res.chat && res.chat.id;
+                return chatId || wid;
+            } catch (_) {
+                return wid; // best effort
+            }
+        } catch (_) {
+            return wid;
+        }
+    };
+
+    window.WWebJS.presence.serialize = (model, displayId) => {
         const idWid = model.id;
         const isGroup = !!model.isGroup;
         const cs = model.chatstate;
@@ -1235,9 +1266,14 @@ exports.LoadUtils = () => {
         const csT = cs ? cs.t : null;
         const csDeny = cs ? cs.deny === true : false;
 
+        // displayId lets callers surface the phone-number form of the id
+        // even when the underlying model is LID-keyed (LID-migrated
+        // clients), so downstream consumers keep seeing @c.us ids.
+        const id = displayId || (idWid && idWid._serialized);
+
         if (isGroup) {
             return {
-                id: idWid._serialized,
+                id,
                 isGroup: true,
                 isOnline: model.isOnline === true,
                 chatstate: null,
@@ -1260,7 +1296,7 @@ exports.LoadUtils = () => {
         // Wire-level 'composing' / 'paused' / 'idle' never surface — the handler
         // maps them to 'typing' and 'available' / 'unavailable' before writing.
         return {
-            id: idWid._serialized,
+            id,
             isGroup: false,
             isOnline: model.isOnline,
             chatstate: csType,
@@ -1307,8 +1343,16 @@ exports.LoadUtils = () => {
             'WAWebPresenceCollection',
         );
         const wid = window.require('WAWebWidFactory').createWid(chatId);
-        await PresenceCollection.find(wid);
-        const model = PresenceCollection.get(wid);
+
+        // Resolve the wid we should actually subscribe for. On LID-migrated
+        // clients this swaps the PN wid for the user's LID wid and ensures
+        // a ChatCollection entry exists, so _subscribe() sends a stanza and
+        // WAWebHandlePresence can route the response to the right model.
+        const subscribeWid =
+            await window.WWebJS.presence.resolveSubscribeWid(wid);
+
+        await PresenceCollection.find(subscribeWid);
+        const model = PresenceCollection.get(subscribeWid);
         if (!model) return null;
 
         if (waitForData) {
@@ -1383,7 +1427,10 @@ exports.LoadUtils = () => {
                 check();
             });
         }
-        return window.WWebJS.presence.serialize(model);
+
+        // Surface the caller's original chatId in the result even if we
+        // subscribed on a LID-keyed model — consumers expect @c.us ids.
+        return window.WWebJS.presence.serialize(model, chatId);
     };
 
     // Binds listeners on every PresenceModel AND its nested chatstate sub-model.
@@ -1408,9 +1455,24 @@ exports.LoadUtils = () => {
 
         const emit = (model) => {
             if (typeof window.onPresenceChangedEvent !== 'function') return;
+            // If the model is LID-keyed (LID-migrated clients), reverse-map
+            // to the phone-number form so external consumers keep seeing
+            // the same @c.us ids they got before the LID migration.
+            let displayId = null;
+            try {
+                const mid = model.id;
+                if (mid && typeof mid.isLid === 'function' && mid.isLid()) {
+                    const pn = window
+                        .require('WAWebApiContact')
+                        .getPhoneNumber(mid);
+                    if (pn && pn._serialized) displayId = pn._serialized;
+                }
+            } catch (_) {
+                /* fall through — emit with raw model id */
+            }
             try {
                 window.onPresenceChangedEvent(
-                    window.WWebJS.presence.serialize(model),
+                    window.WWebJS.presence.serialize(model, displayId),
                 );
             } catch (_) {
                 /* node side detached */
