@@ -97,10 +97,7 @@ declare namespace WAWebJS {
         getBlockedContacts(): Promise<Contact[]>;
 
         /** Gets chat or channel instance by ID */
-        getChatById(
-            chatId: string,
-            options?: { includePresence?: boolean },
-        ): Promise<Chat>;
+        getChatById(chatId: string): Promise<Chat>;
 
         /** Gets a {@link Channel} instance by invite code */
         getChannelByInviteCode(inviteCode: string): Promise<Channel>;
@@ -112,10 +109,7 @@ declare namespace WAWebJS {
         getChannels(): Promise<Channel[]>;
 
         /** Get contact instance by ID */
-        getContactById(
-            contactId: string,
-            options?: { includePresence?: boolean },
-        ): Promise<Contact>;
+        getContactById(contactId: string): Promise<Contact>;
 
         /** Get message by ID */
         getMessageById(messageId: string): Promise<Message>;
@@ -684,8 +678,7 @@ declare namespace WAWebJS {
         /**
          * Emitted when a chat's presence state changes (online/offline/typing/recording).
          * Only fires for chats whose presence has been subscribed to via
-         * {@link Client.getChatPresence}, {@link Chat.getPresence} or the
-         * `includePresence` option on {@link Client.getChatById}.
+         * {@link Client.getChatPresence} or {@link Chat.getPresence}.
          */
         on(
             event: 'presence_update',
@@ -1804,12 +1797,6 @@ declare namespace WAWebJS {
          * without triggering a subscription.
          */
         getPresenceSnapshot: () => Promise<ChatPresence | null>;
-
-        /**
-         * Current presence attached to the contact when fetched via
-         * {@link Client.getContactById} with `includePresence: true`.
-         */
-        presence?: ChatPresence | null;
     }
 
     export interface ContactId {
@@ -2052,11 +2039,6 @@ declare namespace WAWebJS {
          * without triggering a subscription.
          */
         getPresenceSnapshot: () => Promise<ChatPresence | null>;
-        /**
-         * Current presence attached to the chat when it was fetched via
-         * {@link Client.getChatById} with `includePresence: true`.
-         */
-        presence?: ChatPresence | null;
         /** un-archives this chat */
         unarchive: () => Promise<void>;
         /** Unmutes this chat */

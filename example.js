@@ -799,8 +799,7 @@ client.on('vote_update', (vote) => {
 
 client.on('presence_update', (presence) => {
     /** The chat whose presence changed. Only fires after a subscription was
-     * created via client.getChatPresence(), chat.getPresence(), or
-     * client.getChatById(id, { includePresence: true }). */
+     * created via client.getChatPresence() or chat.getPresence(). */
     console.log(
         'PRESENCE',
         presence.id,
