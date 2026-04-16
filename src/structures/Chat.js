@@ -226,7 +226,7 @@ class Chat extends Base {
                     while (msgs.length < searchOptions.limit) {
                         const loadedMessages = await window
                             .require('WAWebChatLoadMessages')
-                            .loadEarlierMsgs(chat, chat.msgs);
+                            .loadEarlierMsgs({ chat });
                         if (!loadedMessages || !loadedMessages.length) break;
                         msgs = [...loadedMessages.filter(msgFilter), ...msgs];
                     }
