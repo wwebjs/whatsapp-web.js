@@ -36,6 +36,21 @@ export default [
         },
     },
     {
+        // be careful, "recommended" settings object has 4 fields:
+        // - name (string)
+        // - plugins (object)
+        // - languageOptions (object)
+        // - rules (object)
+        //
+        // by simple "adding" any of mentioned fields to this object
+        // you REPLACE the "recommended" value.
+        // If you want to PATCH it - consider nested "..." spread operator
+        ...pluginMocha.configs.recommended,
+        name: 'whatsapp-web.js/default/mocha',
+
+        files: ['tests/**/*'],
+    },
+    {
         name: 'whatsapp-web.js/default/ignores',
         ignores: [
             'node_modules',
@@ -48,6 +63,5 @@ export default [
             '.wwebjs_cache',
         ],
     },
-    pluginMocha.configs.recommended,
     configEslintConfigPrettier,
 ];
