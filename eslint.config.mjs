@@ -11,9 +11,7 @@ export default [
             mocha: pluginMocha,
         },
         languageOptions: {
-            // // TODO: consider moving to:
-            // ecmaVersion: 2025,
-            ecmaVersion: 2022,
+            ecmaVersion: 2025,
 
             globals: {
                 ...globals.browser,
