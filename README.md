@@ -10,9 +10,9 @@
                 src="https://img.shields.io/npm/v/whatsapp-web.js.svg" alt="npm" /></a>
         <a href="https://www.npmjs.com/package/whatsapp-web.js"><img alt="NPM Downloads"
                 src="https://img.shields.io/npm/d18m/whatsapp-web.js" /></a>
-        <a href="https://github.com/pedroslopez/whatsapp-web.js/graphs/contributors"><img alt="GitHub contributors"
-                src="https://img.shields.io/github/contributors-anon/pedroslopez/whatsapp-web.js" /></a>
-        <a href="https://depfu.com/github/pedroslopez/whatsapp-web.js?project_id=9765"><img
+        <a href="https://github.com/wwebjs/whatsapp-web.js/graphs/contributors"><img alt="GitHub contributors"
+                src="https://img.shields.io/github/contributors-anon/wwebjs/whatsapp-web.js" /></a>
+        <a href="https://depfu.com/github/wwebjs/whatsapp-web.js?project_id=9765"><img
                 src="https://badges.depfu.com/badges/4a65a0de96ece65fdf39e294e0c8dcba/overview.svg" alt="Depfu" /></a>
         <a href="https://discord.wwebjs.dev"><img
                 src="https://img.shields.io/discord/698610475432411196.svg?logo=discord" alt="Discord server" /></a>
@@ -142,16 +142,16 @@ limitations under the License.
 [guide]: https://guide.wwebjs.dev/guide
 [guide-source]: https://github.com/wwebjs/wwebjs.dev/tree/main
 [documentation]: https://docs.wwebjs.dev/
-[documentation-source]: https://github.com/pedroslopez/whatsapp-web.js/tree/main/docs
+[documentation-source]: https://github.com/wwebjs/whatsapp-web.js/tree/main/docs
 [discord]: https://discord.wwebjs.dev
-[gitHub]: https://github.com/pedroslopez/whatsapp-web.js
+[gitHub]: https://github.com/wwebjs/whatsapp-web.js
 [npm]: https://npmjs.org/package/whatsapp-web.js
 [nodejs]: https://nodejs.org/en/download/
-[examples]: https://github.com/pedroslopez/whatsapp-web.js/blob/main/example.js
+[examples]: https://github.com/wwebjs/whatsapp-web.js/blob/main/example.js
 [auth-strategies]: https://wwebjs.dev/guide/creating-your-bot/authentication.html
 [google-chrome]: https://wwebjs.dev/guide/creating-your-bot/handling-attachments.html#caveat-for-sending-videos-and-gifs
 [deprecated-video]: https://www.youtube.com/watch?v=hv1R1rLeVVE
-[gitHub-sponsors]: https://github.com/sponsors/pedroslopez
+[gitHub-sponsors]: https://github.com/sponsors/wwebjs
 [support-payPal]: https://www.paypal.me/psla/
 [contributing]: .github/CONTRIBUTING.md
 [whatsapp]: https://whatsapp.com

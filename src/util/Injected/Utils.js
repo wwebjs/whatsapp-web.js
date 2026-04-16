@@ -1026,11 +1026,7 @@ exports.LoadUtils = () => {
         if (!res.isBlocked) {
             const alt = window
                 .require('WAWebApiContact')
-                .getAlternateUserWid(
-                    window
-                        .require('WAWebWidFactory')
-                        .asUserWidOrThrow(contact.id),
-                );
+                .getAlternateUserWid(wid);
             if (alt) {
                 res.isBlocked = !!window
                     .require('WAWebCollections')
@@ -1080,19 +1076,17 @@ exports.LoadUtils = () => {
         const contacts = window
             .require('WAWebCollections')
             .Contact.getModelsArray();
-        return contacts.map(async (contact) => {
-            if (contact.isBusiness || contact.isEnterprise) {
-                const contactWid = window
-                    .require('WAWebWidFactory')
-                    .createWid(contact.id);
-                const bizProfile = await window
-                    .require('WAWebCollections')
-                    .BusinessProfile.find(contactWid);
-                bizProfile.profileOptions &&
-                    (contact.businessProfile = bizProfile);
-            }
-            return window.WWebJS.getContactModel(contact);
-        });
+        return Promise.all(
+            contacts.map(async (contact) => {
+                if (contact.isBusiness || contact.isEnterprise) {
+                    await window
+                        .require('WAWebCollections')
+                        .BusinessProfile.find(contact.id)
+                        .catch(() => {});
+                }
+                return window.WWebJS.getContactModel(contact);
+            }),
+        );
     };
 
     window.WWebJS.mediaInfoToFile = ({ data, mimetype, filename }) => {

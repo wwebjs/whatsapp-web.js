@@ -1020,8 +1020,7 @@ class Client extends EventEmitter {
         );
 
         await this.pupPage.evaluate(() => {
-            const { Msg, Chat, WAWebCallCollection } =
-                window.require('WAWebCollections');
+            const { Msg, Chat } = window.require('WAWebCollections');
             const AppState = window.require('WAWebSocketModel').Socket;
 
             // Enable placeholder message resend (recovery for ciphertext messages)
@@ -1069,13 +1068,31 @@ class Client extends EventEmitter {
                 .Conn.on('change:battery', (state) => {
                     window.onBatteryStateChangedEvent(state);
                 });
+            const WAWebCallCollection = window.require('WAWebCallCollection');
             if (
                 WAWebCallCollection &&
                 typeof WAWebCallCollection.on === 'function'
             ) {
-                WAWebCallCollection.on('add', (call) => {
-                    window.onIncomingCall(call);
-                });
+                const mapKey = Object.keys(WAWebCallCollection).find(
+                    (k) => WAWebCallCollection[k] instanceof Map,
+                );
+                const internalCallMap = WAWebCallCollection[mapKey];
+                const originalMapSet =
+                    internalCallMap.set.bind(internalCallMap);
+
+                internalCallMap.set = function (key, value) {
+                    window.onIncomingCall({
+                        id: value.id,
+                        peerJid: value.peerJid,
+                        isVideo: value.isVideo,
+                        isGroup: value.isGroup,
+                        canHandleLocally: value.canHandleLocally,
+                        outgoing: value.outgoing,
+                        webClientShouldHandle: value.webClientShouldHandle,
+                        participants: value.participants,
+                    });
+                    return originalMapSet(key, value);
+                };
             }
             Chat.on('remove', async (chat) => {
                 window.onRemoveChatEvent(
@@ -1422,7 +1439,7 @@ class Client extends EventEmitter {
                 )
             ) {
                 console.warn(
-                    'Mentions with an array of Contact are now deprecated. See more at https://github.com/pedroslopez/whatsapp-web.js/pull/2166.',
+                    'Mentions with an array of Contact are now deprecated. See more at https://github.com/wwebjssapp-web.js/pull/2166.',
                 );
                 options.mentions = options.mentions.map(
                     (a) => a.id._serialized,
@@ -1538,6 +1555,33 @@ class Client extends EventEmitter {
         );
 
         return sentMsg ? new Message(this, sentMsg) : undefined;
+    }
+
+    /**
+     * Send an emoji reaction to a specific message
+     * @param {string} messageId - Id of the message to add the reaction.
+     * @param {string} reaction  - Emoji to react with. Send an empty string to remove the reaction.
+     * @return {Promise}
+     */
+    async sendReaction(messageId, reaction) {
+        await this.pupPage.evaluate(
+            async (messageId, reaction) => {
+                if (!messageId) return null;
+                const msg =
+                    window.require('WAWebCollections').Msg.get(messageId) ||
+                    (
+                        await window
+                            .require('WAWebCollections')
+                            .Msg.getMessagesById([messageId])
+                    )?.messages?.[0];
+                if (!msg) return null;
+                await window
+                    .require('WAWebSendReactionMsgAction')
+                    .sendReactionToMsg(msg, reaction);
+            },
+            messageId,
+            reaction,
+        );
     }
 
     /**
