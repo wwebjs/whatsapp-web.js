@@ -5,7 +5,7 @@ import InterfaceController from './src/util/InterfaceController';
 
 declare namespace WAWebJS {
     export class Client extends EventEmitter {
-        constructor(options: ClientOptions);
+        constructor(options?: ClientOptions);
 
         /** Current connection information */
         public info: ClientInfo;
