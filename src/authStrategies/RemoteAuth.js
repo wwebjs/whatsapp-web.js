@@ -59,6 +59,9 @@ class RemoteAuth extends BaseAuthStrategy {
             fs.accessSync(process.cwd(), fs.constants.W_OK);
             this.zipDir = process.cwd();
         } catch {
+            console.warn(
+                `[RemoteAuth] (${process.cwd()}) is not writable. Falling back to dataPath (${this.dataPath}) for session zips.`,
+            );
             this.zipDir = this.dataPath;
         }
         this.tempDir = `${this.dataPath}/wwebjs_temp_session_${this.clientId}`;
