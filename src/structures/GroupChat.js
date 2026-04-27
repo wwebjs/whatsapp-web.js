@@ -569,7 +569,65 @@ class GroupChat extends Chat {
 
         return success;
     }
+ /**
+ * Sets or updates your member tag in this group.
+ * Max 30 characters, plain text only (no special characters, checkmarks, or links).
+ * @param {string} label - The tag text to set
+ * @returns {Promise<boolean>} Returns true if the tag was saved successfully
+ */
+async setMemberTag(label) {
+    if (typeof label !== 'string' || label.trim().length === 0) {
+        throw new Error('Member tag must be a non-empty string');
+    }
+    if (label.length > 30) {
+        throw new Error('Member tag must be 30 characters or less');
+    }
 
+    return this.client.pupPage.evaluate(async (chatId, label) => {
+        const chat = await window.WWebJS.getChat(chatId, { getAsModel: false });
+        if (!chat) return false;
+
+        const result = await window
+            .require('WAWebSendMemberLabelAction')
+            .sendMemberLabelMsg(chat, label.trim());
+
+        return result?.messageSendResult === 'OK';
+    }, this.id._serialized, label);
+}
+
+/**
+ * Deletes your member tag in this group.
+ * @returns {Promise<boolean>} Returns true if the tag was deleted successfully
+ */
+async deleteMemberTag() {
+    return this.client.pupPage.evaluate(async (chatId) => {
+        const chat = await window.WWebJS.getChat(chatId, { getAsModel: false });
+        if (!chat) return false;
+
+        const result = await window
+            .require('WAWebSendMemberLabelAction')
+            .sendMemberLabelMsg(chat, '');
+
+        return result?.messageSendResult === 'OK';
+    }, this.id._serialized);
+}
+
+/**
+ * Gets your current member tag in this group.
+ * @returns {Promise<string|null>} The current tag string, or null if not set
+ */
+async getMemberTag() {
+    return this.client.pupPage.evaluate(async (chatId) => {
+        const chat = await window.WWebJS.getChat(chatId, { getAsModel: false });
+        if (!chat) return null;
+
+        const label = window
+            .require('WAWebMemberLabelsFrontendUtils')
+            .getMyMemberLabelStringForChat(chat);
+
+        return label ?? null;
+    }, this.id._serialized);
+}
     /**
      * Gets the invite code for a specific group
      * @returns {Promise<string>} Group's invite code
