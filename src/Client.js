@@ -1,7 +1,7 @@
 'use strict';
 
 const EventEmitter = require('events');
-const puppeteer = require('puppeteer');
+var puppeteer = require('puppeteer');
 
 const Util = require('./util/Util');
 const InterfaceController = require('./util/InterfaceController');
@@ -442,6 +442,16 @@ class Client extends EventEmitter {
         await this.authStrategy.beforeBrowserInitialized();
 
         const puppeteerOpts = this.options.puppeteer;
+        if(puppeteerOpts && puppeteerOpts.usePuppeteerExtra){
+            puppeteer = require('puppeteer-extra');
+
+            if(typeof puppeteerOpts.pluginsPuppeteerExtra == "object") {
+                puppeteerOpts.pluginsPuppeteerExtra.map(function (plugin) {
+                    puppeteer.use(plugin);
+                });
+            }
+        }
+
         if (
             puppeteerOpts &&
             (puppeteerOpts.browserWSEndpoint || puppeteerOpts.browserURL)
@@ -465,6 +475,17 @@ class Client extends EventEmitter {
             });
             page = (await browser.pages())[0];
         }
+
+        //Puppeteer extra sometimes don't trigger on the first page, so lets close all openned pages except the new one we will create
+        if(puppeteerOpts && puppeteerOpts.usePuppeteerExtra){
+            await browser.newPage();
+            let pages = (await browser.pages());
+            for(let i=0; i < pages.length -1 ; i++){ //length -1 so we dont close the last page
+                pages[i].close();
+            }
+            page = pages[pages.length-1];
+        }
+
 
         if (this.options.proxyAuthentication !== undefined) {
             await page.authenticate(this.options.proxyAuthentication);
