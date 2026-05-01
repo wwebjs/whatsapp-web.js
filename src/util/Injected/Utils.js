@@ -548,7 +548,7 @@ exports.LoadUtils = () => {
                     ),
                     cannotBeRanked: window
                         .require('WAWebStatusGatingUtils')
-                        .canCheckStatusRankingPosterGating(),
+                        ?.canCheckStatusRankingPosterGating?.() || false,
                 },
             );
 
