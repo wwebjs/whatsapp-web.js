@@ -49,7 +49,7 @@
         "chai": "^4.5.0",
         "chai-as-promised": "^7.1.2",
         "dotenv": "^16.6.1",
-        "eslint": "^9.39.4",
+        "eslint": "^10.3.0",
         "eslint-config-prettier": "^10.1.8",
         "eslint-plugin-mocha": "^11.2.0",
         "eslint-plugin-prettier": "^5.5.5",
