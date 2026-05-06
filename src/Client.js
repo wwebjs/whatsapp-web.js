@@ -487,7 +487,6 @@ class Client extends EventEmitter {
         await page.goto(WhatsWebURL, {
             waitUntil: 'load',
             timeout: 0,
-            referer: 'https://whatsapp.com/',
         });
 
         await this.inject();
