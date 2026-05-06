@@ -442,10 +442,10 @@ class Client extends EventEmitter {
         await this.authStrategy.beforeBrowserInitialized();
 
         const puppeteerOpts = this.options.puppeteer;
-        if(puppeteerOpts && puppeteerOpts.usePuppeteerExtra){
+        if (puppeteerOpts && puppeteerOpts.usePuppeteerExtra) {
             puppeteer = require('puppeteer-extra');
 
-            if(typeof puppeteerOpts.pluginsPuppeteerExtra == "object") {
+            if (typeof puppeteerOpts.pluginsPuppeteerExtra == 'object') {
                 puppeteerOpts.pluginsPuppeteerExtra.map(function (plugin) {
                     puppeteer.use(plugin);
                 });
@@ -477,15 +477,14 @@ class Client extends EventEmitter {
         }
 
         //Puppeteer extra sometimes don't trigger on the first page, so lets close all openned pages except the new one we will create
-        if(puppeteerOpts && puppeteerOpts.usePuppeteerExtra){
+        if (puppeteerOpts && puppeteerOpts.usePuppeteerExtra) {
             await browser.newPage();
-            let pages = (await browser.pages());
-            for(let i=0; i < pages.length -1 ; i++){ //length -1 so we dont close the last page
+            let pages = ( await browser.pages() );
+            for (let i = 0; i < pages.length - 1 ; i++) { //length -1 so we dont close the last page
                 pages[i].close();
             }
-            page = pages[pages.length-1];
+            page = pages[pages.length - 1];
         }
-
 
         if (this.options.proxyAuthentication !== undefined) {
             await page.authenticate(this.options.proxyAuthentication);
