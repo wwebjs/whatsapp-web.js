@@ -55,6 +55,15 @@ class RemoteAuth extends BaseAuthStrategy {
         this.clientId = clientId;
         this.backupSyncIntervalMs = backupSyncIntervalMs;
         this.dataPath = path.resolve(dataPath || './.wwebjs_auth/');
+        try {
+            fs.accessSync(process.cwd(), fs.constants.W_OK);
+            this.zipDir = process.cwd();
+        } catch {
+            console.warn(
+                `[RemoteAuth] (${process.cwd()}) is not writable. Falling back to dataPath (${this.dataPath}) for session zips.`,
+            );
+            this.zipDir = this.dataPath;
+        }
         this.tempDir = `${this.dataPath}/wwebjs_temp_session_${this.clientId}`;
         this.requiredDirs = [
             'Default',
@@ -163,7 +172,7 @@ class RemoteAuth extends BaseAuthStrategy {
     async extractRemoteSession() {
         const pathExists = await this.isValidPath(this.userDataDir);
         const compressedSessionPath = path.join(
-            this.dataPath,
+            this.zipDir,
             `${this.sessionName}.zip`,
         );
         const sessionExists = await this.store.sessionExists({
@@ -205,7 +214,7 @@ class RemoteAuth extends BaseAuthStrategy {
         await this.copyByRequiredDirs(userDataDefaultPath, stageDefaultPath);
 
         const archive = archiver('zip');
-        const outPath = path.join(this.dataPath, `${this.sessionName}.zip`);
+        const outPath = path.join(this.zipDir, `${this.sessionName}.zip`);
         const out = fs.createWriteStream(outPath);
 
         await new Promise((resolve, reject) => {
