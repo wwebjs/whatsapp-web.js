@@ -1105,6 +1105,63 @@ exports.LoadUtils = () => {
         });
     };
 
+    /**
+     * Resolves the media blob and metadata for a message.
+     * Shared by downloadMedia and downloadMediaStream.
+     * @param {string} msgId
+     * @returns {Promise<{blob: Blob, mimetype: string, filename: string, filesize: number}|null>}
+     */
+    window.WWebJS.resolveMediaBlob = async (msgId) => {
+        const { Msg } = window.require('WAWebCollections');
+        const msg =
+            Msg.get(msgId) ||
+            (await Msg.getMessagesById([msgId]))?.messages?.[0];
+
+        if (
+            !msg ||
+            !msg.mediaData ||
+            msg.mediaData.mediaStage === 'REUPLOADING'
+        ) {
+            return null;
+        }
+
+        // Always call internal downloadMedia - never skip based on
+        // mediaStage, because cache eviction can leave stage=RESOLVED
+        // with empty InMemoryMediaBlobCache.
+        await msg.downloadMedia({
+            downloadEvenIfExpensive: true,
+            rmrReason: 1,
+            isUserInitiated: true,
+        });
+
+        if (
+            msg.mediaData.mediaStage.includes('ERROR') ||
+            msg.mediaData.mediaStage === 'FETCHING'
+        ) {
+            return null;
+        }
+
+        const cached = window
+            .require('WAWebMediaInMemoryBlobCache')
+            .InMemoryMediaBlobCache.get(msg.mediaObject?.filehash);
+
+        let blob;
+        if (cached) {
+            blob = cached;
+        } else if (msg.mediaObject?.mediaBlob) {
+            blob = msg.mediaObject.mediaBlob.forceToBlob();
+        }
+
+        if (!blob) return null;
+
+        return {
+            blob,
+            mimetype: msg.mimetype,
+            filename: msg.filename,
+            filesize: msg.size,
+        };
+    };
+
     window.WWebJS.arrayBufferToBase64 = (arrayBuffer) => {
         let binary = '';
         const bytes = new Uint8Array(arrayBuffer);
