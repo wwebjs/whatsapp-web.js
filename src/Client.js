@@ -666,35 +666,28 @@ class Client extends EventEmitter {
             },
         );
 
-        let last_message;
-
         await exposeFunctionIfAbsent(
             this.pupPage,
             'onChangeMessageTypeEvent',
             (msg) => {
-                if (msg.type === 'revoked') {
-                    const message = new Message(this, msg);
-                    let revoked_msg;
-                    if (last_message && msg.id.id === last_message.id.id) {
-                        revoked_msg = new Message(this, last_message);
+                const originalKey = msg.protocolMessageKey;
+                const message = new Message(this, { ...msg, id: originalKey });
+                const revoked_msg = originalKey
+                    ? new Message(this, { id: originalKey })
+                    : undefined;
 
-                        if (message.protocolMessageKey)
-                            revoked_msg.id = { ...message.protocolMessageKey };
-                    }
-
-                    /**
-                     * Emitted when a message is deleted for everyone in the chat.
-                     * @event Client#message_revoke_everyone
-                     * @param {Message} message The message that was revoked, in its current state. It will not contain the original message's data.
-                     * @param {?Message} revoked_msg The message that was revoked, before it was revoked. It will contain the message's original data.
-                     * Note that due to the way this data is captured, it may be possible that this param will be undefined.
-                     */
-                    this.emit(
-                        Events.MESSAGE_REVOKED_EVERYONE,
-                        message,
-                        revoked_msg,
-                    );
-                }
+                /**
+                 * Emitted when a message is deleted for everyone in the chat.
+                 * @event Client#message_revoke_everyone
+                 * @param {Message} message The message that was revoked, in its current state. It will not contain the original message's data.
+                 * @param {?Message} revoked_msg The message that was revoked, before it was revoked. It will contain the message's original data.
+                 * Note that due to the way this data is captured, it may be possible that this param will be undefined.
+                 */
+                this.emit(
+                    Events.MESSAGE_REVOKED_EVERYONE,
+                    message,
+                    revoked_msg,
+                );
             },
         );
 
@@ -702,10 +695,6 @@ class Client extends EventEmitter {
             this.pupPage,
             'onChangeMessageEvent',
             (msg) => {
-                if (msg.type !== 'revoked') {
-                    last_message = msg;
-                }
-
                 /**
                  * The event notification that is received when one of
                  * the group participants changes their phone number.
@@ -1033,6 +1022,7 @@ class Client extends EventEmitter {
                 window.onChangeMessageEvent(window.WWebJS.getMessageModel(msg));
             });
             Msg.on('change:type', (msg) => {
+                if (msg.type !== 'revoked') return;
                 window.onChangeMessageTypeEvent(
                     window.WWebJS.getMessageModel(msg),
                 );
