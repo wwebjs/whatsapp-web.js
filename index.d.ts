@@ -969,9 +969,8 @@ declare namespace WAWebJS {
         body: string;
         /** ID for the Chat that this groupNotification was sent for */
         chatId: string;
-        /** ID that represents the groupNotification
-         *  @todo create a more specific type for the id object */
-        id: object;
+        /** ID that represents the groupNotification */
+        id: MessageId;
         /** Contact IDs for the users that were affected by this GroupNotification */
         recipientIds: string[];
         /** Unix timestamp for when the groupNotification was created */
@@ -1195,6 +1194,8 @@ declare namespace WAWebJS {
         isGif: boolean;
         /** Indicates if the message will disappear after it expires */
         isEphemeral: boolean;
+        /** Indicates if the message is a view once message */
+        isViewOnce: boolean;
         /** ID for the Chat that this message was sent to, except if the message was sent by the current user */
         from: string;
         /** Indicates if the message was sent by the current user */
@@ -1277,11 +1278,17 @@ declare namespace WAWebJS {
         rawData: object;
         pollName: string;
         /** Avaiaible poll voting options */
-        pollOptions: string[];
+        pollOptions: Array<{ name: string; localId: number }>;
         /** False for a single choice poll, true for a multiple choice poll */
         allowMultipleAnswers: boolean;
+        /** Indicates if the poll vote is invalidated */
+        pollInvalidated: boolean;
+        /** Indicates if the poll was created as a CAG poll */
+        isSentCagPollCreation: boolean;
+        /** The name of the scheduled event */
+        eventName?: string;
         /** The start time of the event in timestamp (10 digits) */
-        eventStartTime: number;
+        eventStartTime?: number;
         /** The end time of the event in timestamp (10 digits) */
         eventEndTime?: number;
         /** The event description */
@@ -1295,7 +1302,7 @@ declare namespace WAWebJS {
         /** WhatsApp call link (video call or voice call) */
         eventJoinLink?: string;
         /** Indicates if an event should be sent as an already canceled */
-        isEventCaneled: boolean;
+        isEventCanceled?: boolean;
         /** The custom message secret, can be used as an event ID */
         messageSecret?: Array<number>;
         /*

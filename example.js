@@ -766,14 +766,12 @@ client.on('group_membership_request', async (notification) => {
      */
     console.log(notification);
     /** You can approve or reject the newly appeared membership request: */
-    await client.approveGroupMembershipRequestss(
-        notification.chatId,
-        notification.author,
-    );
-    await client.rejectGroupMembershipRequests(
-        notification.chatId,
-        notification.author,
-    );
+    await client.approveGroupMembershipRequests(notification.chatId, {
+        requesterIds: notification.author,
+    });
+    await client.rejectGroupMembershipRequests(notification.chatId, {
+        requesterIds: notification.author,
+    });
 });
 
 client.on('message_reaction', async (reaction) => {
