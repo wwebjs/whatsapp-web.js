@@ -9,20 +9,25 @@ concurrency:
     cancel-in-progress: true
 
 jobs:
-    tests:
-        name: Tests
+    unit-tests:
+        name: Unit tests (Node ${{ matrix.node-version }})
         runs-on: ubuntu-latest
+        strategy:
+            fail-fast: false
+            matrix:
+                node-version: [18, 20, 22]
         steps:
             - name: Checkout repository
               uses: actions/checkout@v6
 
-            - name: Install Node.js v20
+            - name: Install Node.js v${{ matrix.node-version }}
               uses: actions/setup-node@v6
               with:
-                  node-version: 20
+                  node-version: ${{ matrix.node-version }}
+                  cache: npm
 
             - name: Install dependencies
-              run: npm install
+              run: npm ci
 
-            - name: Run Eslint
-              run: npm run lint
+            - name: Run unit tests
+              run: npm run test:unit

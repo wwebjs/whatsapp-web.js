@@ -3,12 +3,12 @@ const chaiAsPromised = require('chai-as-promised');
 const sinon = require('sinon');
 
 const helper = require('./helper');
-const Chat = require('../src/structures/Chat');
-const Contact = require('../src/structures/Contact');
-const Message = require('../src/structures/Message');
-const MessageMedia = require('../src/structures/MessageMedia');
-const Location = require('../src/structures/Location');
-const { MessageTypes, DefaultOptions } = require('../src/util/Constants');
+const Chat = require('../../src/structures/Chat');
+const Contact = require('../../src/structures/Contact');
+const Message = require('../../src/structures/Message');
+const MessageMedia = require('../../src/structures/MessageMedia');
+const Location = require('../../src/structures/Location');
+const { MessageTypes, DefaultOptions } = require('../../src/util/Constants');
 
 const expect = chai.expect;
 chai.use(chaiAsPromised);

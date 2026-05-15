@@ -1,16 +1,14 @@
-# Running Tests
+# Tests
 
-These tests require an authenticated WhatsApp Web session, as well as an additional phone that you can send messages to.
+The test suite is split into two tiers:
 
-This can be configured using the following environment variables:
+- [`tests/unit`](./unit) — fast, hermetic tests that don't require Chromium, a network connection, or a WhatsApp session. Run on every CI build.
+- [`tests/integration`](./integration) — end-to-end tests that drive a real browser against WhatsApp Web. They require an authenticated session and a second phone number, so they are opt-in (see [`integration/README.md`](./integration/README.md)).
 
-- `WWEBJS_TEST_CLIENT_ID`: `clientId` to use for local file based authentication (required for authenticated tests).
-- `WWEBJS_TEST_REMOTE_ID`: A valid WhatsApp ID that you can send messages to, e.g. `123456789@c.us`. It should be different from the ID used by the provided session (required).
-
-You can create a `.env` file in the root directory with these variables. See `.env.example` for a template.
-
-To run the tests:
+## Commands
 
 ```bash
-npm test
+npm test                  # unit tests only (default)
+npm run test:unit         # unit tests
+npm run test:integration  # integration tests (requires env vars, see integration/README.md)
 ```
