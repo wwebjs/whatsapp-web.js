@@ -1,4 +1,4 @@
-const { Client, LocalAuth } = require('..');
+const { Client, LocalAuth } = require('../..');
 
 require('dotenv').config();
 

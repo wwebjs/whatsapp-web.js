@@ -5,7 +5,9 @@
     "main": "./index.js",
     "typings": "./index.d.ts",
     "scripts": {
-        "test": "mocha tests --recursive --timeout 5000",
+        "test": "npm run test:unit",
+        "test:unit": "mocha \"tests/unit/**/*.test.js\" --timeout 5000",
+        "test:integration": "mocha tests/integration --recursive --timeout 5000",
         "test-single": "mocha",
         "shell": "node --experimental-repl-await ./shell.js",
         "generate-docs": "npx jsdoc --configure .jsdoc.json --verbose",
