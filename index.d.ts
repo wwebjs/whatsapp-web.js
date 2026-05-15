@@ -38,6 +38,12 @@ declare namespace WAWebJS {
         acceptGroupV4Invite: (
             inviteV4: InviteV4Data,
         ) => Promise<{ status: number }>;
+        /** Sets or updates your member tag in this group. Max 30 characters, plain text only. */
+        setMemberTag(label: string): Promise<boolean>;
+        /** Deletes your member tag in this group. */
+        deleteMemberTag(): Promise<boolean>;
+        /** Gets your current member tag in this group, or null if not set. */
+        getMemberTag(): Promise<string | null>;
 
         /**Returns an object with information about the invite code's group */
         getInviteInfo(inviteCode: string): Promise<object>;
