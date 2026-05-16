@@ -307,6 +307,12 @@ class Message extends Base {
          */
         this.links = data.links;
 
+        /**
+         * Indicates if the message is a view once message
+         * @type {boolean}
+         */
+        this.isViewOnce = data.isViewOnce;
+
         /** Buttons */
         if (data.dynamicReplyButtons) {
             this.dynamicReplyButtons = data.dynamicReplyButtons;
@@ -339,6 +345,16 @@ class Message extends Base {
                       (key) => data.messageSecret[key],
                   )
                 : [];
+        }
+
+        if (this.type === MessageTypes.SCHEDULED_EVENT_CREATION) {
+            this.eventName = data.eventName;
+            this.eventStartTime = data.eventStartTime;
+            this.eventEndTime = data.eventEndTime;
+            this.eventDescription = data.eventDescription;
+            this.eventLocation = data.eventLocation;
+            this.eventJoinLink = data.eventJoinLink;
+            this.isEventCanceled = data.isEventCanceled;
         }
 
         return super._patch(data);
