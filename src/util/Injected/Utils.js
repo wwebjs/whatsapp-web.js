@@ -546,9 +546,7 @@ exports.LoadUtils = () => {
                     messageSecret: window.crypto.getRandomValues(
                         new Uint8Array(32),
                     ),
-                    cannotBeRanked: window
-                        .require('WAWebStatusGatingUtils')
-                        .canCheckStatusRankingPosterGating(),
+                    cannotBeRanked: window.require('WAWebStatusGatingUtils')?.canCheckStatusRankingPosterGating ? window.require('WAWebStatusGatingUtils').canCheckStatusRankingPosterGating() : false,
                 },
             );
 
