@@ -1335,6 +1335,13 @@ exports.LoadUtils = () => {
     };
 
     window.WWebJS.rejectCall = async (peerJid, id) => {
+        const stack = await window.WWebJS.getCallStackInterface();
+        if (stack && typeof stack.rejectCall === 'function') {
+            await stack.rejectCall();
+            return;
+        }
+
+        // Fallback signaling stanza for older WhatsApp Web builds.
         const _meUser = window
             .require('WAWebUserPrefsMeUser')
             .getMaybeMePnUser();
@@ -1356,6 +1363,181 @@ exports.LoadUtils = () => {
             ],
         );
         await window.require('WADeprecatedSendIq').deprecatedCastStanza(stanza);
+    };
+
+    window.WWebJS.getCallStackInterface = async () => {
+        return window
+            .require('WAWebVoipStackInterface')
+            .getVoipStackInterface();
+    };
+
+    window.WWebJS.setupCallMediaStream = () => {
+        const store = window.WWebJS;
+        if (store._callMedia && store._callMedia.context.state !== 'closed') {
+            return store._callMedia;
+        }
+
+        const AudioContextClass =
+            window.AudioContext || window.webkitAudioContext;
+        const context = new AudioContextClass();
+        const master = context.createGain();
+        master.gain.value = 1;
+
+        store._callMedia = { context, master, destinations: [] };
+
+        // WhatsApp acquires the microphone through this single entry point.
+        // Patch it once so the outgoing audio track is fed from our own graph
+        // instead of a physical device. A fresh destination is handed out on
+        // every call because WhatsApp stops the track when the stream is
+        // disposed, which would permanently silence a shared destination.
+        const mediaModule = window.require('WAGetUserMedia');
+        if (!mediaModule._wwebjsPatched) {
+            const original = mediaModule.getUserMedia;
+            mediaModule._wwebjsPatched = true;
+            mediaModule.getUserMedia = (constraints) => {
+                const media = window.WWebJS._callMedia;
+                if ((constraints && constraints.video) || !media) {
+                    return original(constraints);
+                }
+                const destination =
+                    media.context.createMediaStreamDestination();
+                media.master.connect(destination);
+                media.destinations.push(destination);
+                return Promise.resolve(destination.stream);
+            };
+        }
+
+        return store._callMedia;
+    };
+
+    window.WWebJS.playCallAudio = async (base64) => {
+        const { context, master } = window.WWebJS.setupCallMediaStream();
+        if (context.state === 'suspended') {
+            await context.resume();
+        }
+
+        const binary = atob(base64);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) {
+            bytes[i] = binary.charCodeAt(i);
+        }
+
+        const buffer = await context.decodeAudioData(bytes.buffer);
+        const source = context.createBufferSource();
+        source.buffer = buffer;
+        source.connect(master);
+
+        return new Promise((resolve) => {
+            source.onended = () => resolve(buffer.duration);
+            source.start();
+        });
+    };
+
+    window.WWebJS.acceptCall = async (callId, isVideo = false) => {
+        window.WWebJS.setupCallMediaStream();
+        const stack = await window.WWebJS.getCallStackInterface();
+        await stack.acceptCall(callId, isVideo);
+        return true;
+    };
+
+    window.WWebJS.endCall = async (callId) => {
+        const stack = await window.WWebJS.getCallStackInterface();
+        const { CALL_TERM_REASON } = window.require(
+            'WAWebWamEnumCallTermReason',
+        );
+        await stack.endCall(callId, CALL_TERM_REASON.ENDED_BY_USER);
+        return true;
+    };
+
+    window.WWebJS.startCall = async (
+        chatId,
+        isVideo = false,
+        waitForAnswer = false,
+        timeout = 60000,
+    ) => {
+        window.WWebJS.setupCallMediaStream();
+
+        let wid;
+        const target = String(chatId);
+        if (target.includes('@')) {
+            wid = window.require('WAWebWidFactory').createWid(target);
+        } else {
+            const result = await window
+                .require('WAWebQueryExistsJob')
+                .queryPhoneExists('+' + target.replace(/\D/g, ''));
+            if (!result || !result.wid) {
+                throw new Error(
+                    'The provided phone number is not registered on WhatsApp',
+                );
+            }
+            wid = result.wid;
+        }
+
+        const { CALL_FROM_UI } = window.require('WAWebWamEnumCallFromUi');
+        await window
+            .require('WAWebVoipStartCall')
+            .startWAWebVoipCall(wid, isVideo, CALL_FROM_UI.CONVERSATION);
+
+        // The call is registered in the collection shortly after the offer is
+        // sent, so wait for it to become available before returning its data.
+        const collection = window.require('WAWebCallCollection');
+        let call = collection.lastActiveCall;
+        for (let i = 0; i < 30 && !call; i++) {
+            await new Promise((resolve) => setTimeout(resolve, 100));
+            call = collection.lastActiveCall;
+        }
+
+        // Optionally block until the callee answers (or the timeout elapses).
+        if (call && waitForAnswer) {
+            const deadline = Date.now() + timeout;
+            while (Date.now() < deadline) {
+                if (
+                    collection.isInConnectedCall &&
+                    collection.lastActiveCall &&
+                    collection.lastActiveCall.id === call.id
+                ) {
+                    break;
+                }
+                await new Promise((resolve) => setTimeout(resolve, 200));
+            }
+        }
+
+        return call
+            ? {
+                  id: call.id,
+                  peerJid: call.peerJid?._serialized,
+                  isVideo: call.isVideo,
+                  isGroup: call.isGroup,
+                  outgoing: call.outgoing,
+              }
+            : null;
+    };
+
+    window.WWebJS.isCallConnected = (callId) => {
+        const collection = window.require('WAWebCallCollection');
+        return (
+            collection.isInConnectedCall === true &&
+            !!collection.lastActiveCall &&
+            collection.lastActiveCall.id === callId
+        );
+    };
+
+    window.WWebJS.getActiveCall = () => {
+        const call = window.require('WAWebCallCollection').lastActiveCall;
+        if (
+            !call ||
+            (typeof call.getState === 'function' && call.getState() === 0)
+        ) {
+            return null;
+        }
+        return {
+            id: call.id,
+            peerJid: call.peerJid?._serialized,
+            offerTime: call.offerTime,
+            isVideo: call.isVideo,
+            isGroup: call.isGroup,
+            outgoing: call.outgoing,
+        };
     };
 
     window.WWebJS.cropAndResizeImage = async (media, options = {}) => {

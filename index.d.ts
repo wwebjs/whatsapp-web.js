@@ -342,6 +342,19 @@ declare namespace WAWebJS {
         /** Generates a WhatsApp call link (video call or voice call) */
         createCallLink(startTime: Date, callType: string): Promise<string>;
 
+        /** Places an outgoing call to the provided chat or phone number */
+        call(
+            chatId: string,
+            options?: {
+                video?: boolean;
+                waitForAnswer?: boolean;
+                answerTimeout?: number;
+            },
+        ): Promise<Call>;
+
+        /** Gets the call that is currently ongoing (ringing, being placed or connected), if any */
+        getActiveCall(): Promise<Call | null>;
+
         /**
          * Sends a response to the scheduled event message, indicating whether a user is going to attend the event or not
          * @param response The response code to the event message. Valid values are: `0` for NONE response (removes a previous response) | `1` for GOING | `2` for NOT GOING | `3` for MAYBE going
@@ -2441,6 +2454,18 @@ declare namespace WAWebJS {
 
         /** Reject the call */
         reject: () => Promise<void>;
+
+        /** Accept the call (audio only by default, even for incoming video calls) */
+        accept: (options?: { video?: boolean }) => Promise<boolean>;
+
+        /** End an ongoing call */
+        end: () => Promise<boolean>;
+
+        /** Play an audio clip into the ongoing call so the other party can hear it */
+        playAudio: (media: MessageMedia | string) => Promise<number>;
+
+        /** Indicates whether the call is currently connected (the other party has answered) */
+        isConnected: () => Promise<boolean>;
     }
 
     /** Message type List */
