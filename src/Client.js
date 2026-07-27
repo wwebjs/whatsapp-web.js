@@ -112,320 +112,355 @@ class Client extends EventEmitter {
      * Private function
      */
     async inject() {
-        if (
-            this.options.authTimeoutMs === undefined ||
-            this.options.authTimeoutMs == 0
-        ) {
-            this.options.authTimeoutMs = 30000;
-        }
-        let start = Date.now();
-        let timeout = this.options.authTimeoutMs;
-        let res = false;
-        while (start > Date.now() - timeout) {
-            res = await this.pupPage.evaluate(
-                'window.Debug?.VERSION != undefined',
+        // Cancel any previous inject still running
+        if (this._injectAbort) this._injectAbort.abort();
+        const abort = new AbortController();
+        this._injectAbort = abort;
+
+        try {
+            const authTimeout = this.options.authTimeoutMs || 30000;
+            await this.pupPage
+                .waitForFunction('window.Debug?.VERSION != undefined', {
+                    timeout: authTimeout,
+                    signal: abort.signal,
+                })
+                .catch((err) => {
+                    if (abort.signal.aborted) throw err;
+                    throw 'auth timeout';
+                });
+            if (abort.signal.aborted) return;
+            await this.setDeviceName(
+                this.options.deviceName,
+                this.options.browserName,
             );
-            if (res) {
-                break;
-            }
-            await new Promise((r) => setTimeout(r, 200));
-        }
-        if (!res) {
-            throw 'auth timeout';
-        }
-        await this.setDeviceName(
-            this.options.deviceName,
-            this.options.browserName,
-        );
-        const pairWithPhoneNumber = this.options.pairWithPhoneNumber;
-        const version = await this.getWWebVersion();
+            const pairWithPhoneNumber = this.options.pairWithPhoneNumber;
+            const version = await this.getWWebVersion();
 
-        const needAuthentication = await this.pupPage.evaluate(async () => {
-            let state = window.require('WAWebSocketModel').Socket.state;
-
-            if (
-                state === 'OPENING' ||
-                state === 'UNLAUNCHED' ||
-                state === 'PAIRING'
-            ) {
-                // wait till state changes
-                await new Promise((r) => {
-                    window
-                        .require('WAWebSocketModel')
-                        .Socket.on(
-                            'change:state',
-                            function waitTillInit(_AppState, state) {
-                                if (
-                                    state !== 'OPENING' &&
-                                    state !== 'UNLAUNCHED' &&
-                                    state !== 'PAIRING'
-                                ) {
-                                    window
-                                        .require('WAWebSocketModel')
-                                        .Socket.off(
-                                            'change:state',
-                                            waitTillInit,
-                                        );
-                                    r();
-                                }
-                            },
-                        );
-                });
-            }
-            state = window.require('WAWebSocketModel').Socket.state;
-            return state == 'UNPAIRED' || state == 'UNPAIRED_IDLE';
-        });
-
-        if (needAuthentication) {
-            const { failed, failureEventPayload, restart } =
-                await this.authStrategy.onAuthenticationNeeded();
-
-            if (failed) {
-                /**
-                 * Emitted when there has been an error while trying to restore an existing session
-                 * @event Client#auth_failure
-                 * @param {string} message
-                 */
-                this.emit(Events.AUTHENTICATION_FAILURE, failureEventPayload);
-                await this.destroy();
-                if (restart) {
-                    // session restore failed so try again but without session to force new authentication
-                    return this.initialize();
-                }
-                return;
-            }
-
-            // Register qr/code events
-            if (pairWithPhoneNumber.phoneNumber) {
-                await exposeFunctionIfAbsent(
-                    this.pupPage,
-                    'onCodeReceivedEvent',
-                    async (code) => {
-                        /**
-                         * Emitted when a pairing code is received
-                         * @event Client#code
-                         * @param {string} code Code
-                         * @returns {string} Code that was just received
-                         */
-                        this.emit(Events.CODE_RECEIVED, code);
-                        return code;
-                    },
-                );
-                this.requestPairingCode(
-                    pairWithPhoneNumber.phoneNumber,
-                    pairWithPhoneNumber.showNotification,
-                    pairWithPhoneNumber.intervalMs,
-                );
-            } else {
-                let qrRetries = 0;
-                await exposeFunctionIfAbsent(
-                    this.pupPage,
-                    'onQRChangedEvent',
-                    async (qr) => {
-                        /**
-                         * Emitted when a QR code is received
-                         * @event Client#qr
-                         * @param {string} qr QR Code
-                         */
-                        this.emit(Events.QR_RECEIVED, qr);
-                        if (this.options.qrMaxRetries > 0) {
-                            qrRetries++;
-                            if (qrRetries > this.options.qrMaxRetries) {
-                                this.emit(
-                                    Events.DISCONNECTED,
-                                    'Max qrcode retries reached',
-                                );
-                                await this.destroy();
-                            }
-                        }
-                    },
-                );
-
-                await this.pupPage.evaluate(async () => {
-                    const registrationInfo = await window
-                        .require('WAWebSignalStoreApi')
-                        .waSignalStore.getRegistrationInfo();
-                    const noiseKeyPair = await window
-                        .require('WAWebUserPrefsInfoStore')
-                        .waNoiseInfo.get();
-                    const staticKeyB64 = window
-                        .require('WABase64')
-                        .encodeB64(noiseKeyPair.staticKeyPair.pubKey);
-                    const identityKeyB64 = window
-                        .require('WABase64')
-                        .encodeB64(registrationInfo.identityKeyPair.pubKey);
-                    const platform = window.require(
-                        'WAWebCompanionRegClientUtils',
-                    ).DEVICE_PLATFORM;
-                    const getQR = (ref) =>
-                        ref +
-                        ',' +
-                        staticKeyB64 +
-                        ',' +
-                        identityKeyB64 +
-                        ',' +
-                        window
-                            .require('WAWebUserPrefsMultiDevice')
-                            .getADVSecretKey() +
-                        ',' +
-                        platform;
-                    window.onQRChangedEvent(
-                        getQR(window.require('WAWebConnModel').Conn.ref),
-                    ); // initial qr
-                    window
-                        .require('WAWebConnModel')
-                        .Conn.on('change:ref', (_, ref) => {
-                            window.onQRChangedEvent(getQR(ref));
-                        }); // future QR changes
-                });
-            }
-        }
-
-        await exposeFunctionIfAbsent(
-            this.pupPage,
-            'onAuthAppStateChangedEvent',
-            async (state) => {
-                if (
-                    state == 'UNPAIRED_IDLE' &&
-                    !pairWithPhoneNumber.phoneNumber
-                ) {
-                    // refresh qr code
-                    window.require('WAWebCmd').Cmd.refreshQR();
-                }
-            },
-        );
-
-        await exposeFunctionIfAbsent(
-            this.pupPage,
-            'onAppStateHasSyncedEvent',
-            async () => {
-                const authEventPayload =
-                    await this.authStrategy.getAuthEventPayload();
-                /**
-                 * Emitted when authentication is successful
-                 * @event Client#authenticated
-                 */
-                this.emit(Events.AUTHENTICATED, authEventPayload);
-
-                const injected = await this.pupPage.evaluate(async () => {
-                    return typeof window.WWebJS !== 'undefined';
-                });
-
-                if (!injected) {
+            const needAuthHandle = await this.pupPage.waitForFunction(
+                () => {
+                    const state =
+                        window.require?.('WAWebSocketModel')?.Socket?.state;
                     if (
-                        this.options.webVersionCache.type === 'local' &&
-                        this.currentIndexHtml
+                        !state ||
+                        state === 'OPENING' ||
+                        state === 'UNLAUNCHED' ||
+                        state === 'PAIRING'
                     ) {
-                        const { type: webCacheType, ...webCacheOptions } =
-                            this.options.webVersionCache;
-                        const webCache = WebCacheFactory.createWebCache(
-                            webCacheType,
-                            webCacheOptions,
-                        );
-
-                        await webCache.persist(this.currentIndexHtml, version);
+                        return false;
                     }
+                    return {
+                        need: state === 'UNPAIRED' || state === 'UNPAIRED_IDLE',
+                        state,
+                    };
+                },
+                { timeout: authTimeout },
+            );
+            const needAuthentication = await needAuthHandle.jsonValue();
 
-                    // Load util functions (serializers, helper functions)
-                    await this.pupPage.evaluate(LoadUtils);
+            if (needAuthentication.need) {
+                const { failed, failureEventPayload, restart } =
+                    await this.authStrategy.onAuthenticationNeeded();
 
-                    let start = Date.now();
-                    let res = false;
-                    while (start > Date.now() - 30000) {
-                        // Check window.WWebJS Injection
-                        res = await this.pupPage.evaluate(
-                            'window.WWebJS != undefined',
-                        );
-                        if (res) {
-                            break;
-                        }
-                        await new Promise((r) => setTimeout(r, 200));
-                    }
-                    if (!res) {
-                        throw 'ready timeout';
-                    }
-
+                if (failed) {
                     /**
-                     * Current connection information
-                     * @type {ClientInfo}
+                     * Emitted when there has been an error while trying to restore an existing session
+                     * @event Client#auth_failure
+                     * @param {string} message
                      */
-                    this.info = new ClientInfo(
-                        this,
-                        await this.pupPage.evaluate(() => {
-                            return {
-                                ...window
-                                    .require('WAWebConnModel')
-                                    .Conn.serialize(),
-                                wid:
-                                    window
-                                        .require('WAWebUserPrefsMeUser')
-                                        .getMaybeMePnUser() ||
-                                    window
-                                        .require('WAWebUserPrefsMeUser')
-                                        .getMaybeMeLidUser(),
-                            };
-                        }),
+                    this.emit(
+                        Events.AUTHENTICATION_FAILURE,
+                        failureEventPayload,
+                    );
+                    await this.destroy();
+                    if (restart) {
+                        // session restore failed so try again but without session to force new authentication
+                        return this.initialize();
+                    }
+                    return;
+                }
+
+                // Register qr/code events
+                if (pairWithPhoneNumber.phoneNumber) {
+                    this.requestPairingCode(
+                        pairWithPhoneNumber.phoneNumber,
+                        pairWithPhoneNumber.showNotification,
+                        pairWithPhoneNumber.intervalMs,
+                    );
+                } else {
+                    let qrRetries = 0;
+
+                    this.on(Events.LOADING_SCREEN, () => {
+                        qrRetries = 0;
+                    });
+
+                    await exposeFunctionIfAbsent(
+                        this.pupPage,
+                        'onQRChangedEvent',
+                        async (qr) => {
+                            /**
+                             * Emitted when a QR code is received
+                             * @event Client#qr
+                             * @param {string} qr QR Code
+                             */
+                            this.emit(Events.QR_RECEIVED, qr);
+                            if (this.options.qrMaxRetries > 0) {
+                                qrRetries++;
+                                if (qrRetries > this.options.qrMaxRetries) {
+                                    this.emit(
+                                        Events.DISCONNECTED,
+                                        'Max qrcode retries reached',
+                                    );
+                                    await this.destroy();
+                                }
+                            }
+                        },
                     );
 
-                    this.interface = new InterfaceController(this);
+                    await this.pupPage.evaluate(async () => {
+                        const registrationInfo = await window
+                            .require('WAWebSignalStoreApi')
+                            .waSignalStore.getRegistrationInfo();
+                        const noiseKeyPair = await window
+                            .require('WAWebUserPrefsInfoStore')
+                            .waNoiseInfo.get();
+                        const staticKeyB64 = window
+                            .require('WABase64')
+                            .encodeB64(noiseKeyPair.staticKeyPair.pubKey);
+                        const identityKeyB64 = window
+                            .require('WABase64')
+                            .encodeB64(registrationInfo.identityKeyPair.pubKey);
+                        const advSecretKey = await window
+                            .require('WAWebUserPrefsMultiDevice')
+                            .getADVSecretKey();
+                        const platform = window.require(
+                            'WAWebCompanionRegClientUtils',
+                        ).DEVICE_PLATFORM;
+                        const getQR = (ref) =>
+                            ref +
+                            ',' +
+                            staticKeyB64 +
+                            ',' +
+                            identityKeyB64 +
+                            ',' +
+                            advSecretKey +
+                            ',' +
+                            platform;
 
-                    await this.attachEventListeners();
+                        const onRefChange = (_, ref) => {
+                            if (ref == null) return;
+                            window.onQRChangedEvent(getQR(ref));
+                        };
+
+                        window.onQRChangedEvent(
+                            getQR(window.require('WAWebConnModel').Conn.ref),
+                        ); // initial qr
+                        window
+                            .require('WAWebConnModel')
+                            .Conn.on('change:ref', onRefChange); // future QR changes
+
+                        // Remove QR listener once authentication succeeds
+                        window
+                            .require('WAWebSocketModel')
+                            .Socket.on('change:hasSynced', () => {
+                                window
+                                    .require('WAWebConnModel')
+                                    .Conn.off('change:ref', onRefChange);
+                            });
+                    });
                 }
-                /**
-                 * Emitted when the client has initialized and is ready to receive messages.
-                 * @event Client#ready
-                 */
-                this.emit(Events.READY);
-                this.authStrategy.afterAuthReady();
-            },
-        );
-        let lastPercent = null;
-        await exposeFunctionIfAbsent(
-            this.pupPage,
-            'onOfflineProgressUpdateEvent',
-            async (percent) => {
-                if (lastPercent !== percent) {
-                    lastPercent = percent;
-                    this.emit(Events.LOADING_SCREEN, percent, 'WhatsApp'); // Message is hardcoded as "WhatsApp" for now
+            }
+
+            await exposeFunctionIfAbsent(
+                this.pupPage,
+                'onAuthAppStateChangedEvent',
+                async (state) => {
+                    if (
+                        state == 'UNPAIRED_IDLE' &&
+                        !pairWithPhoneNumber.phoneNumber
+                    ) {
+                        // refresh qr code
+                        await this.pupPage.evaluate(() => {
+                            window.require('WAWebCmd').Cmd.refreshQR();
+                        });
+                    }
+                },
+            );
+
+            await exposeFunctionIfAbsent(
+                this.pupPage,
+                'onAppStateHasSyncedEvent',
+                async () => {
+                    const authEventPayload =
+                        await this.authStrategy.getAuthEventPayload();
+                    /**
+                     * Emitted when authentication is successful
+                     * @event Client#authenticated
+                     */
+                    this.emit(Events.AUTHENTICATED, authEventPayload);
+
+                    const injected = await this.pupPage.evaluate(async () => {
+                        return typeof window.WWebJS !== 'undefined';
+                    });
+
+                    if (!injected) {
+                        if (
+                            this.options.webVersionCache.type === 'local' &&
+                            this.currentIndexHtml
+                        ) {
+                            const { type: webCacheType, ...webCacheOptions } =
+                                this.options.webVersionCache;
+                            const webCache = WebCacheFactory.createWebCache(
+                                webCacheType,
+                                webCacheOptions,
+                            );
+
+                            await webCache.persist(
+                                this.currentIndexHtml,
+                                version,
+                            );
+                        }
+
+                        // Load util functions (serializers, helper functions)
+                        await this.pupPage.evaluate(LoadUtils);
+
+                        await this.pupPage
+                            .waitForFunction(
+                                'typeof window.WWebJS !== "undefined"',
+                                { timeout: 30000 },
+                            )
+                            .catch(() => {
+                                throw 'ready timeout';
+                            });
+
+                        /**
+                         * Current connection information
+                         * @type {ClientInfo}
+                         */
+                        this.info = new ClientInfo(
+                            this,
+                            await this.pupPage.evaluate(() => {
+                                return {
+                                    ...window
+                                        .require('WAWebConnModel')
+                                        .Conn.serialize(),
+                                    wid:
+                                        window
+                                            .require('WAWebUserPrefsMeUser')
+                                            .getMaybeMePnUser() ||
+                                        window
+                                            .require('WAWebUserPrefsMeUser')
+                                            .getMaybeMeLidUser(),
+                                };
+                            }),
+                        );
+
+                        this.interface = new InterfaceController(this);
+
+                        await this.attachEventListeners();
+                    }
+                    /**
+                     * Emitted when the client has initialized and is ready to receive messages.
+                     * @event Client#ready
+                     */
+                    this.emit(Events.READY);
+                    this.authStrategy.afterAuthReady();
+                },
+            );
+            let lastPercent = null;
+            await exposeFunctionIfAbsent(
+                this.pupPage,
+                'onOfflineProgressUpdateEvent',
+                async (percent) => {
+                    if (lastPercent !== percent) {
+                        lastPercent = percent;
+                        this.emit(Events.LOADING_SCREEN, percent, 'WhatsApp'); // Message is hardcoded as "WhatsApp" for now
+                    }
+                },
+            );
+            await exposeFunctionIfAbsent(
+                this.pupPage,
+                'onLogoutEvent',
+                async () => {
+                    this.lastLoggedOut = true;
+                    await this.pupPage
+                        .waitForNavigation({ waitUntil: 'load', timeout: 5000 })
+                        .catch((_) => _);
+                },
+            );
+            await this.pupPage.evaluate(() => {
+                const Socket = window.require('WAWebSocketModel').Socket;
+                const Cmd = window.require('WAWebCmd').Cmd;
+
+                const listeners = [
+                    [
+                        Socket,
+                        'change:state',
+                        (_AppState, state) => {
+                            window.onAuthAppStateChangedEvent(state);
+                        },
+                    ],
+                    [
+                        Socket,
+                        'change:hasSynced',
+                        () => {
+                            window.onAppStateHasSyncedEvent();
+                        },
+                    ],
+                    [
+                        Cmd,
+                        'offline_progress_update_from_bridge',
+                        () => {
+                            window.onOfflineProgressUpdateEvent(
+                                window
+                                    .require('WAWebOfflineHandler')
+                                    .OfflineMessageHandler.getOfflineDeliveryProgress(),
+                            );
+                        },
+                    ],
+                    [
+                        Cmd,
+                        'logout',
+                        async () => {
+                            await window.onLogoutEvent();
+                        },
+                    ],
+                    [
+                        Cmd,
+                        'logout_from_bridge',
+                        async () => {
+                            await window.onLogoutEvent();
+                        },
+                    ],
+                ];
+
+                // Clean up old listeners to prevent accumulation on re-inject
+                if (window._wwjsListeners) {
+                    for (const [obj, event, handler] of window._wwjsListeners) {
+                        obj.off(event, handler);
+                    }
                 }
-            },
-        );
-        await exposeFunctionIfAbsent(
-            this.pupPage,
-            'onLogoutEvent',
-            async () => {
-                this.lastLoggedOut = true;
-                await this.pupPage
-                    .waitForNavigation({ waitUntil: 'load', timeout: 5000 })
-                    .catch((_) => _);
-            },
-        );
-        await this.pupPage.evaluate(() => {
-            window
-                .require('WAWebSocketModel')
-                .Socket.on('change:state', (_AppState, state) => {
-                    window.onAuthAppStateChangedEvent(state);
-                });
-            window
-                .require('WAWebSocketModel')
-                .Socket.on('change:hasSynced', () => {
+
+                for (const [obj, event, handler] of listeners) {
+                    obj.on(event, handler);
+                }
+                window._wwjsListeners = listeners;
+
+                // Atomic hasSynced check in the same synchronous block as listener registration.
+                // If hasSynced is already true, Backbone won't fire change:hasSynced (no transition).
+                // If hasSynced is false, the listener above will catch the future transition.
+                const storeInjected = typeof window.WWebJS !== 'undefined';
+                if (Socket.hasSynced === true && !storeInjected) {
                     window.onAppStateHasSyncedEvent();
-                });
-            const Cmd = window.require('WAWebCmd').Cmd;
-            Cmd.on('offline_progress_update_from_bridge', () => {
-                window.onOfflineProgressUpdateEvent(
-                    window
-                        .require('WAWebOfflineHandler')
-                        .OfflineMessageHandler.getOfflineDeliveryProgress(),
-                );
+                }
             });
-            Cmd.on('logout', async () => {
-                await window.onLogoutEvent();
-            });
-            Cmd.on('logout_from_bridge', async () => {
-                await window.onLogoutEvent();
-            });
-        });
+        } catch (err) {
+            if (abort.signal.aborted) return; // superseded by newer inject
+            throw err;
+        } finally {
+            if (this._injectAbort === abort) {
+                this._injectAbort = null;
+            }
+        }
     }
 
     /**
@@ -495,16 +530,37 @@ class Client extends EventEmitter {
             referer: 'https://whatsapp.com/',
         });
 
+        // Register framenavigated BEFORE inject so that if navigation
+        // interrupts inject, the handler triggers a fresh inject.
+        this._registerFramenavigatedHandler();
+
         await this.inject();
+    }
+
+    _registerFramenavigatedHandler() {
+        if (this._framenavigatedRegistered) return;
+        this._framenavigatedRegistered = true;
 
         this.pupPage.on('framenavigated', async (frame) => {
-            if (frame.url().includes('post_logout=1') || this.lastLoggedOut) {
+            if (frame.parentFrame() !== null) return;
+
+            const isLogout =
+                frame.url().includes('post_logout=1') || this.lastLoggedOut;
+
+            if (isLogout) {
                 this.emit(Events.DISCONNECTED, 'LOGOUT');
                 await this.authStrategy.logout();
                 await this.authStrategy.beforeBrowserInitialized();
                 await this.authStrategy.afterBrowserInitialized();
                 this.lastLoggedOut = false;
             }
+
+            const storeAvailable = await this.pupPage.evaluate(() => {
+                return typeof window.WWebJS !== 'undefined';
+            });
+
+            if (!isLogout && storeAvailable) return;
+
             await this.inject();
         });
     }
@@ -1276,6 +1332,9 @@ class Client extends EventEmitter {
      * Closes the client
      */
     async destroy() {
+        if (this._injectAbort) this._injectAbort.abort();
+        this._framenavigatedRegistered = false;
+
         const browser = this.pupBrowser;
         const isConnected = browser?.isConnected?.();
         if (isConnected) {
