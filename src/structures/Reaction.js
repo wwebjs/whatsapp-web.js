@@ -18,7 +18,7 @@ class Reaction extends Base {
          * Reaction ID
          * @type {object}
          */
-        this.id = data.msgKey;
+        this.id = Reaction._withSerializedId(data.msgKey);
         /**
          * Orphan
          * @type {number}
@@ -48,7 +48,7 @@ class Reaction extends Base {
          * Message ID
          * @type {object}
          */
-        this.msgId = data.parentMsgKey;
+        this.msgId = Reaction._withSerializedId(data.parentMsgKey);
         /**
          * Sender ID
          * @type {string}
@@ -61,6 +61,22 @@ class Reaction extends Base {
         this.ack = data.ack;
 
         return super._patch(data);
+    }
+
+    /**
+     * Returns a MsgKey with `_serialized` populated. WhatsApp Web's July 2026 build renamed the
+     * property to the minifier-mangled `$1`; `id` and `msgId` are typed as `MessageId`, whose
+     * `_serialized` is not optional, so consumers read it directly. Leaves an already-serialized
+     * key untouched.
+     * @param {object} key
+     * @returns {object}
+     * @private
+     */
+    static _withSerializedId(key) {
+        if (key && key._serialized == null && key.$1 != null) {
+            return Object.assign({}, key, { _serialized: key.$1 });
+        }
+        return key;
     }
 }
 
