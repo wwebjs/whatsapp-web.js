@@ -582,7 +582,7 @@ exports.LoadUtils = () => {
 
         return window
             .require('WAWebCollections')
-            .Msg.get(newMsgKey._serialized);
+            .Msg.get(window.WWebJS.getMsgKeyId(newMsgKey));
     };
 
     window.WWebJS.editMessage = async (msg, content, options = {}) => {
@@ -625,7 +625,9 @@ exports.LoadUtils = () => {
         await window
             .require('WAWebSendMessageEditAction')
             .sendMessageEdit(msg, content, internalOptions);
-        return window.require('WAWebCollections').Msg.get(msg.id._serialized);
+        return window
+            .require('WAWebCollections')
+            .Msg.get(window.WWebJS.getMsgKeyId(msg.id));
     };
 
     window.WWebJS.toStickerData = async (mediaInfo) => {
@@ -834,6 +836,20 @@ exports.LoadUtils = () => {
             });
         }
 
+        // The rename reaches the serialized model too: `msg.id` comes back carrying `$1` and no
+        // `_serialized`, so every consumer of `message.id._serialized` — including this library's own
+        // Message structure and anything keyed on a message id — silently receives undefined. Restore
+        // it here, where `msg.id.remote` is already normalised, so the whole downstream surface keeps
+        // working rather than each caller having to know about `$1`.
+        if (typeof msg.id === 'object' && msg.id._serialized == null) {
+            const serializedId = window.WWebJS.getMsgKeyId(msg.id);
+            if (serializedId) {
+                msg.id = Object.assign({}, msg.id, {
+                    _serialized: serializedId,
+                });
+            }
+        }
+
         delete msg.pendingAckUpdate;
 
         return msg;
@@ -917,6 +933,20 @@ exports.LoadUtils = () => {
         };
     };
 
+    /**
+     * The serialized id of a message key, tolerating WhatsApp Web having renamed the key's
+     * `_serialized` property to `$1`. Reading the old name now returns `undefined`, which reaches
+     * IndexedDB as a `.get(undefined)` and throws
+     * `DataError: Failed to execute 'get' on 'IDBObjectStore': No key or key range specified.`
+     * `_serialized` is preferred so nothing changes wherever it is still present (chat ids, for
+     * example, are unaffected by the rename). Returns undefined when neither exists, so callers can
+     * skip the lookup instead of querying a store with a nullish key.
+     * @param {Object} key a message key, e.g. `chat.lastReceivedKey` or a raw `msg.id`
+     * @returns {string|undefined}
+     */
+    window.WWebJS.getMsgKeyId = (key) =>
+        key?._serialized ?? key?.$1 ?? undefined;
+
     window.WWebJS.getChats = async () => {
         const chats = window.require('WAWebCollections').Chat.getModelsArray();
         const chatPromises = chats.map((chat) =>
@@ -981,16 +1011,17 @@ exports.LoadUtils = () => {
 
         model.lastMessage = null;
         if (model.msgs && model.msgs.length) {
-            const lastMessage = chat.lastReceivedKey
+            const lastReceivedKeyId = window.WWebJS.getMsgKeyId(
+                chat.lastReceivedKey,
+            );
+            const lastMessage = lastReceivedKeyId
                 ? window
                       .require('WAWebCollections')
-                      .Msg.get(chat.lastReceivedKey._serialized) ||
+                      .Msg.get(lastReceivedKeyId) ||
                   (
                       await window
                           .require('WAWebCollections')
-                          .Msg.getMessagesById([
-                              chat.lastReceivedKey._serialized,
-                          ])
+                          .Msg.getMessagesById([lastReceivedKeyId])
                   )?.messages?.[0]
                 : null;
             lastMessage &&
