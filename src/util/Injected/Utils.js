@@ -981,18 +981,28 @@ exports.LoadUtils = () => {
 
         model.lastMessage = null;
         if (model.msgs && model.msgs.length) {
-            const lastMessage = chat.lastReceivedKey
-                ? window
-                      .require('WAWebCollections')
-                      .Msg.get(chat.lastReceivedKey._serialized) ||
-                  (
-                      await window
-                          .require('WAWebCollections')
-                          .Msg.getMessagesById([
-                              chat.lastReceivedKey._serialized,
-                          ])
-                  )?.messages?.[0]
-                : null;
+            let lastMessage = null;
+            try {
+                // Guard against an empty/undefined lastReceivedKey._serialized,
+                // which causes WAWebCollections.Msg.get() to invoke
+                // IDBObjectStore.get() with no key and throw a DataError
+                // ("Failed to execute 'get' on 'IDBObjectStore': No key or
+                // key range specified"). This breaks every getChats() /
+                // getMessages() call for affected chats. Fall back to null.
+                const lastKey =
+                    chat.lastReceivedKey && chat.lastReceivedKey._serialized;
+                if (lastKey) {
+                    lastMessage =
+                        window.require('WAWebCollections').Msg.get(lastKey) ||
+                        (
+                            await window
+                                .require('WAWebCollections')
+                                .Msg.getMessagesById([lastKey])
+                        )?.messages?.[0];
+                }
+            } catch (ignoredError) {
+                lastMessage = null;
+            }
             lastMessage &&
                 (model.lastMessage =
                     window.WWebJS.getMessageModel(lastMessage));
