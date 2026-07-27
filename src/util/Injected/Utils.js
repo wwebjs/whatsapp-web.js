@@ -4,6 +4,51 @@ exports.LoadUtils = () => {
     window.WWebJS = {};
 
     /**
+     * Dual-compat serialized id helper.
+     * Older WhatsApp Web builds expose WID/MsgKey as `_serialized`.
+     * Newer builds (e.g. 2.3000.1043xxx) expose the same value as `$1`.
+     * Prefer `_serialized` first so clients that have not updated keep working.
+     * @param {*} wid
+     * @returns {string|undefined}
+     */
+    window.WWebJS.widSerialized = (wid) => {
+        if (!wid || typeof wid === 'string') return wid;
+        return (
+            wid._serialized ??
+            wid.$1 ??
+            (typeof wid.toString === 'function' ? wid.toString() : undefined)
+        );
+    };
+
+    /**
+     * Mirror `$1` onto `_serialized` in plain objects returned to Node so
+     * existing node-side code keeps reading `id._serialized`.
+     * Never overwrites an existing `_serialized` value.
+     * @param {*} obj
+     * @param {number} [depth=0]
+     * @returns {*}
+     */
+    window.WWebJS.normalizeSerialized = (obj, depth = 0) => {
+        if (!obj || typeof obj !== 'object' || depth > 8) return obj;
+        if (Array.isArray(obj)) {
+            for (const item of obj) {
+                window.WWebJS.normalizeSerialized(item, depth + 1);
+            }
+            return obj;
+        }
+        if (obj.$1 !== undefined && obj._serialized === undefined) {
+            obj._serialized = obj.$1;
+        }
+        for (const key of Object.keys(obj)) {
+            const value = obj[key];
+            if (value && typeof value === 'object') {
+                window.WWebJS.normalizeSerialized(value, depth + 1);
+            }
+        }
+        return obj;
+    };
+
+    /**
      * Helper function that compares between two WWeb versions. Its purpose is to help the developer to choose the correct code implementation depending on the comparison value and the WWeb version.
      * @param {string} lOperand The left operand for the WWeb version string to compare with
      * @param {string} operator The comparison operator
@@ -830,13 +875,13 @@ exports.LoadUtils = () => {
 
         if (typeof msg.id.remote === 'object') {
             msg.id = Object.assign({}, msg.id, {
-                remote: msg.id.remote._serialized,
+                remote: window.WWebJS.widSerialized(msg.id.remote),
             });
         }
 
         delete msg.pendingAckUpdate;
 
-        return msg;
+        return window.WWebJS.normalizeSerialized(msg);
     };
 
     window.WWebJS.getChat = async (chatId, { getAsModel = true } = {}) => {
@@ -953,7 +998,7 @@ exports.LoadUtils = () => {
             model.isGroup = true;
             const chatWid = window
                 .require('WAWebWidFactory')
-                .createWid(chat.id._serialized);
+                .createWid(window.WWebJS.widSerialized(chat.id));
             const groupMetadata =
                 window.require('WAWebCollections').GroupMetadata ||
                 window.require('WAWebCollections').WAWebGroupMetadataCollection;
@@ -981,28 +1026,32 @@ exports.LoadUtils = () => {
 
         model.lastMessage = null;
         if (model.msgs && model.msgs.length) {
-            const lastMessage = chat.lastReceivedKey
-                ? window
-                      .require('WAWebCollections')
-                      .Msg.get(chat.lastReceivedKey._serialized) ||
-                  (
-                      await window
-                          .require('WAWebCollections')
-                          .Msg.getMessagesById([
-                              chat.lastReceivedKey._serialized,
-                          ])
-                  )?.messages?.[0]
-                : null;
-            lastMessage &&
-                (model.lastMessage =
-                    window.WWebJS.getMessageModel(lastMessage));
+            try {
+                const lastKeyId = window.WWebJS.widSerialized(
+                    chat.lastReceivedKey,
+                );
+                const lastMessage = lastKeyId
+                    ? window.require('WAWebCollections').Msg.get(lastKeyId) ||
+                      (
+                          await window
+                              .require('WAWebCollections')
+                              .Msg.getMessagesById([lastKeyId])
+                      )?.messages?.[0]
+                    : null;
+                lastMessage &&
+                    (model.lastMessage =
+                        window.WWebJS.getMessageModel(lastMessage));
+            } catch (_) {
+                // Key-format changes must not break the entire chat model
+                model.lastMessage = null;
+            }
         }
 
         delete model.msgs;
         delete model.msgUnsyncedButtonReplyMsgs;
         delete model.unsyncedButtonReplies;
 
-        return model;
+        return window.WWebJS.normalizeSerialized(model);
     };
 
     window.WWebJS.getContactModel = (contact) => {
@@ -1143,13 +1192,51 @@ exports.LoadUtils = () => {
 
         const cached = window
             .require('WAWebMediaInMemoryBlobCache')
-            .InMemoryMediaBlobCache.get(msg.mediaObject?.filehash);
+            ?.InMemoryMediaBlobCache?.get(msg.mediaObject?.filehash);
 
         let blob;
         if (cached) {
             blob = cached;
-        } else if (msg.mediaObject?.mediaBlob) {
+        } else if (msg.mediaObject?.mediaBlob?.forceToBlob) {
             blob = msg.mediaObject.mediaBlob.forceToBlob();
+        }
+
+        // Fall back to DownloadManager when blob cache is missing or looks like
+        // a thumbnail (much smaller than the declared media size).
+        const expectedSize = msg.size || 0;
+        const blobLooksIncomplete =
+            blob && expectedSize > 0 && blob.size < expectedSize * 0.5;
+
+        if (!blob || blobLooksIncomplete) {
+            try {
+                const mockQpl = {
+                    addAnnotations: function () {
+                        return this;
+                    },
+                    addPoint: function () {
+                        return this;
+                    },
+                };
+                const decryptedMedia = await window
+                    .require('WAWebDownloadManager')
+                    .downloadManager.downloadAndMaybeDecrypt({
+                        directPath: msg.directPath,
+                        encFilehash: msg.encFilehash,
+                        filehash: msg.filehash,
+                        mediaKey: msg.mediaKey,
+                        mediaKeyTimestamp: msg.mediaKeyTimestamp,
+                        type: msg.type,
+                        signal: new AbortController().signal,
+                        downloadQpl: mockQpl,
+                    });
+                if (decryptedMedia) {
+                    blob = new Blob([decryptedMedia], {
+                        type: msg.mimetype || 'application/octet-stream',
+                    });
+                }
+            } catch (e) {
+                if (!(e.status && e.status === 404)) throw e;
+            }
         }
 
         if (!blob) return null;

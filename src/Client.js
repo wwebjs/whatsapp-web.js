@@ -3374,8 +3374,8 @@ class Client extends EventEmitter {
                         await window.WWebJS.enforceLidAndPnRetrieval(userId);
 
                     return {
-                        lid: lid?._serialized,
-                        pn: phone?._serialized,
+                        lid: lid?._serialized ?? lid?.$1,
+                        pn: phone?._serialized ?? phone?.$1,
                     };
                 }),
             );
