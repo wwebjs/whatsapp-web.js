@@ -1646,6 +1646,22 @@ class Client extends EventEmitter {
     }
 
     /**
+     * Sends a presence state to a specific chat without fetching the chat from the database.
+     * @param {string} chatId The ID of the chat
+     * @param {string} state The presence state (e.g., 'typing', 'recording', 'paused')
+     */
+    async sendPresenceUpdate(chatId, state = 'typing') {
+        return this.pupPage.evaluate(
+            (chatId, state) => {
+                window.WWebJS.sendChatstate(state, chatId);
+                return true;
+            },
+            chatId,
+            state,
+        );
+    }
+
+    /**
      * @typedef {Object} SendChannelAdminInviteOptions
      * @property {?string} comment The comment to be added to an invitation
      */
