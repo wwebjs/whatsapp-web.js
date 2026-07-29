@@ -580,9 +580,13 @@ exports.LoadUtils = () => {
 
         if (options.waitUntilMsgSent) await sendMsgResultPromise;
 
-        return window
-            .require('WAWebCollections')
-            .Msg.get(newMsgKey._serialized);
+        const Msg = window.require('WAWebCollections').Msg;
+        return (
+            Msg.get(newMsgKey._serialized) ||
+            chat.msgs
+                .getModelsArray()
+                .find((msg) => msg.id && msg.id.id === newId)
+        );
     };
 
     window.WWebJS.editMessage = async (msg, content, options = {}) => {
