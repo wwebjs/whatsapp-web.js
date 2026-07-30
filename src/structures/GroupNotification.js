@@ -18,7 +18,7 @@ class GroupNotification extends Base {
          * ID that represents the groupNotification
          * @type {object}
          */
-        this.id = data.id;
+        this.id = Base._normalizeId(data.id);
 
         /**
          * Extra content
@@ -45,7 +45,7 @@ class GroupNotification extends Base {
          */
         this.chatId =
             typeof data.id.remote === 'object'
-                ? data.id.remote._serialized
+                ? data.id.remote._serialized || data.id.remote.$1
                 : data.id.remote;
 
         /**
@@ -54,7 +54,7 @@ class GroupNotification extends Base {
          */
         this.author =
             typeof data.author === 'object'
-                ? data.author._serialized
+                ? data.author._serialized || data.author.$1
                 : data.author;
 
         /**

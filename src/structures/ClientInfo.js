@@ -24,7 +24,7 @@ class ClientInfo extends Base {
          * Current user ID
          * @type {object}
          */
-        this.wid = data.wid;
+        this.wid = Base._normalizeId(data.wid);
 
         /**
          * @type {object}

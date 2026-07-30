@@ -26,7 +26,7 @@ class Contact extends Base {
          * ID that represents the contact
          * @type {ContactId}
          */
-        this.id = data.id;
+        this.id = Base._normalizeId(data.id);
 
         /**
          * Contact's phone number
@@ -196,7 +196,7 @@ class Contact extends Base {
 
                 contact = await window
                     .require('WAWebCollections')
-                    .Contact.find(lid._serialized);
+                    .Contact.find(lid._serialized || lid.$1);
             }
             await window
                 .require('WAWebBlockContactAction')
