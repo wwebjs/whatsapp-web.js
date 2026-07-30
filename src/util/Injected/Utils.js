@@ -981,16 +981,21 @@ exports.LoadUtils = () => {
 
         model.lastMessage = null;
         if (model.msgs && model.msgs.length) {
-            const lastMessage = chat.lastReceivedKey
+            // `lastReceivedKey` can be present while its `_serialized` is
+            // undefined. Passing that undefined on to `getMessagesById` makes
+            // IndexedDB throw `DataError: Failed to execute 'get' on
+            // 'IDBObjectStore': No key or key range specified.`, which surfaces
+            // to callers as an unreadable minified error, so check the id
+            // itself rather than the key object.
+            const lastReceivedKeyId = chat.lastReceivedKey?._serialized;
+            const lastMessage = lastReceivedKeyId
                 ? window
                       .require('WAWebCollections')
-                      .Msg.get(chat.lastReceivedKey._serialized) ||
+                      .Msg.get(lastReceivedKeyId) ||
                   (
                       await window
                           .require('WAWebCollections')
-                          .Msg.getMessagesById([
-                              chat.lastReceivedKey._serialized,
-                          ])
+                          .Msg.getMessagesById([lastReceivedKeyId])
                   )?.messages?.[0]
                 : null;
             lastMessage &&
