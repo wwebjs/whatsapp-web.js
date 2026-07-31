@@ -830,8 +830,13 @@ exports.LoadUtils = () => {
 
         if (typeof msg.id.remote === 'object') {
             msg.id = Object.assign({}, msg.id, {
-                remote: msg.id.remote._serialized,
+                remote: msg.id.remote._serialized || msg.id.remote.$1,
             });
+        }
+
+        // WhatsApp Web changed _serialized to $1 in July 2026 update
+        if (msg.id && msg.id._serialized == null && msg.id.$1 != null) {
+            msg.id = Object.assign({}, msg.id, { _serialized: msg.id.$1 });
         }
 
         delete msg.pendingAckUpdate;
@@ -840,39 +845,48 @@ exports.LoadUtils = () => {
     };
 
     window.WWebJS.getChat = async (chatId, { getAsModel = true } = {}) => {
-        const isChannel = /@\w*newsletter\b/.test(chatId);
-        const chatWid = window.require('WAWebWidFactory').createWid(chatId);
-        let chat;
+        try {
+            const isChannel = /@\w*newsletter\b/.test(chatId);
+            const chatWid = window.require('WAWebWidFactory').createWid(chatId);
+            let chat;
 
-        if (isChannel) {
-            try {
-                chat = window
-                    .require('WAWebCollections')
-                    .WAWebNewsletterCollection.get(chatId);
-                if (!chat) {
-                    await window
-                        .require('WAWebLoadNewsletterPreviewChatAction')
-                        .loadNewsletterPreviewChat(chatId);
-                    chat = await window
+            if (isChannel) {
+                try {
+                    chat = window
                         .require('WAWebCollections')
-                        .WAWebNewsletterCollection.find(chatWid);
+                        .WAWebNewsletterCollection.get(chatId);
+                    if (!chat) {
+                        await window
+                            .require('WAWebLoadNewsletterPreviewChatAction')
+                            .loadNewsletterPreviewChat(chatId);
+                        chat = await window
+                            .require('WAWebCollections')
+                            .WAWebNewsletterCollection.find(chatWid);
+                    }
+                } catch (ignoredError) {
+                    chat = null;
                 }
-            } catch (ignoredError) {
-                chat = null;
+            } else {
+                try {
+                    chat =
+                        window.require('WAWebCollections').Chat.get(chatWid) ||
+                        window.require('WAWebCollections').Chat.getModelsArray().find(c => (c.id._serialized || c.id.$1) === chatId) ||
+                        (
+                            await window
+                                .require('WAWebFindChatAction')
+                                .findOrCreateLatestChat(chatWid)
+                        )?.chat;
+                } catch (ignoredError) {
+                    chat = window.require('WAWebCollections').Chat.getModelsArray().find(c => (c.id._serialized || c.id.$1) === chatId) || null;
+                }
             }
-        } else {
-            chat =
-                window.require('WAWebCollections').Chat.get(chatWid) ||
-                (
-                    await window
-                        .require('WAWebFindChatAction')
-                        .findOrCreateLatestChat(chatWid)
-                )?.chat;
-        }
 
-        return getAsModel && chat
-            ? await window.WWebJS.getChatModel(chat, { isChannel: isChannel })
-            : chat;
+            return getAsModel && chat
+                ? await window.WWebJS.getChatModel(chat, { isChannel: isChannel })
+                : chat;
+        } catch (err) {
+            return null;
+        }
     };
 
     window.WWebJS.getChannelMetadata = async (inviteCode) => {
