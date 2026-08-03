@@ -3373,6 +3373,58 @@ class Client extends EventEmitter {
     }
 
     /**
+     * Adds an individual WhatsApp contact to the currently active call using
+     * WhatsApp Web internals.
+     * This API is experimental and depends on private WhatsApp Web modules. In
+     * versions where no supported internal call controller can be detected, the
+     * method rejects without sending custom signaling stanzas.
+     * @param {string} contactId Individual WhatsApp contact ID, e.g. `123456789@c.us`
+     * @param {string} [callId] Optional active call ID guard
+     * @returns {Promise<void>}
+     */
+    async addParticipantToCall(contactId, callId) {
+        if (typeof contactId !== 'string' || contactId.trim() === '') {
+            throw new Error('Invalid contactId: expected a non-empty string.');
+        }
+
+        contactId = contactId.trim();
+
+        if (contactId.endsWith('@g.us')) {
+            throw new Error('Group IDs cannot be added as call participants.');
+        }
+
+        if (!contactId.endsWith('@c.us')) {
+            throw new Error(
+                "Invalid contactId: expected an individual WhatsApp ID ending with '@c.us'.",
+            );
+        }
+
+        if (callId !== undefined && typeof callId !== 'string') {
+            throw new Error('Invalid callId: expected a string when provided.');
+        }
+
+        if (!this.pupPage || !this.info) {
+            throw new Error(
+                'Client is not ready. Wait for the ready event first.',
+            );
+        }
+
+        const contactWid = await this.getNumberId(contactId);
+        if (!contactWid) {
+            throw new Error(
+                `Contact is not registered or reachable: ${contactId}`,
+            );
+        }
+
+        await this.pupPage.evaluate(
+            async (id, activeCallId) =>
+                window.WWebJS.addParticipantToCall(id, activeCallId),
+            contactWid._serialized || contactId,
+            callId,
+        );
+    }
+
+    /**
      * Sends a response to the scheduled event message, indicating whether a user is going to attend the event or not
      * @param {number} response The response code to the scheduled event message. Valid values are: `0` for NONE response (removes a previous response) | `1` for GOING | `2` for NOT GOING | `3` for MAYBE going
      * @param {string} eventMessageId The scheduled event message ID

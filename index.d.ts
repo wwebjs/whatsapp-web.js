@@ -357,6 +357,13 @@ declare namespace WAWebJS {
         getActiveCall(): Promise<Call | null>;
 
         /**
+         * Adds an individual WhatsApp contact to the currently active call.
+         * @experimental Depends on private WhatsApp Web internals and may reject
+         * when no supported internal call controller is detected.
+         */
+        addParticipantToCall(contactId: string, callId?: string): Promise<void>;
+
+        /**
          * Sends a response to the scheduled event message, indicating whether a user is going to attend the event or not
          * @param response The response code to the event message. Valid values are: `0` for NONE response (removes a previous response) | `1` for GOING | `2` for NOT GOING | `3` for MAYBE going
          * @param eventMessageId The event message ID
@@ -2470,6 +2477,9 @@ declare namespace WAWebJS {
 
         /** Indicates whether the call is currently connected (the other party has answered) */
         isConnected: () => Promise<boolean>;
+
+        /** Add an individual WhatsApp contact to the active call */
+        addParticipant: (contactId: string) => Promise<void>;
     }
 
     /** Message type List */
