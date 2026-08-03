@@ -108,6 +108,21 @@ describe('Calls', function () {
                 ).to.deep.equal(['call-id']);
             });
         });
+
+        describe('addParticipant', function () {
+            it('adds a participant using the current call id', async function () {
+                client.addParticipantToCall = sinon.stub().resolves();
+
+                await call.addParticipant('987654321@c.us');
+
+                expect(
+                    client.addParticipantToCall.calledOnceWithExactly(
+                        '987654321@c.us',
+                        'call-id',
+                    ),
+                ).to.equal(true);
+            });
+        });
     });
 
     describe('Client.call', function () {
@@ -155,6 +170,80 @@ describe('Calls', function () {
             expect(
                 client.pupPage.evaluate.firstCall.args.slice(1),
             ).to.deep.equal(['15551234567', true, true, 1000, false]);
+        });
+    });
+
+    describe('Client.addParticipantToCall', function () {
+        let client;
+
+        beforeEach(function () {
+            client = new Client();
+            client.info = {};
+            client.pupPage = {
+                evaluate: sinon.stub().resolves(),
+            };
+            sinon.stub(client, 'getNumberId').resolves({
+                _serialized: '123456789@c.us',
+            });
+        });
+
+        it('rejects missing contactId', async function () {
+            await expect(client.addParticipantToCall()).to.be.rejectedWith(
+                'Invalid contactId',
+            );
+        });
+
+        it('rejects invalid contactId', async function () {
+            await expect(
+                client.addParticipantToCall('123456789'),
+            ).to.be.rejectedWith("ending with '@c.us'");
+        });
+
+        it('rejects group IDs', async function () {
+            await expect(
+                client.addParticipantToCall('123456789@g.us'),
+            ).to.be.rejectedWith('Group IDs cannot be added');
+        });
+
+        it('rejects invalid callId values', async function () {
+            await expect(
+                client.addParticipantToCall('123456789@c.us', 123),
+            ).to.be.rejectedWith('Invalid callId');
+        });
+
+        it('requires a ready client', async function () {
+            const unreadyClient = new Client();
+
+            await expect(
+                unreadyClient.addParticipantToCall('123456789@c.us'),
+            ).to.be.rejectedWith('Client is not ready');
+        });
+
+        it('rejects unreachable contacts', async function () {
+            client.getNumberId.resolves(null);
+
+            await expect(
+                client.addParticipantToCall('123456789@c.us'),
+            ).to.be.rejectedWith('Contact is not registered or reachable');
+        });
+
+        it('passes the participant and callId guard to the injected controller', async function () {
+            await client.addParticipantToCall('123456789@c.us', 'call-id');
+
+            expect(client.pupPage.evaluate.firstCall.args[1]).to.equal(
+                '123456789@c.us',
+            );
+            expect(client.pupPage.evaluate.firstCall.args[2]).to.equal(
+                'call-id',
+            );
+        });
+
+        it('propagates internal controller errors', async function () {
+            client.pupPage.evaluate.rejects(new Error('No active call'));
+
+            await expect(
+                client.addParticipantToCall('123456789@c.us', 'call-id'),
+            ).to.be.rejectedWith('No active call');
         });
     });
 });

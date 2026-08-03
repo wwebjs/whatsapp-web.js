@@ -1573,6 +1573,43 @@ exports.LoadUtils = () => {
         };
     };
 
+    window.WWebJS.addParticipantToCall = async (contactId, callId) => {
+        const inviteWid = window
+            .require('WAWebWidFactory')
+            .createWid(contactId);
+        if (!inviteWid || inviteWid.isGroup?.()) {
+            throw new Error(
+                'Only individual WhatsApp contacts can be added to calls.',
+            );
+        }
+
+        const callCollectionModule = window.require('WAWebCallCollection');
+        const callCollection =
+            callCollectionModule.get?.() || callCollectionModule;
+        const activeCall = callCollection.activeCall;
+
+        if (!activeCall) {
+            throw new Error(
+                'No active WhatsApp call is available to add a participant.',
+            );
+        }
+
+        if (callId && activeCall.id !== callId) {
+            throw new Error(
+                `Active WhatsApp call ID does not match requested call ID: ${callId}`,
+            );
+        }
+
+        const callStart = window.require('WAWebVoipStartCall');
+        if (!callStart || typeof callStart.inviteToCall !== 'function') {
+            throw new Error(
+                'Adding participants to WhatsApp calls is not supported by this WhatsApp Web version: no supported internal call controller was detected.',
+            );
+        }
+
+        await callStart.inviteToCall(inviteWid);
+    };
+
     window.WWebJS.cropAndResizeImage = async (media, options = {}) => {
         if (!media.mimetype.includes('image'))
             throw new Error('Media is not an image');
