@@ -1483,6 +1483,19 @@ exports.LoadUtils = () => {
         return true;
     };
 
+    window.WWebJS.getOngoingCall = () => {
+        // lastActiveCall keeps pointing at the previous call even after it ends,
+        // so a call in the ended state (0) is treated as no ongoing call.
+        const call = window.require('WAWebCallCollection').lastActiveCall;
+        if (
+            !call ||
+            (typeof call.getState === 'function' && call.getState() === 0)
+        ) {
+            return null;
+        }
+        return call;
+    };
+
     window.WWebJS.startCall = async (
         chatId,
         isVideo = false,
@@ -1516,22 +1529,24 @@ exports.LoadUtils = () => {
             .startWAWebVoipCall(wid, isVideo, CALL_FROM_UI.CONVERSATION);
 
         // The call is registered in the collection shortly after the offer is
-        // sent, so wait for it to become available before returning its data.
+        // sent, so wait for the newly placed call to become available before
+        // returning its data.
         const collection = window.require('WAWebCallCollection');
-        let call = collection.lastActiveCall;
+        let call = null;
         for (let i = 0; i < 30 && !call; i++) {
             await new Promise((resolve) => setTimeout(resolve, 100));
-            call = collection.lastActiveCall;
+            call = window.WWebJS.getOngoingCall();
         }
 
         // Optionally block until the callee answers (or the timeout elapses).
         if (call && waitForAnswer) {
             const deadline = Date.now() + timeout;
             while (Date.now() < deadline) {
+                const current = window.WWebJS.getOngoingCall();
                 if (
                     collection.isInConnectedCall &&
-                    collection.lastActiveCall &&
-                    collection.lastActiveCall.id === call.id
+                    current &&
+                    current.id === call.id
                 ) {
                     break;
                 }
@@ -1560,11 +1575,8 @@ exports.LoadUtils = () => {
     };
 
     window.WWebJS.getActiveCall = () => {
-        const call = window.require('WAWebCallCollection').lastActiveCall;
-        if (
-            !call ||
-            (typeof call.getState === 'function' && call.getState() === 0)
-        ) {
+        const call = window.WWebJS.getOngoingCall();
+        if (!call) {
             return null;
         }
         return {
