@@ -1355,6 +1355,25 @@ exports.LoadUtils = () => {
             .getVoipStackInterface();
     };
 
+    window.WWebJS.serializeCallModel = (call) => {
+        if (!call) return null;
+
+        return {
+            id: call.id,
+            peerJid:
+                call.peerJid?._serialized ||
+                call.peerJid?.toString?.() ||
+                call.peerJid,
+            offerTime: call.offerTime,
+            isVideo: !!call.isVideo,
+            isGroup: !!call.isGroup,
+            canHandleLocally: !!call.canHandleLocally,
+            outgoing: !!call.outgoing,
+            webClientShouldHandle: !!call.webClientShouldHandle,
+            participants: call.participants || {},
+        };
+    };
+
     window.WWebJS.setupCallMediaStream = () => {
         const store = window.WWebJS;
         // Route the outgoing microphone through our own graph only while an
@@ -1455,6 +1474,55 @@ exports.LoadUtils = () => {
         const stack = await window.WWebJS.getCallStackInterface();
         await stack.acceptCall(callId, isVideo);
         return true;
+    };
+
+    window.WWebJS.startGroupCall = async (contactIds, options = {}) => {
+        const contactWids = contactIds.map((contactId) =>
+            window.require('WAWebWidFactory').createWid(contactId),
+        );
+
+        if (contactWids.some((contactWid) => !contactWid)) {
+            throw new Error('Only valid WhatsApp contacts can be called.');
+        }
+
+        if (contactWids.some((contactWid) => contactWid.isGroup?.())) {
+            throw new Error(
+                'Group chat IDs cannot be used as group call participants.',
+            );
+        }
+
+        const callStart = window.require('WAWebVoipStartCall');
+        if (
+            !callStart ||
+            typeof callStart.startWAWebVoipGroupCallFromWids !== 'function'
+        ) {
+            throw new Error(
+                'Group WhatsApp calls are not supported by this WhatsApp Web version: no supported internal call controller was detected.',
+            );
+        }
+
+        const callCollectionModule = window.require('WAWebCallCollection');
+        const callCollection =
+            callCollectionModule.get?.() || callCollectionModule;
+
+        await callStart.startWAWebVoipGroupCallFromWids(
+            contactWids,
+            options.video === true,
+        );
+
+        const startedAt = Date.now();
+        while (Date.now() - startedAt < 5000) {
+            const call = callCollection.activeCall;
+            if (call?.outgoing && call?.isGroup) {
+                return window.WWebJS.serializeCallModel(call);
+            }
+
+            await new Promise((resolve) => setTimeout(resolve, 100));
+        }
+
+        throw new Error(
+            'Outgoing WhatsApp group call was not promoted to an active call.',
+        );
     };
 
     window.WWebJS.endCall = async (callId) => {
@@ -1608,6 +1676,61 @@ exports.LoadUtils = () => {
         }
 
         await callStart.inviteToCall(inviteWid);
+    };
+
+    window.WWebJS.removeParticipantFromCall = async (contactId, callId) => {
+        const participantWid = window
+            .require('WAWebWidFactory')
+            .createWid(contactId);
+        if (!participantWid || participantWid.isGroup?.()) {
+            throw new Error(
+                'Only individual WhatsApp contacts can be removed from calls.',
+            );
+        }
+
+        const callCollectionModule = window.require('WAWebCallCollection');
+        const callCollection =
+            callCollectionModule.get?.() || callCollectionModule;
+        const activeCall = callCollection.activeCall;
+
+        if (!activeCall) {
+            throw new Error(
+                'No active WhatsApp call is available to remove a participant.',
+            );
+        }
+
+        if (callId && activeCall.id !== callId) {
+            throw new Error(
+                `Active WhatsApp call ID does not match requested call ID: ${callId}`,
+            );
+        }
+
+        const stack = window.require('WAWebVoipStackInterface');
+        if (!stack || typeof stack.getVoipStackInterface !== 'function') {
+            throw new Error(
+                'Removing participants from WhatsApp calls is not supported by this WhatsApp Web version: no supported internal call controller was detected.',
+            );
+        }
+
+        const voipStack = await stack.getVoipStackInterface();
+        if (
+            !voipStack ||
+            voipStack.type !== 'web' ||
+            typeof voipStack.removeCallParticipant !== 'function'
+        ) {
+            throw new Error(
+                'Removing participants from WhatsApp calls is not supported by this WhatsApp Web version: no supported internal call controller was detected.',
+            );
+        }
+
+        const status = await voipStack.removeCallParticipant(
+            participantWid.toString(),
+        );
+        if (status !== 0) {
+            throw new Error(
+                `Removing participant from WhatsApp call failed with status: ${status}`,
+            );
+        }
     };
 
     window.WWebJS.cropAndResizeImage = async (media, options = {}) => {
