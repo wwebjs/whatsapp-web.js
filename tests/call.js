@@ -4,6 +4,7 @@ const sinon = require('sinon');
 const Call = require('../src/structures/Call');
 const Client = require('../src/Client');
 
+chai.use(require('chai-as-promised'));
 const expect = chai.expect;
 
 // These are unit tests: the injected browser functions run inside WhatsApp Web,
@@ -123,6 +124,21 @@ describe('Calls', function () {
                 ).to.equal(true);
             });
         });
+
+        describe('removeParticipant', function () {
+            it('removes a participant using the current call id', async function () {
+                client.removeParticipantFromCall = sinon.stub().resolves();
+
+                await call.removeParticipant('987654321@c.us');
+
+                expect(
+                    client.removeParticipantFromCall.calledOnceWithExactly(
+                        '987654321@c.us',
+                        'call-id',
+                    ),
+                ).to.equal(true);
+            });
+        });
     });
 
     describe('Client.call', function () {
@@ -170,6 +186,81 @@ describe('Calls', function () {
             expect(
                 client.pupPage.evaluate.firstCall.args.slice(1),
             ).to.deep.equal(['15551234567', true, true, 1000, false]);
+        });
+    });
+
+    describe('Client.startGroupCall', function () {
+        let client;
+
+        beforeEach(function () {
+            client = new Client();
+            client.info = {};
+            client.pupPage = {
+                evaluate: sinon.stub().resolves({
+                    id: 'group-call',
+                    peerJid: 'group-call@call',
+                    isVideo: false,
+                    isGroup: true,
+                    outgoing: true,
+                }),
+            };
+            sinon.stub(client, 'getNumberId').callsFake(async (contactId) => ({
+                _serialized: contactId,
+            }));
+        });
+
+        it('rejects non-array contactIds', async function () {
+            await expect(
+                client.startGroupCall('123456789@c.us'),
+            ).to.be.rejectedWith('Invalid contactIds');
+        });
+
+        it('requires at least two participants', async function () {
+            await expect(
+                client.startGroupCall(['123456789@c.us']),
+            ).to.be.rejectedWith('At least two participants');
+        });
+
+        it('rejects group chat IDs', async function () {
+            await expect(
+                client.startGroupCall(['123456789@c.us', '987654321@g.us']),
+            ).to.be.rejectedWith('Group chat IDs cannot be used');
+        });
+
+        it('requires a ready client', async function () {
+            const unreadyClient = new Client();
+
+            await expect(
+                unreadyClient.startGroupCall([
+                    '123456789@c.us',
+                    '987654321@c.us',
+                ]),
+            ).to.be.rejectedWith('Client is not ready');
+        });
+
+        it('rejects unreachable contacts', async function () {
+            client.getNumberId.withArgs('987654321@c.us').resolves(null);
+
+            await expect(
+                client.startGroupCall(['123456789@c.us', '987654321@c.us']),
+            ).to.be.rejectedWith('Contact is not registered or reachable');
+        });
+
+        it('passes resolved contacts and video option to the injected controller', async function () {
+            const call = await client.startGroupCall(
+                ['123456789@c.us', '987654321@c.us'],
+                { video: true },
+            );
+
+            expect(call).to.be.instanceOf(Call);
+            expect(call.id).to.equal('group-call');
+            expect(client.pupPage.evaluate.firstCall.args[1]).to.deep.equal([
+                '123456789@c.us',
+                '987654321@c.us',
+            ]);
+            expect(client.pupPage.evaluate.firstCall.args[2]).to.deep.equal({
+                video: true,
+            });
         });
     });
 
@@ -243,6 +334,80 @@ describe('Calls', function () {
 
             await expect(
                 client.addParticipantToCall('123456789@c.us', 'call-id'),
+            ).to.be.rejectedWith('No active call');
+        });
+    });
+
+    describe('Client.removeParticipantFromCall', function () {
+        let client;
+
+        beforeEach(function () {
+            client = new Client();
+            client.info = {};
+            client.pupPage = {
+                evaluate: sinon.stub().resolves(),
+            };
+            sinon.stub(client, 'getNumberId').resolves({
+                _serialized: '123456789@c.us',
+            });
+        });
+
+        it('rejects missing contactId', async function () {
+            await expect(client.removeParticipantFromCall()).to.be.rejectedWith(
+                'Invalid contactId',
+            );
+        });
+
+        it('rejects invalid contactId', async function () {
+            await expect(
+                client.removeParticipantFromCall('123456789'),
+            ).to.be.rejectedWith("ending with '@c.us'");
+        });
+
+        it('rejects group IDs', async function () {
+            await expect(
+                client.removeParticipantFromCall('123456789@g.us'),
+            ).to.be.rejectedWith('Group IDs cannot be removed');
+        });
+
+        it('rejects invalid callId values', async function () {
+            await expect(
+                client.removeParticipantFromCall('123456789@c.us', 123),
+            ).to.be.rejectedWith('Invalid callId');
+        });
+
+        it('requires a ready client', async function () {
+            const unreadyClient = new Client();
+
+            await expect(
+                unreadyClient.removeParticipantFromCall('123456789@c.us'),
+            ).to.be.rejectedWith('Client is not ready');
+        });
+
+        it('rejects unreachable contacts', async function () {
+            client.getNumberId.resolves(null);
+
+            await expect(
+                client.removeParticipantFromCall('123456789@c.us'),
+            ).to.be.rejectedWith('Contact is not registered or reachable');
+        });
+
+        it('passes the participant and callId guard to the injected controller', async function () {
+            await client.removeParticipantFromCall('123456789@c.us', 'call-id');
+
+            expect(client.pupPage.evaluate.firstCall.args[1]).to.equal(
+                '123456789@c.us',
+            );
+            expect(client.pupPage.evaluate.firstCall.args[2]).to.equal(
+                'call-id',
+            );
+        });
+
+        it('propagates internal controller errors', async function () {
+            client.pupPage.evaluate.rejects(new Error('No active call'));
+
+            await expect(
+                client.removeParticipantFromCall('123456789@c.us', 'call-id'),
             ).to.be.rejectedWith('No active call');
         });
     });

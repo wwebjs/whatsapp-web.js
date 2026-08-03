@@ -357,11 +357,33 @@ declare namespace WAWebJS {
         getActiveCall(): Promise<Call | null>;
 
         /**
+         * Starts an outgoing WhatsApp group call.
+         * @experimental Depends on private WhatsApp Web internals and may reject
+         * when no supported internal group call controller is detected.
+         */
+        startGroupCall(
+            contactIds: string[],
+            options?: {
+                video?: boolean;
+            },
+        ): Promise<Call>;
+
+        /**
          * Adds an individual WhatsApp contact to the currently active call.
          * @experimental Depends on private WhatsApp Web internals and may reject
          * when no supported internal call controller is detected.
          */
         addParticipantToCall(contactId: string, callId?: string): Promise<void>;
+
+        /**
+         * Removes an individual WhatsApp contact from the currently active call.
+         * @experimental Depends on private WhatsApp Web internals and may reject
+         * when no supported internal call controller is detected.
+         */
+        removeParticipantFromCall(
+            contactId: string,
+            callId?: string,
+        ): Promise<void>;
 
         /**
          * Sends a response to the scheduled event message, indicating whether a user is going to attend the event or not
@@ -2480,6 +2502,9 @@ declare namespace WAWebJS {
 
         /** Add an individual WhatsApp contact to the active call */
         addParticipant: (contactId: string) => Promise<void>;
+
+        /** Remove an individual WhatsApp contact from the active call */
+        removeParticipant: (contactId: string) => Promise<void>;
     }
 
     /** Message type List */
