@@ -2200,22 +2200,23 @@ class Client extends EventEmitter {
     /**
      * Returns the contact ID's profile picture URL, if privacy settings allow it
      * @param {string} contactId the whatsapp user's ID
-     * @returns {Promise<string>}
+     * @returns {Promise<string|undefined>}
      */
     async getProfilePicUrl(contactId) {
-        const profilePic = await this.pupPage.evaluate(async (contactId) => {
+        return this.pupPage.evaluate(async (contactId) => {
             try {
-                const chat = await window.WWebJS.getChat(contactId);
-                return await window
-                    .require('WAWebContactProfilePicThumbBridge')
-                    .requestProfilePicFromServer(chat);
-            } catch (err) {
-                if (err.name === 'ServerStatusCodeError') return undefined;
-                throw err;
+                const wid = window
+                    .require('WAWebWidFactory')
+                    .createWid(contactId);
+                const pictures =
+                    window.require('WAWebCollections').ProfilePicThumb;
+                const picture = pictures.get(wid) || (await pictures.find(wid));
+
+                return picture?.eurl;
+            } catch {
+                return undefined;
             }
         }, contactId);
-
-        return profilePic ? profilePic.eurl : undefined;
     }
 
     /**
