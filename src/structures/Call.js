@@ -67,13 +67,7 @@ class Call extends Base {
      * Reject the call
      */
     async reject() {
-        return this.client.pupPage.evaluate(
-            (peerJid, id) => {
-                return window.WWebJS.rejectCall(peerJid, id);
-            },
-            this.from,
-            this.id,
-        );
+        return this.client.rejectCall(this.id);
     }
 
     /**
@@ -132,6 +126,14 @@ class Call extends Base {
      */
     async addParticipant(contactId) {
         return this.client.addParticipantToCall(contactId, this.id);
+    }
+
+    /**
+     * Remove an individual WhatsApp contact from the active call
+     * @param {string} contactId Individual WhatsApp contact ID, e.g. `123456789@c.us`
+     */
+    async removeParticipant(contactId) {
+        return this.client.removeParticipantFromCall(contactId, this.id);
     }
 }
 

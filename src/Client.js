@@ -3361,6 +3361,82 @@ class Client extends EventEmitter {
     }
 
     /**
+     * Starts an outgoing WhatsApp group call using WhatsApp Web internals.
+     * This API is experimental and depends on private WhatsApp Web modules. In
+     * versions where no supported internal group call controller can be
+     * detected, the method rejects without sending custom signaling stanzas.
+     * @param {Array<string>} contactIds Individual WhatsApp contact IDs, e.g. `['123456789@c.us', '987654321@c.us']`
+     * @param {object} [options]
+     * @param {boolean} [options.video=false] Start a video call instead of a voice call
+     * @returns {Promise<Call>}
+     */
+    async startGroupCall(contactIds, options = {}) {
+        if (!Array.isArray(contactIds)) {
+            throw new Error('Invalid contactIds: expected an array.');
+        }
+
+        const normalizedContactIds = contactIds.map((contactId) => {
+            if (typeof contactId !== 'string' || contactId.trim() === '') {
+                throw new Error(
+                    'Invalid contactId: expected a non-empty string.',
+                );
+            }
+
+            contactId = contactId.trim();
+
+            if (contactId.endsWith('@g.us')) {
+                throw new Error(
+                    'Group chat IDs cannot be used as group call participants.',
+                );
+            }
+
+            if (!contactId.endsWith('@c.us')) {
+                throw new Error(
+                    "Invalid contactId: expected an individual WhatsApp ID ending with '@c.us'.",
+                );
+            }
+
+            return contactId;
+        });
+
+        if (normalizedContactIds.length < 2) {
+            throw new Error(
+                'At least two participants are required to start a group call.',
+            );
+        }
+
+        if (!this.pupPage || !this.info) {
+            throw new Error(
+                'Client is not ready. Wait for the ready event first.',
+            );
+        }
+
+        const contactWids = await Promise.all(
+            normalizedContactIds.map(async (contactId) => {
+                const contactWid = await this.getNumberId(contactId);
+                if (!contactWid) {
+                    throw new Error(
+                        `Contact is not registered or reachable: ${contactId}`,
+                    );
+                }
+
+                return contactWid._serialized || contactId;
+            }),
+        );
+
+        const call = await this.pupPage.evaluate(
+            async (ids, callOptions) =>
+                window.WWebJS.startGroupCall(ids, callOptions),
+            contactWids,
+            {
+                video: options && options.video === true,
+            },
+        );
+
+        return new Call(this, call);
+    }
+
+    /**
      * Gets the call that is currently ongoing (ringing, being placed or connected), if any
      * @returns {Promise<Call|null>} The current call, or null if there is no ongoing call
      */
@@ -3419,6 +3495,60 @@ class Client extends EventEmitter {
         await this.pupPage.evaluate(
             async (id, activeCallId) =>
                 window.WWebJS.addParticipantToCall(id, activeCallId),
+            contactWid._serialized || contactId,
+            callId,
+        );
+    }
+
+    /**
+     * Removes an individual WhatsApp contact from the currently active call
+     * using WhatsApp Web internals.
+     * This API is experimental and depends on private WhatsApp Web modules. In
+     * versions where no supported internal call controller can be detected, the
+     * method rejects without sending custom signaling stanzas.
+     * @param {string} contactId Individual WhatsApp contact ID, e.g. `123456789@c.us`
+     * @param {string} [callId] Optional active call ID guard
+     * @returns {Promise<void>}
+     */
+    async removeParticipantFromCall(contactId, callId) {
+        if (typeof contactId !== 'string' || contactId.trim() === '') {
+            throw new Error('Invalid contactId: expected a non-empty string.');
+        }
+
+        contactId = contactId.trim();
+
+        if (contactId.endsWith('@g.us')) {
+            throw new Error(
+                'Group IDs cannot be removed as call participants.',
+            );
+        }
+
+        if (!contactId.endsWith('@c.us')) {
+            throw new Error(
+                "Invalid contactId: expected an individual WhatsApp ID ending with '@c.us'.",
+            );
+        }
+
+        if (callId !== undefined && typeof callId !== 'string') {
+            throw new Error('Invalid callId: expected a string when provided.');
+        }
+
+        if (!this.pupPage || !this.info) {
+            throw new Error(
+                'Client is not ready. Wait for the ready event first.',
+            );
+        }
+
+        const contactWid = await this.getNumberId(contactId);
+        if (!contactWid) {
+            throw new Error(
+                `Contact is not registered or reachable: ${contactId}`,
+            );
+        }
+
+        await this.pupPage.evaluate(
+            async (id, activeCallId) =>
+                window.WWebJS.removeParticipantFromCall(id, activeCallId),
             contactWid._serialized || contactId,
             callId,
         );
