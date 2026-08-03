@@ -1172,7 +1172,18 @@ class Client extends EventEmitter {
                 if (!window._wwjsCallListener) {
                     window._wwjsCallListener = true;
                     WAWebCallCollection.on('change:activeCall', (call) => {
-                        emitCall(call);
+                        if (call) {
+                            emitCall(call);
+                        }
+                        // Restore the real microphone once the call is over so a
+                        // following normal call is not fed the injected stream.
+                        if (
+                            !call ||
+                            (typeof call.getState === 'function' &&
+                                call.getState() === 0)
+                        ) {
+                            window.WWebJS.teardownCallMediaStream?.();
+                        }
                     });
                 }
 
@@ -3331,22 +3342,25 @@ class Client extends EventEmitter {
      * @param {boolean} [options.video=false] Whether to place a video call instead of a voice call
      * @param {boolean} [options.waitForAnswer=false] If true, waits until the callee answers (or the timeout elapses) before resolving
      * @param {number} [options.answerTimeout=60000] Maximum time to wait for an answer, in milliseconds, when waitForAnswer is true
+     * @param {boolean} [options.injectAudio=true] Route the outgoing audio from injected clips (via Call.playAudio) instead of the real microphone. Set false to place a normal call
      * @returns {Promise<Call>} The placed call
      */
     async call(chatId, options = {}) {
         const callData = await this.pupPage.evaluate(
-            (id, isVideo, waitForAnswer, answerTimeout) => {
+            (id, isVideo, waitForAnswer, answerTimeout, injectAudio) => {
                 return window.WWebJS.startCall(
                     id,
                     isVideo,
                     waitForAnswer,
                     answerTimeout,
+                    injectAudio,
                 );
             },
             chatId,
             options.video ?? false,
             options.waitForAnswer ?? false,
             options.answerTimeout ?? 60000,
+            options.injectAudio ?? true,
         );
 
         return new Call(this, callData);

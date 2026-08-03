@@ -80,15 +80,17 @@ class Call extends Base {
      * Accept the call
      * @param {object} [options] Accept options
      * @param {boolean} [options.video=false] Whether to answer with video (requires a camera). Defaults to audio only, even for incoming video calls
+     * @param {boolean} [options.injectAudio=true] Route the outgoing audio from injected clips (via playAudio) instead of the real microphone. Set false to answer with the real microphone
      * @returns {Promise<boolean>}
      */
     async accept(options = {}) {
         return this.client.pupPage.evaluate(
-            (id, isVideo) => {
-                return window.WWebJS.acceptCall(id, isVideo);
+            (id, isVideo, injectAudio) => {
+                return window.WWebJS.acceptCall(id, isVideo, injectAudio);
             },
             this.id,
             options.video ?? false,
+            options.injectAudio ?? true,
         );
     }
 

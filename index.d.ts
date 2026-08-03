@@ -349,6 +349,7 @@ declare namespace WAWebJS {
                 video?: boolean;
                 waitForAnswer?: boolean;
                 answerTimeout?: number;
+                injectAudio?: boolean;
             },
         ): Promise<Call>;
 
@@ -2456,7 +2457,10 @@ declare namespace WAWebJS {
         reject: () => Promise<void>;
 
         /** Accept the call (audio only by default, even for incoming video calls) */
-        accept: (options?: { video?: boolean }) => Promise<boolean>;
+        accept: (options?: {
+            video?: boolean;
+            injectAudio?: boolean;
+        }) => Promise<boolean>;
 
         /** End an ongoing call */
         end: () => Promise<boolean>;

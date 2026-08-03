@@ -1373,6 +1373,11 @@ exports.LoadUtils = () => {
 
     window.WWebJS.setupCallMediaStream = () => {
         const store = window.WWebJS;
+        // Route the outgoing microphone through our own graph only while an
+        // injected call is active, so ordinary calls keep using the real
+        // microphone (see teardownCallMediaStream).
+        store._callMediaActive = true;
+
         if (store._callMedia && store._callMedia.context.state !== 'closed') {
             return store._callMedia;
         }
@@ -1387,7 +1392,8 @@ exports.LoadUtils = () => {
 
         // WhatsApp acquires the microphone through this single entry point.
         // Patch it once so the outgoing audio track is fed from our own graph
-        // instead of a physical device. A fresh destination is handed out on
+        // instead of a physical device, but only while injection is active so
+        // normal calls are left untouched. A fresh destination is handed out on
         // every call because WhatsApp stops the track when the stream is
         // disposed, which would permanently silence a shared destination.
         const mediaModule = window.require('WAGetUserMedia');
@@ -1396,7 +1402,11 @@ exports.LoadUtils = () => {
             mediaModule._wwebjsPatched = true;
             mediaModule.getUserMedia = (constraints) => {
                 const media = window.WWebJS._callMedia;
-                if ((constraints && constraints.video) || !media) {
+                if (
+                    (constraints && constraints.video) ||
+                    !media ||
+                    !window.WWebJS._callMediaActive
+                ) {
                     return original(constraints);
                 }
                 const destination =
@@ -1408,6 +1418,23 @@ exports.LoadUtils = () => {
         }
 
         return store._callMedia;
+    };
+
+    window.WWebJS.teardownCallMediaStream = () => {
+        const media = window.WWebJS._callMedia;
+        window.WWebJS._callMediaActive = false;
+        if (!media) return;
+
+        // Detach the destinations handed out during the call so the next call
+        // starts from a clean graph and the real microphone is used again.
+        for (const destination of media.destinations) {
+            try {
+                media.master.disconnect(destination);
+            } catch {
+                // The destination was already disconnected by WhatsApp.
+            }
+        }
+        media.destinations = [];
     };
 
     window.WWebJS.playCallAudio = async (base64) => {
@@ -1433,8 +1460,14 @@ exports.LoadUtils = () => {
         });
     };
 
-    window.WWebJS.acceptCall = async (callId, isVideo = false) => {
-        window.WWebJS.setupCallMediaStream();
+    window.WWebJS.acceptCall = async (
+        callId,
+        isVideo = false,
+        injectAudio = true,
+    ) => {
+        if (injectAudio) {
+            window.WWebJS.setupCallMediaStream();
+        }
         const stack = await window.WWebJS.getCallStackInterface();
         await stack.acceptCall(callId, isVideo);
         return true;
@@ -1446,6 +1479,7 @@ exports.LoadUtils = () => {
             'WAWebWamEnumCallTermReason',
         );
         await stack.endCall(callId, CALL_TERM_REASON.ENDED_BY_USER);
+        window.WWebJS.teardownCallMediaStream();
         return true;
     };
 
@@ -1454,8 +1488,11 @@ exports.LoadUtils = () => {
         isVideo = false,
         waitForAnswer = false,
         timeout = 60000,
+        injectAudio = true,
     ) => {
-        window.WWebJS.setupCallMediaStream();
+        if (injectAudio) {
+            window.WWebJS.setupCallMediaStream();
+        }
 
         let wid;
         const target = String(chatId);
