@@ -3385,29 +3385,27 @@ class Client extends EventEmitter {
     /**
      * Add or edit a customer note
      * @see https://faq.whatsapp.com/1433099287594476
-     * @param {string} userId The ID of a customer to add a note to
-     * @param {string} note The note to add
+     * @param {string} userId The customer chat ID
+     * @param {string} note The note content
      * @returns {Promise<void>}
      */
     async addOrEditCustomerNote(userId, note) {
-        return await this.pupPage.evaluate(
+        await this.pupPage.evaluate(
             async (userId, note) => {
-                if (!window.require('WAWebBizGatingUtils').smbNotesV1Enabled())
-                    return;
+                const BizNotesGatingUtils = window.require(
+                    'WAWebBizNotesGatingUtils',
+                );
 
-                return window
-                    .require('WAWebNoteAction')
-                    .noteAddAction(
-                        'unstructured',
-                        window
-                            .require('WAWebWidToJid')
-                            .widToUserJid(
-                                window
-                                    .require('WAWebWidFactory')
-                                    .createWid(userId),
-                            ),
-                        note,
-                    );
+                if (!BizNotesGatingUtils?.smbNotesV1Enabled?.()) return;
+
+                const NoteAction = window.require('WAWebNoteAction');
+                const WidFactory = window.require('WAWebWidFactory');
+                const WidToJid = window.require('WAWebWidToJid');
+
+                const chatWid = WidFactory.createWid(userId);
+                const chatJid = WidToJid.widToUserJid(chatWid);
+
+                await NoteAction.noteAddAction('unstructured', chatJid, note);
             },
             userId,
             note,
@@ -3417,41 +3415,47 @@ class Client extends EventEmitter {
     /**
      * Get a customer note
      * @see https://faq.whatsapp.com/1433099287594476
-     * @param {string} userId The ID of a customer to get a note from
+     * @param {string} userId The customer chat ID
      * @returns {Promise<{
+     *    id: string,
      *    chatId: string,
+     *    type: string
      *    content: string,
      *    createdAt: number,
-     *    id: string,
-     *    modifiedAt: number,
-     *    type: string
-     * }>}
+     *    modifiedAt: number
+     * } | null>}
      */
     async getCustomerNote(userId) {
         return await this.pupPage.evaluate(async (userId) => {
-            if (!window.require('WAWebBizGatingUtils').smbNotesV1Enabled())
-                return null;
+            const BizNotesGatingUtils = window.require(
+                'WAWebBizNotesGatingUtils',
+            );
 
-            const note = await window
-                .require('WAWebNoteAction')
-                .retrieveOnlyNoteForChatJid(
-                    window
-                        .require('WAWebWidToJid')
-                        .widToUserJid(
-                            window.require('WAWebWidFactory').createWid(userId),
-                        ),
-                );
+            if (!BizNotesGatingUtils?.smbNotesV1Enabled?.()) return null;
 
-            let serialized = note?.serialize();
+            const NoteAction = window.require('WAWebNoteAction');
+            const WidFactory = window.require('WAWebWidFactory');
+            const WidToJid = window.require('WAWebWidToJid');
+            const JidToWid = window.require('WAWebJidToWid');
+
+            const chatWid = WidFactory.createWid(userId);
+            const chatJid = WidToJid.widToUserJid(chatWid);
+
+            const note = await NoteAction.retrieveOnlyNoteForChatJid(chatJid);
+
+            const serialized = note?.serialize();
 
             if (!serialized) return null;
 
-            serialized.chatId = window
-                .require('WAWebJidToWid')
-                .userJidToUserWid(serialized.chatJid)._serialized;
-            delete serialized.chatJid;
-
-            return serialized;
+            return {
+                id: serialized.id,
+                chatId: JidToWid.userJidToUserWid(serialized.chatJid)
+                    ._serialized,
+                type: serialized.type,
+                content: serialized.content,
+                createdAt: serialized.createdAt,
+                modifiedAt: serialized.modifiedAt,
+            };
         }, userId);
     }
 
