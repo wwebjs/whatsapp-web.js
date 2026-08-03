@@ -585,6 +585,79 @@ exports.LoadUtils = () => {
             .Msg.get(newMsgKey._serialized);
     };
 
+    window.WWebJS.sendMetaAiMessage = async (message, options = {}) => {
+        const { Msg } = window.require('WAWebCollections');
+        const { BotMsgEditType } = window.require('WAWebBotTypes');
+        const chatId =
+            window.require('WAWebBotUtils').META_BOT_PN_WID._serialized;
+        const chat = await window.WWebJS.getChat(chatId, { getAsModel: false });
+
+        if (!chat) return null;
+
+        const previousIds = new Set(
+            Msg.getModelsArray()
+                .filter((msg) => msg.id?.remote?._serialized === chatId)
+                .map((msg) => msg.id?._serialized),
+        );
+
+        // Meta AI only replies when the outgoing message carries a bot secret.
+        const messageSecret = window.crypto.getRandomValues(new Uint8Array(32));
+        const botMessageSecret = await window
+            .require('WAWebBotMessageSecret')
+            .genBotMsgSecretFromMsgSecret(messageSecret);
+
+        await window.WWebJS.sendMessage(chat, message, {
+            messageSecret,
+            botMessageSecret,
+        });
+
+        const getReplies = () =>
+            Msg.getModelsArray().filter(
+                (msg) =>
+                    msg.id?.remote?._serialized === chatId &&
+                    msg.id?.fromMe === false &&
+                    !previousIds.has(msg.id?._serialized),
+            );
+        const isFinished = (msg) =>
+            msg.botEditType === BotMsgEditType.LAST ||
+            msg.botEditType === BotMsgEditType.FULL;
+
+        // The text reply streams in as a single message edited in place until
+        // the last chunk. A generated image arrives as a separate message right
+        // after, so wait for a finished reply plus a short quiet period to catch
+        // any trailing message.
+        const timeout = options.timeout ?? 60000;
+        const start = Date.now();
+        let signature = '';
+        let stableSince = start;
+
+        while (Date.now() - start < timeout) {
+            const replies = getReplies();
+            const currentSignature = replies
+                .map(
+                    (msg) =>
+                        `${msg.id?._serialized}:${msg.botEditType}:${Boolean(msg.directPath)}`,
+                )
+                .join('|');
+            if (currentSignature !== signature) {
+                signature = currentSignature;
+                stableSince = Date.now();
+            }
+            if (replies.some(isFinished) && Date.now() - stableSince >= 1500) {
+                break;
+            }
+            await new Promise((resolve) => setTimeout(resolve, 300));
+        }
+
+        const replies = getReplies();
+        const reply =
+            replies.find((msg) => msg.directPath) ||
+            replies.filter(isFinished).pop() ||
+            replies.pop();
+
+        return reply ? window.WWebJS.getMessageModel(reply) : null;
+    };
+
     window.WWebJS.editMessage = async (msg, content, options = {}) => {
         const extraOptions = options.extraOptions || {};
         delete options.extraOptions;

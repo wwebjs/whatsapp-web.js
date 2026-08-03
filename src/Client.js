@@ -1619,6 +1619,25 @@ class Client extends EventEmitter {
     }
 
     /**
+     * Sends a message to Meta AI and resolves once its reply has finished streaming
+     * @param {string} message The prompt to send to Meta AI
+     * @param {object} [options] Options
+     * @param {number} [options.timeout=60000] How long to wait for the reply, in milliseconds
+     * @returns {Promise<Message>} The reply from Meta AI, which may be a text or a media message
+     */
+    async sendMetaAiMessage(message, options = {}) {
+        const msg = await this.pupPage.evaluate(
+            (message, options) => {
+                return window.WWebJS.sendMetaAiMessage(message, options);
+            },
+            message,
+            options,
+        );
+
+        return msg ? new Message(this, msg) : null;
+    }
+
+    /**
      * Send an emoji reaction to a specific message
      * @param {string} messageId - Id of the message to add the reaction.
      * @param {string} reaction  - Emoji to react with. Send an empty string to remove the reaction.

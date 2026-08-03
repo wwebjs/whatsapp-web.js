@@ -73,6 +73,16 @@ client.on('message', async (msg) => {
     } else if (msg.body === '!ping') {
         // Send a new message to the same chat
         client.sendMessage(msg.from, 'pong');
+    } else if (msg.body.startsWith('!ai ')) {
+        // Ask Meta AI and forward its reply back to the chat
+        const prompt = msg.body.slice(4);
+        const reply = await client.sendMetaAiMessage(prompt);
+        if (reply && reply.hasMedia) {
+            const media = await reply.downloadMedia();
+            client.sendMessage(msg.from, media, { caption: reply.body });
+        } else {
+            client.sendMessage(msg.from, reply ? reply.body : 'No response');
+        }
     } else if (msg.body.startsWith('!sendto ')) {
         // Direct send a new message to specific id
         let number = msg.body.split(' ')[1];

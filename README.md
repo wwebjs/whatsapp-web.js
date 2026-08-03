@@ -86,6 +86,7 @@ For more details on saving and restoring sessions, check out the [Authentication
 | Send location                                    | ✅                                           |
 | Send buttons                                     | ❌ [(DEPRECATED)][deprecated-video]          |
 | Send lists                                       | ❌ [(DEPRECATED)][deprecated-video]          |
+| Chat with Meta AI                                | ✅                                           |
 | Receive location                                 | ✅                                           |
 | Message replies                                  | ✅                                           |
 | Join groups by invite                            | ✅                                           |

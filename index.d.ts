@@ -211,11 +211,14 @@ declare namespace WAWebJS {
             options?: MessageSendOptions,
         ): Promise<Message>;
 
+        /** Sends a message to Meta AI and resolves once its reply has finished streaming */
+        sendMetaAiMessage(
+            message: string,
+            options?: { timeout?: number },
+        ): Promise<Message | null>;
+
         /** Send a reaction to a specific messageId */
-        sendReaction(
-            messageId: string,
-            reaction: string,
-        ): Promise<void>;
+        sendReaction(messageId: string, reaction: string): Promise<void>;
 
         /** Sends a channel admin invitation to a user, allowing them to become an admin of the channel */
         sendChannelAdminInvite(
