@@ -125,6 +125,14 @@ class Call extends Base {
             return window.WWebJS.isCallConnected(id);
         }, this.id);
     }
+
+    /**
+     * Add an individual WhatsApp contact to the active call
+     * @param {string} contactId Individual WhatsApp contact ID, e.g. `123456789@c.us`
+     */
+    async addParticipant(contactId) {
+        return this.client.addParticipantToCall(contactId, this.id);
+    }
 }
 
 module.exports = Call;
