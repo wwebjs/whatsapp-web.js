@@ -9,7 +9,16 @@
   <link rel="stylesheet" href="https://brick.a.ssl.fastly.net/Noto+Serif:400,400i,700,700i" type="text/css">
   <link rel="stylesheet" href="https://brick.a.ssl.fastly.net/Inconsolata:500" type="text/css">
   <link href="css/baseline.css" rel="stylesheet">
-</head>
+
+		<meta property="og:type" content="website">
+		<meta property="og:title" content="Class: Message">
+		<meta property="og:description" content="Represents a Message on WhatsApp">
+		<meta property="og:image" content="https://wwebjs.dev/docs/images/og-gen/message.png">
+		<meta property="og:image:width" content="1834">
+		<meta property="og:image:height" content="963">
+		<meta name="twitter:card" content="summary_large_image">
+		<meta name="twitter:image" content="https://wwebjs.dev/docs/images/og-gen/message.png">
+	</head>
 
 <body onload="prettyPrint()">
   <nav id="jsdoc-navbar" role="navigation" class="jsdoc-navbar">
@@ -26,7 +35,7 @@
           <header class="page-header">
             <div class="symbol-detail-labels"><span class="label label-kind">class</span></div>
             <h1><small></small><span class="symbol-name">Message</span></h1>
-            <p class="source-link">Source: <a href="structures_Message.js.html#source-line-17">structures/<wbr>Message.<wbr>js:17</a></p>
+            <p class="source-link">Source: <a href="structures_Message.js.html#source-line-18">structures/<wbr>Message.<wbr>js:18</a></p>
             <div class="symbol-classdesc">
               <p>Represents a Message on WhatsApp</p>
             </div>
@@ -158,6 +167,9 @@
                     <dt><a href="Message.html#downloadMedia">downloadMedia()</a></dt>
                     <dd>
                     </dd>
+                    <dt><a href="Message.html#downloadMediaStream">downloadMediaStream([options])</a></dt>
+                    <dd>
+                    </dd>
                     <dt><a href="Message.html#edit">edit(content[, options])</a></dt>
                     <dd>
                     </dd>
@@ -201,13 +213,13 @@
                     <dt><a href="Message.html#getReactions">getReactions()</a></dt>
                     <dd>
                     </dd>
+                    <dt><a href="Message.html#pin">pin(duration)</a></dt>
+                    <dd>
+                    </dd>
                   </dl>
                 </div>
                 <div class="summary-column">
                   <dl class="dl-summary-callout">
-                    <dt><a href="Message.html#pin">pin(duration)</a></dt>
-                    <dd>
-                    </dd>
                     <dt><a href="Message.html#react">react(reaction)</a></dt>
                     <dd>
                     </dd>
@@ -465,12 +477,79 @@
               <dl class="dl-compact">
               </dl>
               <div class="symbol-detail-labels"><span class="label label-async">async</span></div>
-              <h3 id="downloadMedia"><span class="symbol-name">downloadMedia</span><span class="signature"><span class="signature-params">()</span>&nbsp;&rarr; <span class="signature-returns"> Promise containing <a href="MessageMedia.html">MessageMedia</a></span></span></h3>
-              <p>Downloads and returns the attatched message media</p>
+              <h3 id="downloadMedia"><span class="symbol-name">downloadMedia</span><span class="signature"><span class="signature-params">()</span>&nbsp;&rarr; <span class="signature-returns"> Promise containing (<a href="MessageMedia.html">MessageMedia</a> or undefined)</span></span></h3>
+              <p>Downloads and returns the attached message media</p>
               <dl class="dl-compact">
                 <dt>Returns</dt>
                 <dd>
-                  <p><code>Promise containing <a href="MessageMedia.html">MessageMedia</a></code> </p>
+                  <p><code>Promise containing (<a href="MessageMedia.html">MessageMedia</a> or undefined)</code> </p>
+                </dd>
+              </dl>
+              <div class="symbol-detail-labels"><span class="label label-async">async</span></div>
+              <h3 id="downloadMediaStream"><span class="symbol-name">downloadMediaStream</span><span class="signature"><span class="signature-params">([options])</span>&nbsp;&rarr; <span class="signature-returns"> Promise containing (MessageMediaStream or undefined)</span></span></h3>
+              <p>Like downloadMedia(), but returns a Readable stream instead of loading the entire file into memory.</p>
+              <section>
+                <h4>Parameters</h4>
+                <table class="jsdoc-details-table">
+                  <thead>
+                    <tr>
+                      <th>Name</th>
+                      <th>Type</th>
+                      <th>Optional</th>
+                      <th>Description</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>
+                        <p>options</p>
+                      </td>
+                      <td>
+                        <p>Object</p>
+                      </td>
+                      <td>
+                        <p>Yes</p>
+                      </td>
+                      <td>
+                        <p>Values in <code>options</code> have the following properties:</p>
+                        <table class="jsdoc-details-table">
+                          <thead>
+                            <tr>
+                              <th>Name</th>
+                              <th>Type</th>
+                              <th>Optional</th>
+                              <th>Description</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <tr>
+                              <td>
+                                <p>chunkSize</p>
+                              </td>
+                              <td>
+                                <p>number</p>
+                              </td>
+                              <td>
+                                <p>Yes</p>
+                              </td>
+                              <td>
+                                <p>Size in bytes of each chunk read from the browser (default 10MB)</p>
+                                <p>Defaults to <code>10485760</code>.</p>
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </section>
+              <dl class="dl-compact">
+                <dt>Returns</dt>
+                <dd>
+                  <p><code>Promise containing (MessageMediaStream or undefined)</code> 
+                  <p>undefined if media is unavailable</p>
+                  </p>
                 </dd>
               </dl>
               <div class="symbol-detail-labels"><span class="label label-async">async</span></div>
@@ -911,7 +990,7 @@
   <footer id="jsdoc-footer" class="jsdoc-footer">
     <div id="jsdoc-footer-container">
       <p>
-        Generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc</a> 3.6.11 on April 24, 2026.
+        Generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc</a> 3.6.11 on August 4, 2026.
       </p>
     </div>
   </footer>
