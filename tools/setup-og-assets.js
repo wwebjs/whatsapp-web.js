@@ -7,16 +7,22 @@ if (!fs.existsSync(assetsDir)) {
     fs.mkdirSync(assetsDir, { recursive: true });
 }
 
-// Copy user uploaded template image if exists
-const uploadedImage =
+// Copy user uploaded template images if exist
+const uploadedOgTemplate =
     'C:\\Users\\Tino\\.gemini\\antigravity\\brain\\593e3aac-45d7-4961-868f-5ba7c1cfafe7\\.user_uploaded\\media_1785849331092.png';
-const targetTemplate = path.join(assetsDir, 'og-template.png');
+const uploadedIndexTemplate =
+    'C:\\Users\\Tino\\.gemini\\antigravity\\brain\\38311d14-ef3b-4443-8890-de62fed00daf\\.user_uploaded\\media_1785875191856.png';
 
-if (fs.existsSync(uploadedImage)) {
-    fs.copyFileSync(uploadedImage, targetTemplate);
-    console.log(`Copied template image to ${targetTemplate}`);
-} else {
-    console.log(`Uploaded image not found at ${uploadedImage}`);
+const targetOgTemplate = path.join(assetsDir, 'og-template.png');
+const targetIndexTemplate = path.join(assetsDir, 'index-template.png');
+
+if (fs.existsSync(uploadedOgTemplate)) {
+    fs.copyFileSync(uploadedOgTemplate, targetOgTemplate);
+    console.log(`Copied template image to ${targetOgTemplate}`);
+}
+if (fs.existsSync(uploadedIndexTemplate)) {
+    fs.copyFileSync(uploadedIndexTemplate, targetIndexTemplate);
+    console.log(`Copied index template image to ${targetIndexTemplate}`);
 }
 
 function downloadFile(url, dest) {

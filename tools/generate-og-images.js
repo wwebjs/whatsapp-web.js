@@ -158,6 +158,7 @@ async function main() {
 
     const archivoPath = path.join(ASSETS_DIR, 'ArchivoBlack-Regular.ttf');
     const templatePath = path.join(ASSETS_DIR, 'og-template.png');
+    const indexTemplatePath = path.join(ASSETS_DIR, 'index-template.png');
 
     if (!fs.existsSync(archivoPath) || !fs.existsSync(templatePath)) {
         console.error('Missing required OG assets in tools/og-assets/!');
@@ -188,27 +189,37 @@ async function main() {
             `Processing [${file}] -> Title: "${title}" | Slug: "${slug}"`,
         );
 
-        const overlayHtml = createTextOverlayHtml({ title });
+        let finalImageBuffer;
 
-        // Render text typography overlay via takumi-js
-        const textOverlayBuffer = await render(overlayHtml, {
-            width: 1834,
-            height: 963,
-            fonts: [
-                {
-                    name: 'Archivo Black',
-                    data: archivoFont,
-                    weight: 400,
-                    style: 'normal',
-                },
-            ],
-        });
+        if (slug === 'index' && fs.existsSync(indexTemplatePath)) {
+            // Compress and resize the custom index page image using sharp
+            finalImageBuffer = await sharp(indexTemplatePath)
+                .resize(1834, 963, { fit: 'cover' })
+                .png({ quality: 95, compressionLevel: 9 })
+                .toBuffer();
+        } else {
+            const overlayHtml = createTextOverlayHtml({ title });
 
-        // Composite text overlay over background template using sharp
-        const finalImageBuffer = await sharp(resizedBgBuffer)
-            .composite([{ input: textOverlayBuffer, top: 0, left: 0 }])
-            .png({ quality: 95 })
-            .toBuffer();
+            // Render text typography overlay via takumi-js
+            const textOverlayBuffer = await render(overlayHtml, {
+                width: 1834,
+                height: 963,
+                fonts: [
+                    {
+                        name: 'Archivo Black',
+                        data: archivoFont,
+                        weight: 400,
+                        style: 'normal',
+                    },
+                ],
+            });
+
+            // Composite text overlay over background template using sharp
+            finalImageBuffer = await sharp(resizedBgBuffer)
+                .composite([{ input: textOverlayBuffer, top: 0, left: 0 }])
+                .png({ quality: 95 })
+                .toBuffer();
+        }
 
         const outputImagePath = path.join(OUTPUT_DIR, `${slug}.png`);
         fs.writeFileSync(outputImagePath, finalImageBuffer);
