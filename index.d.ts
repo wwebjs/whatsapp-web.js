@@ -847,7 +847,10 @@ declare namespace WAWebJS {
             session: string;
         }) => Promise<boolean> | boolean;
         delete: (options: { session: string }) => Promise<any> | any;
-        save: (options: { session: string }) => Promise<any> | any;
+        save: (options: {
+            session: string;
+            path: string;
+        }) => Promise<any> | any;
         extract: (options: {
             session: string;
             path: string;
