@@ -8,7 +8,8 @@
         "test": "mocha tests --recursive --timeout 5000",
         "test-single": "mocha",
         "shell": "node --experimental-repl-await ./shell.js",
-        "generate-docs": "npx jsdoc --configure .jsdoc.json --verbose",
+        "generate-docs": "npx jsdoc --configure .jsdoc.json --verbose && node tools/generate-og-images.js",
+        "generate-og-images": "node tools/generate-og-images.js",
         "lint": "eslint .",
         "lint:fix": "eslint . --fix",
         "format": "prettier --write .",
@@ -61,7 +62,9 @@
         "lint-staged": "^16.3.2",
         "mocha": "^11.7.5",
         "prettier": "^3.8.1",
-        "sinon": "^21.0.2"
+        "sharp": "^0.35.3",
+        "sinon": "^21.0.2",
+        "takumi-js": "^2.5.4"
     },
     "engines": {
         "node": ">=18.0.0"
