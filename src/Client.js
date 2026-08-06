@@ -3441,11 +3441,33 @@ class Client extends EventEmitter {
      * @returns {Promise<Call|null>} The current call, or null if there is no ongoing call
      */
     async getActiveCall() {
-        const callData = await this.pupPage.evaluate(() => {
-            return window.WWebJS.getActiveCall();
-        });
+        const call = await this.pupPage.evaluate(async () =>
+            window.WWebJS.getActiveCall(),
+        );
 
-        return callData ? new Call(this, callData) : null;
+        return call ? new Call(this, call) : null;
+    }
+
+    /**
+     * Gets the number of participants in the currently active WhatsApp call.
+     * This API is experimental and depends on private WhatsApp Web modules.
+     * @returns {Promise<number|null>} The participant count, or null when no
+     * active call or countable participant roster is available.
+     */
+    async getActiveCallParticipantCount() {
+        return this.pupPage.evaluate(() => {
+            const WAWebCallCollection = window.require('WAWebCallCollection');
+            const activeCall =
+                WAWebCallCollection?.activeCall ||
+                WAWebCallCollection?.get?.()?.activeCall;
+            try {
+                const participants =
+                    activeCall?.msg?.serialize?.()?.callParticipants;
+                return Array.isArray(participants) ? participants.length : null;
+            } catch (ignoredError) {
+                return null;
+            }
+        });
     }
 
     /**
