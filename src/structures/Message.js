@@ -342,6 +342,26 @@ class Message extends Base {
                 : [];
         }
 
+        if (this.type === MessageTypes.CALL_LOG) {
+            /**
+             * Outcome of the call, for `call_log` messages. Common values are
+             * 'Completed', 'Missed', 'Rejected', 'Cancelled', 'Failed' and
+             * 'AcceptedElsewhere' (the call was answered on another device)
+             * @type {string}
+             */
+            this.callOutcome = data.callOutcome;
+            /**
+             * Duration of the call in seconds, for `call_log` messages
+             * @type {number}
+             */
+            this.callDuration = data.callDuration;
+            /**
+             * Indicates if the call was a video call, for `call_log` messages
+             * @type {boolean}
+             */
+            this.isVideoCall = Boolean(data.isVideoCall);
+        }
+
         return super._patch(data);
     }
 

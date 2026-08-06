@@ -67,6 +67,14 @@ client.on('ready', async () => {
 client.on('message', async (msg) => {
     console.log('MESSAGE RECEIVED', msg);
 
+    if (msg.type === 'call_log') {
+        // Call log messages carry the outcome of a call, e.g. 'AcceptedElsewhere'
+        // when the call was answered on one of your other linked devices
+        console.log(
+            `Call from ${msg.from} ended with outcome: ${msg.callOutcome}`,
+        );
+    }
+
     if (msg.body === '!ping reply') {
         // Send a new message as a reply to the current one
         msg.reply('pong');

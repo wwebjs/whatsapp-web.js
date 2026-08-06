@@ -212,10 +212,7 @@ declare namespace WAWebJS {
         ): Promise<Message>;
 
         /** Send a reaction to a specific messageId */
-        sendReaction(
-            messageId: string,
-            reaction: string,
-        ): Promise<void>;
+        sendReaction(messageId: string, reaction: string): Promise<void>;
 
         /** Sends a channel admin invitation to a user, allowing them to become an admin of the channel */
         sendChannelAdminInvite(
@@ -1196,6 +1193,12 @@ declare namespace WAWebJS {
         isGif: boolean;
         /** Indicates if the message will disappear after it expires */
         isEphemeral: boolean;
+        /** Outcome of the call, for `call_log` messages (e.g. 'Completed', 'Missed', 'Rejected', 'AcceptedElsewhere') */
+        callOutcome?: string;
+        /** Duration of the call in seconds, for `call_log` messages */
+        callDuration?: number;
+        /** Indicates if the call was a video call, for `call_log` messages */
+        isVideoCall?: boolean;
         /** ID for the Chat that this message was sent to, except if the message was sent by the current user */
         from: string;
         /** Indicates if the message was sent by the current user */
