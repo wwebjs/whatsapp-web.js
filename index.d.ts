@@ -369,6 +369,13 @@ declare namespace WAWebJS {
         ): Promise<Call>;
 
         /**
+         * Gets the number of participants in the currently active WhatsApp
+         * call, or null when no call or countable roster is available.
+         * @experimental Depends on private WhatsApp Web internals.
+         */
+        getActiveCallParticipantCount(): Promise<number | null>;
+
+        /**
          * Adds an individual WhatsApp contact to the currently active call.
          * @experimental Depends on private WhatsApp Web internals and may reject
          * when no supported internal call controller is detected.
