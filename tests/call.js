@@ -264,6 +264,26 @@ describe('Calls', function () {
         });
     });
 
+    describe('Client.getActiveCallParticipantCount', function () {
+        it('returns the serialized active-call participant count', async function () {
+            const client = {
+                pupPage: {
+                    evaluate: sinon.stub().resolves(2),
+                },
+            };
+
+            const count =
+                await Client.prototype.getActiveCallParticipantCount.call(
+                    client,
+                );
+
+            expect(count).to.equal(2);
+            expect(client.pupPage.evaluate.firstCall.args[0]).to.be.a(
+                'function',
+            );
+        });
+    });
+
     describe('Client.addParticipantToCall', function () {
         let client;
 
