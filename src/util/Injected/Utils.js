@@ -1320,6 +1320,13 @@ exports.LoadUtils = () => {
     };
 
     window.WWebJS.rejectCall = async (peerJid, id) => {
+        const stack = await window.WWebJS.getCallStackInterface();
+        if (stack && typeof stack.rejectCall === 'function') {
+            await stack.rejectCall();
+            return;
+        }
+
+        // Fallback signaling stanza for older WhatsApp Web builds.
         let userId = window
             .require('WAWebUserPrefsMeUser')
             .getMaybeMePnUser()._serialized;
@@ -1340,6 +1347,546 @@ exports.LoadUtils = () => {
             ],
         );
         await window.require('WADeprecatedSendIq').deprecatedCastStanza(stanza);
+    };
+
+    window.WWebJS.getCallStackInterface = async () => {
+        return window
+            .require('WAWebVoipStackInterface')
+            .getVoipStackInterface();
+    };
+
+    window.WWebJS.setupCallMediaStream = () => {
+        const store = window.WWebJS;
+        // Route the outgoing microphone through our own graph only while an
+        // injected call is active, so ordinary calls keep using the real
+        // microphone (see teardownCallMediaStream).
+        store._callMediaActive = true;
+
+        if (store._callMedia && store._callMedia.context.state !== 'closed') {
+            return store._callMedia;
+        }
+
+        const AudioContextClass =
+            window.AudioContext || window.webkitAudioContext;
+        const context = new AudioContextClass();
+        const master = context.createGain();
+        master.gain.value = 1;
+
+        store._callMedia = { context, master, destinations: [] };
+
+        // WhatsApp acquires the microphone through this single entry point.
+        // Patch it once so the outgoing audio track is fed from our own graph
+        // instead of a physical device, but only while injection is active so
+        // normal calls are left untouched. A fresh destination is handed out on
+        // every call because WhatsApp stops the track when the stream is
+        // disposed, which would permanently silence a shared destination.
+        const mediaModule = window.require('WAGetUserMedia');
+        if (!mediaModule._wwebjsPatched) {
+            const original = mediaModule.getUserMedia;
+            mediaModule._wwebjsPatched = true;
+            mediaModule.getUserMedia = (constraints) => {
+                const media = window.WWebJS._callMedia;
+                if (
+                    (constraints && constraints.video) ||
+                    !media ||
+                    !window.WWebJS._callMediaActive
+                ) {
+                    return original(constraints);
+                }
+                const destination =
+                    media.context.createMediaStreamDestination();
+                media.master.connect(destination);
+                media.destinations.push(destination);
+                return Promise.resolve(destination.stream);
+            };
+        }
+
+        return store._callMedia;
+    };
+
+    window.WWebJS.teardownCallMediaStream = () => {
+        const media = window.WWebJS._callMedia;
+        window.WWebJS._callMediaActive = false;
+        if (!media) return;
+
+        // Detach the destinations handed out during the call so the next call
+        // starts from a clean graph and the real microphone is used again.
+        for (const destination of media.destinations) {
+            try {
+                media.master.disconnect(destination);
+            } catch {
+                // The destination was already disconnected by WhatsApp.
+            }
+        }
+        media.destinations = [];
+    };
+
+    window.WWebJS.playCallAudio = async (base64) => {
+        const { context, master } = window.WWebJS.setupCallMediaStream();
+        if (context.state === 'suspended') {
+            await context.resume();
+        }
+
+        const binary = atob(base64);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) {
+            bytes[i] = binary.charCodeAt(i);
+        }
+
+        const buffer = await context.decodeAudioData(bytes.buffer);
+        const source = context.createBufferSource();
+        source.buffer = buffer;
+        source.connect(master);
+
+        return new Promise((resolve) => {
+            source.onended = () => resolve(buffer.duration);
+            source.start();
+        });
+    };
+
+    window.WWebJS.acceptCall = async (
+        callId,
+        isVideo = false,
+        injectAudio = true,
+        video = {},
+    ) => {
+        if (injectAudio) {
+            window.WWebJS.setupCallMediaStream();
+        }
+        if (isVideo) {
+            window.WWebJS.setupCallVideoStream(video);
+        }
+        const stack = await window.WWebJS.getCallStackInterface();
+        await stack.acceptCall(callId, isVideo);
+        return true;
+    };
+
+    window.WWebJS.endCall = async (callId) => {
+        const stack = await window.WWebJS.getCallStackInterface();
+        const { CALL_TERM_REASON } = window.require(
+            'WAWebWamEnumCallTermReason',
+        );
+        await stack.endCall(callId, CALL_TERM_REASON.ENDED_BY_USER);
+        window.WWebJS.teardownCallMediaStream();
+        return true;
+    };
+
+    window.WWebJS.getOngoingCall = () => {
+        // lastActiveCall keeps pointing at the previous call even after it ends,
+        // so a call in the ended state (0) is treated as no ongoing call.
+        const call = window.require('WAWebCallCollection').lastActiveCall;
+        if (
+            !call ||
+            (typeof call.getState === 'function' && call.getState() === 0)
+        ) {
+            return null;
+        }
+        return call;
+    };
+
+    window.WWebJS.startCall = async (
+        chatId,
+        isVideo = false,
+        waitForAnswer = false,
+        timeout = 60000,
+        injectAudio = true,
+        video = {},
+    ) => {
+        if (injectAudio) {
+            window.WWebJS.setupCallMediaStream();
+        }
+        if (isVideo) {
+            window.WWebJS.setupCallVideoStream(video);
+        }
+
+        let wid;
+        const target = String(chatId);
+        if (target.includes('@')) {
+            wid = window.require('WAWebWidFactory').createWid(target);
+        } else {
+            const result = await window
+                .require('WAWebQueryExistsJob')
+                .queryPhoneExists('+' + target.replace(/\D/g, ''));
+            if (!result || !result.wid) {
+                throw new Error(
+                    'The provided phone number is not registered on WhatsApp',
+                );
+            }
+            wid = result.wid;
+        }
+
+        const { CALL_FROM_UI } = window.require('WAWebWamEnumCallFromUi');
+        await window
+            .require('WAWebVoipStartCall')
+            .startWAWebVoipCall(wid, isVideo, CALL_FROM_UI.CONVERSATION);
+
+        // The call is registered in the collection shortly after the offer is
+        // sent, so wait for the newly placed call to become available before
+        // returning its data.
+        const collection = window.require('WAWebCallCollection');
+        let call = null;
+        for (let i = 0; i < 30 && !call; i++) {
+            await new Promise((resolve) => setTimeout(resolve, 100));
+            call = window.WWebJS.getOngoingCall();
+        }
+
+        // Optionally block until the callee answers (or the timeout elapses).
+        if (call && waitForAnswer) {
+            const deadline = Date.now() + timeout;
+            while (Date.now() < deadline) {
+                const current = window.WWebJS.getOngoingCall();
+                if (
+                    collection.isInConnectedCall &&
+                    current &&
+                    current.id === call.id
+                ) {
+                    break;
+                }
+                await new Promise((resolve) => setTimeout(resolve, 200));
+            }
+        }
+
+        return call
+            ? {
+                  id: call.id,
+                  peerJid: call.peerJid?._serialized,
+                  isVideo: call.isVideo,
+                  isGroup: call.isGroup,
+                  outgoing: call.outgoing,
+              }
+            : null;
+    };
+
+    window.WWebJS.isCallConnected = (callId) => {
+        const collection = window.require('WAWebCallCollection');
+        return (
+            collection.isInConnectedCall === true &&
+            !!collection.lastActiveCall &&
+            collection.lastActiveCall.id === callId
+        );
+    };
+
+    window.WWebJS.getActiveCall = () => {
+        const call = window.WWebJS.getOngoingCall();
+        if (!call) {
+            return null;
+        }
+        return {
+            id: call.id,
+            peerJid: call.peerJid?._serialized,
+            offerTime: call.offerTime,
+            isVideo: call.isVideo,
+            isGroup: call.isGroup,
+            outgoing: call.outgoing,
+        };
+    };
+
+    window.WWebJS.setupCallVideoStream = (options = {}) => {
+        const store = window.WWebJS;
+        window.WWebJS.setupCallMediaStream();
+        if (store._callVideo) {
+            if (options.orientation) {
+                window.WWebJS.setCallVideoOrientation(options.orientation);
+            }
+            if (options.resolution) {
+                window.WWebJS.setCallVideoResolution(options.resolution);
+            }
+            return store._callVideo;
+        }
+
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+
+        // orientation fixes the outgoing frame shape (WhatsApp locks it for the
+        // whole call); rotate counters the turn WhatsApp applies to a portrait
+        // frame; resolution is the short side of the frame in pixels.
+        const callVideo = {
+            canvas,
+            context,
+            source: null,
+            orientation: 'landscape',
+            resolution: 720,
+            rotate: 0,
+        };
+        store._callVideo = callVideo;
+        window.WWebJS.setCallVideoOrientation(
+            options.orientation || 'landscape',
+        );
+        if (options.resolution) {
+            window.WWebJS.setCallVideoResolution(options.resolution);
+        }
+
+        // Draw the current source (a still image or a playing video) onto the
+        // canvas on a fixed interval. captureStream() reads from the canvas, so
+        // this loop is what actually produces the outgoing frames. setInterval
+        // is used instead of requestAnimationFrame because the tab is often
+        // backgrounded, which throttles animation frames to a crawl.
+        callVideo.timer = setInterval(() => {
+            const video = window.WWebJS._callVideo;
+            // Stop a stale loop if the utils were re-injected (which resets
+            // window.WWebJS) and a newer stream took over.
+            if (video !== callVideo) {
+                clearInterval(callVideo.timer);
+                return;
+            }
+
+            const frameWidth = canvas.width;
+            const frameHeight = canvas.height;
+            context.fillStyle = '#000000';
+            context.fillRect(0, 0, frameWidth, frameHeight);
+
+            const source = video.source;
+            if (!source) {
+                return;
+            }
+
+            const element = source.element;
+            // Chrome occasionally pauses hidden media elements on its own;
+            // resume a clip that is supposed to be playing (a finished
+            // non-looping clip legitimately stays on its last frame).
+            if (source.type === 'video' && element.paused && !element.ended) {
+                element.play().catch(() => {});
+            }
+            const mediaWidth =
+                source.type === 'video'
+                    ? element.videoWidth
+                    : element.naturalWidth;
+            const mediaHeight =
+                source.type === 'video'
+                    ? element.videoHeight
+                    : element.naturalHeight;
+            if (!mediaWidth || !mediaHeight) {
+                return;
+            }
+
+            // When the frame is rotated a quarter turn, the media is fitted
+            // against the swapped dimensions. It is centred and letterboxed so
+            // it always shows in full, whatever its aspect ratio.
+            const turned = Math.abs(video.rotate) % 180 === 90;
+            const fitWidth = turned ? frameHeight : frameWidth;
+            const fitHeight = turned ? frameWidth : frameHeight;
+            const scale = Math.min(
+                fitWidth / mediaWidth,
+                fitHeight / mediaHeight,
+            );
+            const drawWidth = mediaWidth * scale;
+            const drawHeight = mediaHeight * scale;
+            context.save();
+            context.translate(frameWidth / 2, frameHeight / 2);
+            if (video.rotate) {
+                context.rotate((video.rotate * Math.PI) / 180);
+            }
+            context.drawImage(
+                element,
+                -drawWidth / 2,
+                -drawHeight / 2,
+                drawWidth,
+                drawHeight,
+            );
+            context.restore();
+        }, 40);
+
+        // The camera is acquired straight through navigator.mediaDevices (the
+        // microphone goes through WAGetUserMedia instead, see above). Patch it
+        // once so the outgoing video track is fed from our canvas. When audio is
+        // requested alongside the camera it is served from the same graph the
+        // microphone uses, so injected audio is heard on video calls too. A
+        // fresh stream is handed out every time because WhatsApp stops the track
+        // when the stream is disposed.
+        const devices = navigator.mediaDevices;
+        if (devices && !devices._wwebjsPatched) {
+            const original = devices.getUserMedia.bind(devices);
+            devices._wwebjsPatched = true;
+            devices.getUserMedia = (constraints) => {
+                const video = window.WWebJS._callVideo;
+                const media = window.WWebJS._callMedia;
+                if (
+                    !constraints ||
+                    (!constraints.video && !constraints.audio)
+                ) {
+                    return original(constraints);
+                }
+
+                const stream = new MediaStream();
+                if (constraints.video && video) {
+                    stream.addTrack(
+                        video.canvas.captureStream(30).getVideoTracks()[0],
+                    );
+                }
+                if (constraints.audio && media) {
+                    const destination =
+                        media.context.createMediaStreamDestination();
+                    media.master.connect(destination);
+                    media.destinations.push(destination);
+                    stream.addTrack(destination.stream.getAudioTracks()[0]);
+                }
+
+                if (!stream.getTracks().length) {
+                    return original(constraints);
+                }
+                return Promise.resolve(stream);
+            };
+        }
+
+        return store._callVideo;
+    };
+
+    // Fix the outgoing frame orientation for the call. A portrait frame is
+    // pre-rotated because WhatsApp turns a portrait camera to correct for a
+    // landscape-mounted sensor; screen.orientation is aligned to it so that
+    // correction is predictable regardless of the host environment. 'auto'
+    // follows the current source's aspect ratio.
+    window.WWebJS.setCallVideoOrientation = (orientation) => {
+        const video = window.WWebJS._callVideo;
+        if (!video) {
+            return;
+        }
+
+        let mode = orientation;
+        if (mode !== 'portrait' && mode !== 'landscape') {
+            const source = video.source;
+            const element = source && source.element;
+            const mediaWidth =
+                element &&
+                (source.type === 'video'
+                    ? element.videoWidth
+                    : element.naturalWidth);
+            const mediaHeight =
+                element &&
+                (source.type === 'video'
+                    ? element.videoHeight
+                    : element.naturalHeight);
+            mode =
+                mediaWidth && mediaHeight && mediaHeight > mediaWidth
+                    ? 'portrait'
+                    : 'landscape';
+        }
+
+        video.orientation = mode;
+        video.rotate = mode === 'portrait' ? -90 : 0;
+        try {
+            const type =
+                mode === 'portrait' ? 'portrait-primary' : 'landscape-primary';
+            Object.defineProperty(screen.orientation, 'type', {
+                get: () => type,
+                configurable: true,
+            });
+            Object.defineProperty(screen.orientation, 'angle', {
+                get: () => 0,
+                configurable: true,
+            });
+        } catch (ignoredError) {
+            // Some environments do not allow overriding screen.orientation.
+        }
+        window.WWebJS.resizeCallVideoCanvas();
+    };
+
+    window.WWebJS.setCallVideoResolution = (resolution) => {
+        const video = window.WWebJS._callVideo;
+        if (!video || !resolution) {
+            return false;
+        }
+        video.resolution = resolution;
+        window.WWebJS.resizeCallVideoCanvas();
+        return true;
+    };
+
+    // Size the canvas (and therefore the outgoing track) from the chosen
+    // orientation and resolution. The resolution is the short side; the long
+    // side follows a 16:9 frame. WhatsApp caps the encode around 720p, so there
+    // is nothing to gain from going much higher.
+    window.WWebJS.resizeCallVideoCanvas = () => {
+        const video = window.WWebJS._callVideo;
+        if (!video) {
+            return;
+        }
+        const target = Math.min(video.resolution || 720, 1080);
+        // Even dimensions keep the encoder happy.
+        const shortSide = Math.round(target / 2) * 2;
+        const longSide = Math.round((shortSide * 16) / 9 / 2) * 2;
+        const portrait = video.orientation === 'portrait';
+        const width = portrait ? shortSide : longSide;
+        const height = portrait ? longSide : shortSide;
+        if (video.canvas.width !== width || video.canvas.height !== height) {
+            video.canvas.width = width;
+            video.canvas.height = height;
+        }
+    };
+
+    window.WWebJS.showCallImage = async (base64, mimetype) => {
+        const video = window.WWebJS.setupCallVideoStream();
+
+        const image = new Image();
+        await new Promise((resolve, reject) => {
+            image.onload = resolve;
+            image.onerror = () => reject(new Error('Failed to load image'));
+            image.src = `data:${mimetype};base64,${base64}`;
+        });
+
+        window.WWebJS.disposeCallVideoSource();
+        video.source = { type: 'image', element: image };
+        return true;
+    };
+
+    window.WWebJS.playCallVideo = async (base64, mimetype, options = {}) => {
+        const video = window.WWebJS.setupCallVideoStream();
+
+        const binary = atob(base64);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) {
+            bytes[i] = binary.charCodeAt(i);
+        }
+        const url = URL.createObjectURL(
+            new Blob([bytes.buffer], { type: mimetype }),
+        );
+
+        const element = document.createElement('video');
+        element.muted = true;
+        element.playsInline = true;
+        element.loop = options.loop === true;
+        element.src = url;
+        // Chrome keeps a detached media element paused, so the source video has
+        // to live in the document (kept off-screen) for playback to advance.
+        element.style.position = 'fixed';
+        element.style.top = '-9999px';
+        element.style.width = '1px';
+        element.style.height = '1px';
+        document.body.appendChild(element);
+
+        await new Promise((resolve, reject) => {
+            element.onloadedmetadata = resolve;
+            element.onerror = () => reject(new Error('Failed to load video'));
+        });
+
+        window.WWebJS.disposeCallVideoSource();
+        video.source = { type: 'video', element, url };
+
+        // A looping clip never ends, so resolve as soon as it starts playing;
+        // otherwise resolve when it finishes so clips can be chained. The last
+        // frame stays on screen until another source is set.
+        return new Promise((resolve) => {
+            if (element.loop) {
+                element.play().then(() => resolve(element.duration));
+            } else {
+                element.onended = () => resolve(element.duration);
+                element.play();
+            }
+        });
+    };
+
+    // Tear down the current outgoing video source. A playing clip keeps its
+    // element in the document, so it is removed before a new source is set to
+    // avoid piling up hidden video elements.
+    window.WWebJS.disposeCallVideoSource = () => {
+        const video = window.WWebJS._callVideo;
+        const source = video && video.source;
+        if (source && source.type === 'video') {
+            source.element.pause();
+            source.element.remove();
+            if (source.url) {
+                URL.revokeObjectURL(source.url);
+            }
+        }
     };
 
     window.WWebJS.cropAndResizeImage = async (media, options = {}) => {

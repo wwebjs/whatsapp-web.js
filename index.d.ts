@@ -212,10 +212,7 @@ declare namespace WAWebJS {
         ): Promise<Message>;
 
         /** Send a reaction to a specific messageId */
-        sendReaction(
-            messageId: string,
-            reaction: string,
-        ): Promise<void>;
+        sendReaction(messageId: string, reaction: string): Promise<void>;
 
         /** Sends a channel admin invitation to a user, allowing them to become an admin of the channel */
         sendChannelAdminInvite(
@@ -344,6 +341,22 @@ declare namespace WAWebJS {
 
         /** Generates a WhatsApp call link (video call or voice call) */
         createCallLink(startTime: Date, callType: string): Promise<string>;
+
+        /** Places an outgoing call to the provided chat or phone number */
+        call(
+            chatId: string,
+            options?: {
+                video?: boolean;
+                waitForAnswer?: boolean;
+                answerTimeout?: number;
+                injectAudio?: boolean;
+                orientation?: 'landscape' | 'portrait' | 'auto';
+                resolution?: number;
+            },
+        ): Promise<Call>;
+
+        /** Gets the call that is currently ongoing (ringing, being placed or connected), if any */
+        getActiveCall(): Promise<Call | null>;
 
         /**
          * Sends a response to the scheduled event message, indicating whether a user is going to attend the event or not
@@ -2444,6 +2457,35 @@ declare namespace WAWebJS {
 
         /** Reject the call */
         reject: () => Promise<void>;
+
+        /** Accept the call (audio only by default, even for incoming video calls) */
+        accept: (options?: {
+            video?: boolean;
+            injectAudio?: boolean;
+            orientation?: 'landscape' | 'portrait' | 'auto';
+            resolution?: number;
+        }) => Promise<boolean>;
+
+        /** End an ongoing call */
+        end: () => Promise<boolean>;
+
+        /** Play an audio clip into the ongoing call so the other party can hear it */
+        playAudio: (media: MessageMedia | string) => Promise<number>;
+
+        /** Show a still image to the other party for the duration of a video call */
+        showImage: (media: MessageMedia | string) => Promise<boolean>;
+
+        /** Play a video clip into the ongoing video call so the other party can see it */
+        playVideo: (
+            media: MessageMedia | string,
+            options?: { loop?: boolean },
+        ) => Promise<number>;
+
+        /** Change the outgoing video resolution (the short side, in pixels) during a call */
+        setVideoResolution: (resolution: number) => Promise<boolean>;
+
+        /** Indicates whether the call is currently connected (the other party has answered) */
+        isConnected: () => Promise<boolean>;
     }
 
     /** Message type List */
