@@ -697,7 +697,24 @@ client.on('call', async (call) => {
         call.from,
         `[${call.fromMe ? 'Outgoing' : 'Incoming'}] Phone call from ${call.from}, type ${call.isGroup ? 'group' : ''} ${call.isVideo ? 'video' : 'audio'} call. ${rejectCalls ? 'This call was automatically rejected by the script.' : ''}`,
     );
+
+    // Instead of rejecting, a call can also be answered and an audio clip
+    // (e.g. a text-to-speech file you generated) can be played into it:
+    // await call.accept(); // answers with audio only, even for video calls
+    // await call.playAudio(MessageMedia.fromFilePath('./welcome.mp3'));
+    // await call.end();
 });
+
+// Placing an outgoing call and speaking once the other party answers:
+// const call = await client.call('1234567890', { waitForAnswer: true });
+// if (await call.isConnected()) {
+//     await call.playAudio(MessageMedia.fromFilePath('./message.mp3'));
+//     await call.end();
+// }
+
+// Checking for an ongoing call and hanging it up:
+// const activeCall = await client.getActiveCall();
+// if (activeCall) await activeCall.end();
 
 client.on('disconnected', (reason) => {
     console.log('Client was logged out', reason);
