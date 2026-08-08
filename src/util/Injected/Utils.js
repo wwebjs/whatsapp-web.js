@@ -203,23 +203,11 @@ exports.LoadUtils = () => {
             delete options.quotedMessageId;
         }
 
-        let mentionAll = {};
         if (options.mentionedJidList) {
-            if (options.mentionedJidList === '@all') {
-                mentionAll = { nonJidMentions: 1 };
-                options.mentionedJidList = [];
-            } else if (Array.isArray(options.mentionedJidList)) {
-                if (options.mentionedJidList.includes('@all')) {
-                    options.mentionedJidList = options.mentionedJidList.filter(
-                        (id) => id !== '@all',
-                    );
-                }
-                options.mentionedJidList = options.mentionedJidList.map((id) =>
-                    window.require('WAWebWidFactory').createWid(id),
-                );
-                options.mentionedJidList =
-                    options.mentionedJidList.filter(Boolean);
-            }
+            options.mentionedJidList = options.mentionedJidList.map((id) =>
+                window.require('WAWebWidFactory').createWid(id),
+            );
+            options.mentionedJidList = options.mentionedJidList.filter(Boolean);
         }
 
         if (options.groupMentions) {
@@ -492,7 +480,6 @@ exports.LoadUtils = () => {
             ...buttonOptions,
             ...listOptions,
             ...botOptions,
-            ...mentionAll,
             ...extraOptions,
         };
 
