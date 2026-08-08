@@ -2000,22 +2000,13 @@ class Client extends EventEmitter {
     /**
      * Sets the current user's status message
      * @param {string} status New status message
-     * @param {string} emoji New emoji to status
-     * @param {number} duration seconds for status duration
      */
     async setStatus(status, emoji, duration) {
-        return await this.pupPage.evaluate(
-            async (status, emoji, duration) => {
-                const res = await window
-                    .require('WAWebUpdateTextStatusJob')
-                    .updateTextStatus(status, emoji, duration);
-
-                return res && res.result === 'SUCCESS';
-            },
-            status,
-            emoji,
-            duration,
-        );
+        await this.pupPage.evaluate(async (status) => {
+            return await window
+                .require('WAWebContactStatusBridge')
+                .setMyStatus(status);
+        }, status);
     }
 
     /**
