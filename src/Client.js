@@ -1492,26 +1492,19 @@ class Client extends EventEmitter {
         }
 
         if (options.mentions) {
+            !Array.isArray(options.mentions) &&
+                (options.mentions = [options.mentions]);
             if (
-                options.mentions !== '@all' &&
-                !Array.isArray(options.mentions)
+                options.mentions.some(
+                    (possiblyContact) => possiblyContact instanceof Contact,
+                )
             ) {
-                options.mentions = [options.mentions];
-            }
-
-            if (Array.isArray(options.mentions)) {
-                if (
-                    options.mentions.some(
-                        (possiblyContact) => possiblyContact instanceof Contact,
-                    )
-                ) {
-                    console.warn(
-                        'Mentions with an array of Contact are now deprecated. See more at https://github.com/wwebjs/whatsapp-web.js/pull/2166.',
-                    );
-                    options.mentions = options.mentions.map(
-                        (a) => a.id._serialized,
-                    );
-                }
+                console.warn(
+                    'Mentions with an array of Contact are now deprecated. See more at https://github.com/wwebjssapp-web.js/pull/2166.',
+                );
+                options.mentions = options.mentions.map(
+                    (a) => a.id._serialized,
+                );
             }
         }
 
