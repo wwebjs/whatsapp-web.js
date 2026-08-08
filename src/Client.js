@@ -2424,8 +2424,8 @@ class Client extends EventEmitter {
                                 announce: options.announce ?? false,
                                 restrict:
                                     options.isRestrict !== undefined
-                                    ? !options.isRestrict
-                                    : false,
+                                        ? !options.isRestrict
+                                        : false,
                                 ephemeralDuration: messageTimer,
                                 parentGroupId: parentGroupWid,
                                 title: title,
