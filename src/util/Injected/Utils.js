@@ -1324,21 +1324,17 @@ exports.LoadUtils = () => {
             .require('WAWebUserPrefsMeUser')
             .getMaybeMePnUser()._serialized;
 
-        let wid = window.require('WAWebWidFactory').createWid(peerJid);
-
-        let jid = window.require('WAWebCommsWapMd').JID(wid);
-
         const stanza = window.require('WAWap').wap(
             'call',
             {
                 id: window.require('WAWap').generateId(),
                 from: userId,
-                to: jid,
+                to: peerJid,
             },
             [
                 window.require('WAWap').wap('reject', {
                     'call-id': id,
-                    'call-creator': jid,
+                    'call-creator': peerJid,
                     count: '0',
                 }),
             ],
