@@ -1571,8 +1571,8 @@ declare namespace WAWebJS {
         caption?: string;
         /** Id of the message that is being quoted (or replied to) */
         quotedMessageId?: string;
-        /** User IDs to mention in the message or string @all to mention everybody */
-        mentions?: string[] | string;
+        /** User IDs to mention in the message */
+        mentions?: string[];
         /** An array of object that handle group mentions */
         groupMentions?: {
             /** The name of a group to mention (can be custom) */
