@@ -2001,7 +2001,7 @@ class Client extends EventEmitter {
      * Sets the current user's status message
      * @param {string} status New status message
      */
-    async setStatus(status, emoji, duration) {
+    async setStatus(status) {
         await this.pupPage.evaluate(async (status) => {
             return await window
                 .require('WAWebContactStatusBridge')
