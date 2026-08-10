@@ -1320,6 +1320,13 @@ exports.LoadUtils = () => {
     };
 
     window.WWebJS.rejectCall = async (peerJid, id) => {
+        const stack = await window.WWebJS.getCallStackInterface();
+        if (stack && typeof stack.rejectCall === 'function') {
+            await stack.rejectCall();
+            return;
+        }
+
+        // Fallback signaling stanza for older WhatsApp Web builds.
         let userId = window
             .require('WAWebUserPrefsMeUser')
             .getMaybeMePnUser()._serialized;
@@ -1340,6 +1347,390 @@ exports.LoadUtils = () => {
             ],
         );
         await window.require('WADeprecatedSendIq').deprecatedCastStanza(stanza);
+    };
+
+    window.WWebJS.getCallStackInterface = async () => {
+        return window
+            .require('WAWebVoipStackInterface')
+            .getVoipStackInterface();
+    };
+
+    window.WWebJS.serializeCallModel = (call) => {
+        if (!call) return null;
+
+        return {
+            id: call.id,
+            peerJid:
+                call.peerJid?._serialized ||
+                call.peerJid?.toString?.() ||
+                call.peerJid,
+            offerTime: call.offerTime,
+            isVideo: !!call.isVideo,
+            isGroup: !!call.isGroup,
+            canHandleLocally: !!call.canHandleLocally,
+            outgoing: !!call.outgoing,
+            webClientShouldHandle: !!call.webClientShouldHandle,
+            participants: call.participants || {},
+        };
+    };
+
+    window.WWebJS.setupCallMediaStream = () => {
+        const store = window.WWebJS;
+        // Route the outgoing microphone through our own graph only while an
+        // injected call is active, so ordinary calls keep using the real
+        // microphone (see teardownCallMediaStream).
+        store._callMediaActive = true;
+
+        if (store._callMedia && store._callMedia.context.state !== 'closed') {
+            return store._callMedia;
+        }
+
+        const AudioContextClass =
+            window.AudioContext || window.webkitAudioContext;
+        const context = new AudioContextClass();
+        const master = context.createGain();
+        master.gain.value = 1;
+
+        store._callMedia = { context, master, destinations: [] };
+
+        // WhatsApp acquires the microphone through this single entry point.
+        // Patch it once so the outgoing audio track is fed from our own graph
+        // instead of a physical device, but only while injection is active so
+        // normal calls are left untouched. A fresh destination is handed out on
+        // every call because WhatsApp stops the track when the stream is
+        // disposed, which would permanently silence a shared destination.
+        const mediaModule = window.require('WAGetUserMedia');
+        if (!mediaModule._wwebjsPatched) {
+            const original = mediaModule.getUserMedia;
+            mediaModule._wwebjsPatched = true;
+            mediaModule.getUserMedia = (constraints) => {
+                const media = window.WWebJS._callMedia;
+                if (
+                    (constraints && constraints.video) ||
+                    !media ||
+                    !window.WWebJS._callMediaActive
+                ) {
+                    return original(constraints);
+                }
+                const destination =
+                    media.context.createMediaStreamDestination();
+                media.master.connect(destination);
+                media.destinations.push(destination);
+                return Promise.resolve(destination.stream);
+            };
+        }
+
+        return store._callMedia;
+    };
+
+    window.WWebJS.teardownCallMediaStream = () => {
+        const media = window.WWebJS._callMedia;
+        window.WWebJS._callMediaActive = false;
+        if (!media) return;
+
+        // Detach the destinations handed out during the call so the next call
+        // starts from a clean graph and the real microphone is used again.
+        for (const destination of media.destinations) {
+            try {
+                media.master.disconnect(destination);
+            } catch {
+                // The destination was already disconnected by WhatsApp.
+            }
+        }
+        media.destinations = [];
+    };
+
+    window.WWebJS.playCallAudio = async (base64) => {
+        const { context, master } = window.WWebJS.setupCallMediaStream();
+        if (context.state === 'suspended') {
+            await context.resume();
+        }
+
+        const binary = atob(base64);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) {
+            bytes[i] = binary.charCodeAt(i);
+        }
+
+        const buffer = await context.decodeAudioData(bytes.buffer);
+        const source = context.createBufferSource();
+        source.buffer = buffer;
+        source.connect(master);
+
+        return new Promise((resolve) => {
+            source.onended = () => resolve(buffer.duration);
+            source.start();
+        });
+    };
+
+    window.WWebJS.acceptCall = async (
+        callId,
+        isVideo = false,
+        injectAudio = true,
+    ) => {
+        if (injectAudio) {
+            window.WWebJS.setupCallMediaStream();
+        }
+        const stack = await window.WWebJS.getCallStackInterface();
+        await stack.acceptCall(callId, isVideo);
+        return true;
+    };
+
+    window.WWebJS.startGroupCall = async (contactIds, options = {}) => {
+        const contactWids = contactIds.map((contactId) =>
+            window.require('WAWebWidFactory').createWid(contactId),
+        );
+
+        if (contactWids.some((contactWid) => !contactWid)) {
+            throw new Error('Only valid WhatsApp contacts can be called.');
+        }
+
+        if (contactWids.some((contactWid) => contactWid.isGroup?.())) {
+            throw new Error(
+                'Group chat IDs cannot be used as group call participants.',
+            );
+        }
+
+        const callStart = window.require('WAWebVoipStartCall');
+        if (
+            !callStart ||
+            typeof callStart.startWAWebVoipGroupCallFromWids !== 'function'
+        ) {
+            throw new Error(
+                'Group WhatsApp calls are not supported by this WhatsApp Web version: no supported internal call controller was detected.',
+            );
+        }
+
+        const callCollectionModule = window.require('WAWebCallCollection');
+        const callCollection =
+            callCollectionModule.get?.() || callCollectionModule;
+
+        await callStart.startWAWebVoipGroupCallFromWids(
+            contactWids,
+            options.video === true,
+        );
+
+        const startedAt = Date.now();
+        while (Date.now() - startedAt < 5000) {
+            const call = callCollection.activeCall;
+            if (call?.outgoing && call?.isGroup) {
+                return window.WWebJS.serializeCallModel(call);
+            }
+
+            await new Promise((resolve) => setTimeout(resolve, 100));
+        }
+
+        throw new Error(
+            'Outgoing WhatsApp group call was not promoted to an active call.',
+        );
+    };
+
+    window.WWebJS.endCall = async (callId) => {
+        const stack = await window.WWebJS.getCallStackInterface();
+        const { CALL_TERM_REASON } = window.require(
+            'WAWebWamEnumCallTermReason',
+        );
+        await stack.endCall(callId, CALL_TERM_REASON.ENDED_BY_USER);
+        window.WWebJS.teardownCallMediaStream();
+        return true;
+    };
+
+    window.WWebJS.getOngoingCall = () => {
+        // lastActiveCall keeps pointing at the previous call even after it ends,
+        // so a call in the ended state (0) is treated as no ongoing call.
+        const call = window.require('WAWebCallCollection').lastActiveCall;
+        if (
+            !call ||
+            (typeof call.getState === 'function' && call.getState() === 0)
+        ) {
+            return null;
+        }
+        return call;
+    };
+
+    window.WWebJS.startCall = async (
+        chatId,
+        isVideo = false,
+        waitForAnswer = false,
+        timeout = 60000,
+        injectAudio = true,
+    ) => {
+        if (injectAudio) {
+            window.WWebJS.setupCallMediaStream();
+        }
+
+        let wid;
+        const target = String(chatId);
+        if (target.includes('@')) {
+            wid = window.require('WAWebWidFactory').createWid(target);
+        } else {
+            const result = await window
+                .require('WAWebQueryExistsJob')
+                .queryPhoneExists('+' + target.replace(/\D/g, ''));
+            if (!result || !result.wid) {
+                throw new Error(
+                    'The provided phone number is not registered on WhatsApp',
+                );
+            }
+            wid = result.wid;
+        }
+
+        const { CALL_FROM_UI } = window.require('WAWebWamEnumCallFromUi');
+        await window
+            .require('WAWebVoipStartCall')
+            .startWAWebVoipCall(wid, isVideo, CALL_FROM_UI.CONVERSATION);
+
+        // The call is registered in the collection shortly after the offer is
+        // sent, so wait for the newly placed call to become available before
+        // returning its data.
+        const collection = window.require('WAWebCallCollection');
+        let call = null;
+        for (let i = 0; i < 30 && !call; i++) {
+            await new Promise((resolve) => setTimeout(resolve, 100));
+            call = window.WWebJS.getOngoingCall();
+        }
+
+        // Optionally block until the callee answers (or the timeout elapses).
+        if (call && waitForAnswer) {
+            const deadline = Date.now() + timeout;
+            while (Date.now() < deadline) {
+                const current = window.WWebJS.getOngoingCall();
+                if (
+                    collection.isInConnectedCall &&
+                    current &&
+                    current.id === call.id
+                ) {
+                    break;
+                }
+                await new Promise((resolve) => setTimeout(resolve, 200));
+            }
+        }
+
+        return call
+            ? {
+                  id: call.id,
+                  peerJid: call.peerJid?._serialized,
+                  isVideo: call.isVideo,
+                  isGroup: call.isGroup,
+                  outgoing: call.outgoing,
+              }
+            : null;
+    };
+
+    window.WWebJS.isCallConnected = (callId) => {
+        const collection = window.require('WAWebCallCollection');
+        return (
+            collection.isInConnectedCall === true &&
+            !!collection.lastActiveCall &&
+            collection.lastActiveCall.id === callId
+        );
+    };
+
+    window.WWebJS.getActiveCall = () => {
+        const call = window.WWebJS.getOngoingCall();
+        if (!call) {
+            return null;
+        }
+        return {
+            id: call.id,
+            peerJid: call.peerJid?._serialized,
+            offerTime: call.offerTime,
+            isVideo: call.isVideo,
+            isGroup: call.isGroup,
+            outgoing: call.outgoing,
+        };
+    };
+
+    window.WWebJS.addParticipantToCall = async (contactId, callId) => {
+        const inviteWid = window
+            .require('WAWebWidFactory')
+            .createWid(contactId);
+        if (!inviteWid || inviteWid.isGroup?.()) {
+            throw new Error(
+                'Only individual WhatsApp contacts can be added to calls.',
+            );
+        }
+
+        const callCollectionModule = window.require('WAWebCallCollection');
+        const callCollection =
+            callCollectionModule.get?.() || callCollectionModule;
+        const activeCall = callCollection.activeCall;
+
+        if (!activeCall) {
+            throw new Error(
+                'No active WhatsApp call is available to add a participant.',
+            );
+        }
+
+        if (callId && activeCall.id !== callId) {
+            throw new Error(
+                `Active WhatsApp call ID does not match requested call ID: ${callId}`,
+            );
+        }
+
+        const callStart = window.require('WAWebVoipStartCall');
+        if (!callStart || typeof callStart.inviteToCall !== 'function') {
+            throw new Error(
+                'Adding participants to WhatsApp calls is not supported by this WhatsApp Web version: no supported internal call controller was detected.',
+            );
+        }
+
+        await callStart.inviteToCall(inviteWid);
+    };
+
+    window.WWebJS.removeParticipantFromCall = async (contactId, callId) => {
+        const participantWid = window
+            .require('WAWebWidFactory')
+            .createWid(contactId);
+        if (!participantWid || participantWid.isGroup?.()) {
+            throw new Error(
+                'Only individual WhatsApp contacts can be removed from calls.',
+            );
+        }
+
+        const callCollectionModule = window.require('WAWebCallCollection');
+        const callCollection =
+            callCollectionModule.get?.() || callCollectionModule;
+        const activeCall = callCollection.activeCall;
+
+        if (!activeCall) {
+            throw new Error(
+                'No active WhatsApp call is available to remove a participant.',
+            );
+        }
+
+        if (callId && activeCall.id !== callId) {
+            throw new Error(
+                `Active WhatsApp call ID does not match requested call ID: ${callId}`,
+            );
+        }
+
+        const stack = window.require('WAWebVoipStackInterface');
+        if (!stack || typeof stack.getVoipStackInterface !== 'function') {
+            throw new Error(
+                'Removing participants from WhatsApp calls is not supported by this WhatsApp Web version: no supported internal call controller was detected.',
+            );
+        }
+
+        const voipStack = await stack.getVoipStackInterface();
+        if (
+            !voipStack ||
+            voipStack.type !== 'web' ||
+            typeof voipStack.removeCallParticipant !== 'function'
+        ) {
+            throw new Error(
+                'Removing participants from WhatsApp calls is not supported by this WhatsApp Web version: no supported internal call controller was detected.',
+            );
+        }
+
+        const status = await voipStack.removeCallParticipant(
+            participantWid.toString(),
+        );
+        if (status !== 0) {
+            throw new Error(
+                `Removing participant from WhatsApp call failed with status: ${status}`,
+            );
+        }
     };
 
     window.WWebJS.cropAndResizeImage = async (media, options = {}) => {
