@@ -404,23 +404,23 @@ class GroupChat extends Chat {
     async setDescription(description) {
         const success = await this.client.pupPage.evaluate(
             async (chatId, description) => {
-                const chatWid = window
+                const chatWid = await window
                     .require('WAWebWidFactory')
                     .createWid(chatId);
                 const chat = await window.WWebJS.getChat(chatId, {
                     getAsModel: false,
                 });
-                let descId = chat.groupMetadata.descId;
+                let descId = chat.groupMetadata?.descId;
                 let newId = await window.require('WAWebMsgKey').newId();
                 try {
                     await window
                         .require('WAWebGroupModifyInfoJob')
-                        .setGroupDescription(
-                            chatWid,
-                            description,
-                            newId,
-                            descId,
-                        );
+                        .setGroupDescription({
+                            desc: description,
+                            groupWid: chatWid,
+                            newDescId: newId,
+                            prevDescId: descId,
+                        });
                     return true;
                 } catch (err) {
                     if (err.name === 'ServerStatusCodeError') return false;
