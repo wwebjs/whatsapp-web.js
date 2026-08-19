@@ -36,6 +36,9 @@ class Message extends Base {
          * @type {object}
          */
         this.id = data.id;
+        if (this.id && !this.id._serialized && this.id.$1) {
+            this.id._serialized = this.id.$1;
+        }
 
         /**
          * ACK status for the message

@@ -12,6 +12,7 @@ const {
     WAState,
     MessageTypes,
 } = require('./util/Constants');
+const { ExposeAuthStore } = require('./util/Injected/AuthStore/AuthStore');
 const { LoadUtils } = require('./util/Injected/Utils');
 const ChatFactory = require('./factories/ChatFactory');
 const ContactFactory = require('./factories/ContactFactory');
@@ -135,6 +136,8 @@ class Client extends EventEmitter {
             );
             const pairWithPhoneNumber = this.options.pairWithPhoneNumber;
             const version = await this.getWWebVersion();
+
+            await this.pupPage.evaluate(ExposeAuthStore);
 
             const needAuthHandle = await this.pupPage.waitForFunction(
                 () => {
