@@ -43,7 +43,7 @@
     },
     "devDependencies": {
         "@commitlint/cli": "^20.4.3",
-        "@commitlint/config-conventional": "^20.4.3",
+        "@commitlint/config-conventional": "^21.2.2",
         "@eslint/js": "^9.39.4",
         "@types/node-fetch": "^2.6.13",
         "chai": "^4.5.0",
