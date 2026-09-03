@@ -3,6 +3,61 @@
 exports.LoadUtils = () => {
     window.WWebJS = {};
 
+    // ISSUE-388 (Phase 2): WhatsApp Web 2.3000.x renamed the internal wid
+    // property `_serialized` to `$1` on live model objects. The Utils.js
+    // crash sites use `obj._serialized || obj.$1` fallbacks (Phase 1), but
+    // the model builders below return `model.serialize()` output whose `id`
+    // may ALSO be missing `_serialized` if the serializer dropped it.
+    // Node-side structures (Chat.js:22 `this.id = data.id`, then
+    // `this.id._serialized` on every method) require that field, so every
+    // model we hand back to `page.evaluate()` callers must be normalized.
+    window.WWebJS.__widToSerialized = (wid) => {
+        if (wid === null || wid === undefined) return wid;
+        if (typeof wid === 'string') return wid;
+        if (typeof wid._serialized === 'string') return wid._serialized;
+        if (typeof wid.$1 === 'string') return wid.$1;
+        if (typeof wid.user === 'string' && typeof wid.server === 'string') {
+            return `${wid.user}@${wid.server}`;
+        }
+        return undefined;
+    };
+
+    // ISSUE-388 (Phase 2): Normalize a serialized model so all id-like
+    // fields carry the `_serialized` string the Node-side structures
+    // expect. Mutates and returns the model for convenience. Never throws.
+    window.WWebJS.__ensureSerializedIds = (model) => {
+        try {
+            if (!model || typeof model !== 'object') return model;
+            const fixWid = (obj, key) => {
+                const v = obj && obj[key];
+                if (!v || typeof v !== 'object') return;
+                const s = window.WWebJS.__widToSerialized(v);
+                if (s !== undefined) obj[key] = s;
+            };
+            const fixId = (obj) => {
+                if (!obj || typeof obj !== 'object') return;
+                if (obj.id && typeof obj.id === 'object' && typeof obj.id._serialized !== 'string') {
+                    const s = window.WWebJS.__widToSerialized(obj.id);
+                    if (s !== undefined) obj.id._serialized = s;
+                }
+                // Message models: from/to/author are read by Message.js as
+                // `typeof data.from === 'object' ? data.from._serialized : data.from`
+                fixWid(obj, 'from');
+                fixWid(obj, 'to');
+                fixWid(obj, 'author');
+            };
+            fixId(model);
+            if (model.groupMetadata && Array.isArray(model.groupMetadata.participants)) {
+                model.groupMetadata.participants.forEach((p) => fixId(p));
+            }
+            if (model.lastMessage) fixId(model.lastMessage);
+            return model;
+        } catch (_) {
+            return model;
+        }
+    };
+
+
     /**
      * Helper function that compares between two WWeb versions. Its purpose is to help the developer to choose the correct code implementation depending on the comparison value and the WWeb version.
      * @param {string} lOperand The left operand for the WWeb version string to compare with
@@ -582,7 +637,7 @@ exports.LoadUtils = () => {
 
         return window
             .require('WAWebCollections')
-            .Msg.get(newMsgKey._serialized);
+            .Msg.get(newMsgKey._serialized || newMsgKey.$1);
     };
 
     window.WWebJS.editMessage = async (msg, content, options = {}) => {
@@ -625,7 +680,7 @@ exports.LoadUtils = () => {
         await window
             .require('WAWebSendMessageEditAction')
             .sendMessageEdit(msg, content, internalOptions);
-        return window.require('WAWebCollections').Msg.get(msg.id._serialized);
+        return window.require('WAWebCollections').Msg.get(msg.id._serialized || msg.id.$1);
     };
 
     window.WWebJS.toStickerData = async (mediaInfo) => {
@@ -802,6 +857,9 @@ exports.LoadUtils = () => {
 
     window.WWebJS.getMessageModel = (message) => {
         const msg = message.serialize();
+        // ISSUE-388 (Phase 2): normalize id/from/to/author in case the
+        // 2.3000.x serializer emits `$1` instead of `_serialized`.
+        window.WWebJS.__ensureSerializedIds(msg);
 
         const { findLinks } = window.require('WALinkify');
 
@@ -830,7 +888,7 @@ exports.LoadUtils = () => {
 
         if (typeof msg.id.remote === 'object') {
             msg.id = Object.assign({}, msg.id, {
-                remote: msg.id.remote._serialized,
+                remote: msg.id.remote._serialized || msg.id.remote.$1,
             });
         }
 
@@ -917,12 +975,40 @@ exports.LoadUtils = () => {
         };
     };
 
+    // ISSUE-393: fault-isolated chat model resolution. Upstream maps every
+    // chat through getChatModel() inside a bare Promise.all — ONE broken
+    // chat (stale group metadata, LID-migrated participant id, revoked
+    // newsletter, or a chat whose serialize() throws) rejects the entire
+    // getChats()/getChannels() call with the minified "r" DataError, so
+    // the offline history sync dies and the bot cannot recover missed
+    // messages. This wrapper degrades a broken chat to a basic serialized
+    // model instead of failing the whole batch.
+    window.WWebJS.__getChatModelSafe = async (chat, opts) => {
+        try {
+            return await window.WWebJS.getChatModel(chat, opts);
+        } catch (_) {
+            try {
+                const fallback = chat && chat.serialize ? chat.serialize() : null;
+                if (
+                    fallback &&
+                    typeof window.WWebJS.__ensureSerializedIds === 'function'
+                ) {
+                    window.WWebJS.__ensureSerializedIds(fallback);
+                }
+                return fallback || null;
+            } catch (_) {
+                return null; // filtered out by the callers below
+            }
+        }
+    };
+
     window.WWebJS.getChats = async () => {
         const chats = window.require('WAWebCollections').Chat.getModelsArray();
         const chatPromises = chats.map((chat) =>
-            window.WWebJS.getChatModel(chat),
+            window.WWebJS.__getChatModelSafe(chat),
         );
-        return await Promise.all(chatPromises);
+        const results = await Promise.all(chatPromises);
+        return results.filter(Boolean);
     };
 
     window.WWebJS.getChannels = async () => {
@@ -930,15 +1016,19 @@ exports.LoadUtils = () => {
             .require('WAWebCollections')
             .WAWebNewsletterCollection.getModelsArray();
         const channelPromises = channels?.map((channel) =>
-            window.WWebJS.getChatModel(channel, { isChannel: true }),
+            window.WWebJS.__getChatModelSafe(channel, { isChannel: true }),
         );
-        return await Promise.all(channelPromises);
+        const results = await Promise.all(channelPromises || []);
+        return results.filter(Boolean);
     };
 
     window.WWebJS.getChatModel = async (chat, { isChannel = false } = {}) => {
         if (!chat) return null;
 
         const model = chat.serialize();
+        // ISSUE-388 (Phase 2): ensure model.id._serialized exists for
+        // Chat.js/GroupChat.js (`this.id._serialized` on every method).
+        window.WWebJS.__ensureSerializedIds(model);
         model.isGroup = false;
         model.isMuted = chat.mute?.expiration !== 0;
         if (isChannel) {
@@ -953,18 +1043,39 @@ exports.LoadUtils = () => {
             model.isGroup = true;
             const chatWid = window
                 .require('WAWebWidFactory')
-                .createWid(chat.id._serialized);
+                .createWid(chat.id._serialized || chat.id.$1);
             const groupMetadata =
                 window.require('WAWebCollections').GroupMetadata ||
                 window.require('WAWebCollections').WAWebGroupMetadataCollection;
-            await groupMetadata.update(chatWid);
-            const { toPn } = window.require('WAWebLidMigrationUtils');
-            const serializedMetadata = chat.groupMetadata.serialize();
-            for (const p of serializedMetadata.participants || []) {
-                p.id = toPn(p.id) ?? p.id;
+            // ISSUE-393: metadata update can throw for stale / kicked /
+            // LID-pending groups — degrade to the metadata already
+            // serialized on the chat instead of rejecting the chat model.
+            try {
+                await groupMetadata.update(chatWid);
+            } catch (_) { /* keep existing metadata */ }
+            // ISSUE-393: LID→PN participant migration is best-effort —
+            // guard the module require, each participant id, AND the
+            // metadata serialization so one bad group never breaks the
+            // whole getChats() batch.
+            try {
+                const { toPn } = window.require('WAWebLidMigrationUtils');
+                const serializedMetadata = chat.groupMetadata.serialize();
+                for (const p of serializedMetadata.participants || []) {
+                    try {
+                        p.id = toPn(p.id) ?? p.id;
+                    } catch (_) { /* unmigratable participant id — keep */ }
+                }
+                model.groupMetadata = serializedMetadata;
+            } catch (_) {
+                // Module missing or serialization failed — fall back to
+                // the raw serialized metadata without PN migration.
+                try {
+                    model.groupMetadata = chat.groupMetadata.serialize();
+                } catch (_) { /* unreadable metadata — leave undefined */ }
             }
-            model.groupMetadata = serializedMetadata;
-            model.isReadOnly = chat.groupMetadata.announce;
+            try {
+                model.isReadOnly = chat.groupMetadata.announce;
+            } catch (_) { /* optional field */ }
         }
 
         if (chat.newsletterMetadata) {
@@ -973,10 +1084,16 @@ exports.LoadUtils = () => {
                     .NewsletterMetadataCollection ||
                 window.require('WAWebCollections')
                     .WAWebNewsletterMetadataCollection;
-            await newsletterMetadata.update(chat.id);
-            model.channelMetadata = chat.newsletterMetadata.serialize();
-            model.channelMetadata.createdAtTs =
-                chat.newsletterMetadata.creationTime;
+            // ISSUE-393: revoked / suspended newsletters throw on metadata
+            // update — keep whatever is already serialized.
+            try {
+                await newsletterMetadata.update(chat.id);
+            } catch (_) { /* keep existing metadata */ }
+            try {
+                model.channelMetadata = chat.newsletterMetadata.serialize();
+                model.channelMetadata.createdAtTs =
+                    chat.newsletterMetadata.creationTime;
+            } catch (_) { /* optional field */ }
         }
 
         model.lastMessage = null;
@@ -984,12 +1101,12 @@ exports.LoadUtils = () => {
             const lastMessage = chat.lastReceivedKey
                 ? window
                       .require('WAWebCollections')
-                      .Msg.get(chat.lastReceivedKey._serialized) ||
+                      .Msg.get(chat.lastReceivedKey._serialized || chat.lastReceivedKey.$1) ||
                   (
                       await window
                           .require('WAWebCollections')
                           .Msg.getMessagesById([
-                              chat.lastReceivedKey._serialized,
+                              chat.lastReceivedKey._serialized || chat.lastReceivedKey.$1,
                           ])
                   )?.messages?.[0]
                 : null;
@@ -1007,6 +1124,9 @@ exports.LoadUtils = () => {
 
     window.WWebJS.getContactModel = (contact) => {
         let res = contact.serialize();
+        // ISSUE-388 (Phase 2): ensure res.id._serialized exists for
+        // Contact.js (`this.id._serialized` on every method).
+        window.WWebJS.__ensureSerializedIds(res);
 
         const wid = window
             .require('WAWebWidFactory')
@@ -1322,7 +1442,7 @@ exports.LoadUtils = () => {
     window.WWebJS.rejectCall = async (peerJid, id) => {
         let userId = window
             .require('WAWebUserPrefsMeUser')
-            .getMaybeMePnUser()._serialized;
+            .getMaybeMePnUser()?._serialized || window.require('WAWebUserPrefsMeUser').getMaybeMePnUser()?.$1;
 
         const stanza = window.require('WAWap').wap(
             'call',
@@ -1634,7 +1754,7 @@ exports.LoadUtils = () => {
                             return {
                                 requesterId: window
                                     .require('WAWebWidFactory')
-                                    .createWid(p.jid)._serialized,
+                                    .createWid(p.jid)._serialized || window.require('WAWebWidFactory').createWid(p.jid).$1,
                                 ...(error
                                     ? {
                                           error: +error,
@@ -1655,7 +1775,7 @@ exports.LoadUtils = () => {
                             .require('WAWebJidToWid')
                             .userJidToUserWid(
                                 participant.participantArgs[0].participantJid,
-                            )._serialized,
+                            )._serialized || window.require('WAWebJidToWid').userJidToUserWid(participant.participantArgs[0].participantJid).$1,
                         message: 'ServerStatusCodeError',
                     });
                 }
