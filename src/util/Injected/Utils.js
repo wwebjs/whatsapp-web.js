@@ -151,7 +151,14 @@ exports.LoadUtils = () => {
         const { findLink } = window.require('WALinkify');
 
         let mediaOptions = {};
-        if (options.media) {
+        if (options.stickerPack) {
+            mediaOptions = await window.WWebJS.processStickerPackData(
+                options.stickerPack,
+            );
+            content = undefined;
+            delete options.stickerPack;
+            delete options.sendMediaAsStickerPack;
+        } else if (options.media) {
             mediaOptions =
                 options.sendMediaAsSticker && !isChannel && !isStatus
                     ? await window.WWebJS.processStickerData(options.media)
@@ -678,6 +685,65 @@ exports.LoadUtils = () => {
         };
 
         return stickerInfo;
+    };
+
+    window.WWebJS.processStickerPackData = async (pack) => {
+        const file = window.WWebJS.mediaInfoToFile(pack.media);
+        const thumbnailFile = window.WWebJS.mediaInfoToFile(pack.thumbnail);
+        const filehash = await window.WWebJS.getFileHash(file);
+        const thumbnailSha256 = await window.WWebJS.getFileHash(thumbnailFile);
+
+        const upload = (blob, type, key) =>
+            window.require('WAWebUploadManager').encryptAndUpload({
+                blob,
+                type,
+                signal: new AbortController().signal,
+                // encryptAndUpload ignores a provided mediaKey on a fresh
+                // upload, but honors it together with a mediaKeyTimestamp
+                // (reupload semantics) so the thumbnail can share the pack key.
+                ...key,
+                uploadQpl: window
+                    .require('WAWebStartMediaUploadQpl')
+                    .startMediaUploadQpl({ entryPoint: 'MediaUpload' }),
+            });
+
+        // Upload the pack first; it mints its own mediaKey/timestamp. The
+        // sticker-pack message carries a single mediaKey (the pack's) and no
+        // separate thumbnail key, so the thumbnail is encrypted with that same
+        // key for the recipient to decrypt and render the chat card preview.
+        const uploaded = await upload(file, 'sticker-pack');
+        const thumbnail = await upload(
+            thumbnailFile,
+            'thumbnail-sticker-pack',
+            {
+                mediaKey: uploaded.mediaKey,
+                mediaKeyTimestamp: uploaded.mediaKeyTimestamp,
+            },
+        );
+
+        return {
+            directPath: uploaded.directPath,
+            encFilehash: uploaded.encFilehash,
+            filehash,
+            mediaKey: uploaded.mediaKey,
+            mediaKeyTimestamp: uploaded.mediaKeyTimestamp,
+            size: file.size,
+            type: 'sticker-pack',
+            filename: pack.stickerPackName,
+            stickerPackId: pack.stickerPackId,
+            name: pack.stickerPackName,
+            publisher: pack.stickerPackPublisher,
+            stickerPackPublisher: pack.stickerPackPublisher,
+            packDescription: pack.stickerPackDescription,
+            stickerPackSize: pack.stickerPackSize,
+            stickers: pack.stickers,
+            trayIconFileName: pack.trayIconFileName,
+            thumbnailDirectPath: thumbnail.directPath,
+            thumbnailEncSha256: thumbnail.encFilehash,
+            thumbnailSha256,
+            notifyName: window.require('WAWebConnModel').Conn.pushname || '',
+            messageSecret: window.crypto.getRandomValues(new Uint8Array(32)),
+        };
     };
 
     window.WWebJS.processMediaData = async (
@@ -1385,6 +1451,93 @@ exports.LoadUtils = () => {
             mimetype: options.mimetype,
             data: dataUrl.replace(`data:${options.mimetype};base64,`, ''),
         });
+    };
+
+    window.WWebJS.createStickerPackPreview = async (
+        mediaList,
+        options = {},
+    ) => {
+        if (!Array.isArray(mediaList) || !mediaList.length) {
+            throw new Error('Sticker pack preview requires media');
+        }
+
+        const { size, stickerSize, padding, mimetype, quality } = Object.assign(
+            {
+                size: 252,
+                stickerSize: 108,
+                padding: 12,
+                mimetype: 'image/jpeg',
+                quality: 0.79,
+            },
+            options,
+        );
+
+        const images = await Promise.all(
+            mediaList.slice(0, 4).map(
+                (media) =>
+                    new Promise((resolve, reject) => {
+                        const img = new Image();
+                        img.onload = () => resolve(img);
+                        img.onerror = reject;
+                        img.src = `data:${media.mimetype};base64,${media.data}`;
+                    }),
+            ),
+        );
+
+        const canvas = document.createElement('canvas');
+        canvas.width = canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, size, size);
+
+        // WhatsApp layout: 108×108 stickers with 12px padding + 12px gap.
+        // The 1-sticker case is left-shifted by 10px and vertically centered.
+        const col0 = padding; // 12
+        const col1 = padding + stickerSize + padding; // 132
+        const row0 = padding; // 12
+        const row1 = padding + stickerSize + padding; // 132
+        const center = (size - stickerSize) / 2; // 72
+        const positions = {
+            1: [{ x: center + 10, y: center }],
+            2: [
+                { x: col0, y: center },
+                { x: col1, y: center },
+            ],
+            3: [
+                { x: col0, y: row0 },
+                { x: col1, y: row0 },
+                { x: center, y: row1 },
+            ],
+            4: [
+                { x: col0, y: row0 },
+                { x: col1, y: row0 },
+                { x: col0, y: row1 },
+                { x: col1, y: row1 },
+            ],
+        }[images.length];
+
+        images.forEach((img, i) => {
+            const ratio = Math.min(
+                stickerSize / img.width,
+                stickerSize / img.height,
+            );
+            const w = img.width * ratio;
+            const h = img.height * ratio;
+            const { x, y } = positions[i];
+            ctx.drawImage(
+                img,
+                x + (stickerSize - w) / 2,
+                y + (stickerSize - h) / 2,
+                w,
+                h,
+            );
+        });
+
+        const dataUrl = canvas.toDataURL(mimetype, quality);
+        return {
+            mimetype,
+            data: dataUrl.replace(`data:${mimetype};base64,`, ''),
+        };
     };
 
     window.WWebJS.setPicture = async (chatId, media) => {

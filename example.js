@@ -1,5 +1,13 @@
 const fs = require('fs');
-const { Client, Location, Poll, List, Buttons, LocalAuth } = require('./index');
+const {
+    Client,
+    Location,
+    Poll,
+    List,
+    Buttons,
+    LocalAuth,
+    MessageMedia,
+} = require('./index');
 
 const client = new Client({
     authStrategy: new LocalAuth(),
@@ -278,6 +286,26 @@ client.on('message', async (msg) => {
                 sendAudioAsVoice: true,
             });
         }
+    } else if (msg.body === '!pack') {
+        // TODO: point to wwebjs/whatsapp-web.js/main once this PR is merged.
+        const urls = [
+            'https://raw.githubusercontent.com/sergiooak/whatsapp-web.js/feat/sticker-pack/example-assets/stickers/circle.webp',
+            'https://raw.githubusercontent.com/sergiooak/whatsapp-web.js/feat/sticker-pack/example-assets/stickers/square.webp',
+            'https://raw.githubusercontent.com/sergiooak/whatsapp-web.js/feat/sticker-pack/example-assets/stickers/triangle.webp',
+            'https://raw.githubusercontent.com/sergiooak/whatsapp-web.js/feat/sticker-pack/example-assets/stickers/hexagon.webp',
+        ];
+
+        const stickers = await Promise.all(
+            urls.map((url) => MessageMedia.fromUrl(url)),
+        );
+
+        await client.sendMessage(msg.from, stickers, {
+            sendMediaAsStickerPack: true,
+            stickerPackName: 'WWebJS Pack',
+            stickerPackPublisher: 'whatsapp-web.js',
+            // Optional custom tray icon; defaults to the first sticker:
+            // stickerPackTrayIcon: await MessageMedia.fromUrl('https://wwebjs.dev/images/logo.png', {unsafeMime: true},),
+        });
     } else if (msg.body === '!isviewonce' && msg.hasQuotedMsg) {
         const quotedMsg = await msg.getQuotedMessage();
         if (quotedMsg.hasMedia) {

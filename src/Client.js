@@ -1416,6 +1416,7 @@ class Client extends EventEmitter {
      * @property {boolean} [sendAudioAsVoice=false] - Send audio as voice message with a generated waveform
      * @property {boolean} [sendVideoAsGif=false] - Send video as gif
      * @property {boolean} [sendMediaAsSticker=false] - Send media as a sticker
+     * @property {boolean} [sendMediaAsStickerPack=false] - Send a MessageMedia array as a sticker pack
      * @property {boolean} [sendMediaAsDocument=false] - Send media as a document
      * @property {boolean} [sendMediaAsHd=false] - Send image as quality HD
      * @property {boolean} [isViewOnce=false] - Send photo/video as a view once message
@@ -1429,6 +1430,10 @@ class Client extends EventEmitter {
      * @property {string} [stickerAuthor=undefined] - Sets the author of the sticker, (if sendMediaAsSticker is true).
      * @property {string} [stickerName=undefined] - Sets the name of the sticker, (if sendMediaAsSticker is true).
      * @property {string[]} [stickerCategories=undefined] - Sets the categories of the sticker, (if sendMediaAsSticker is true). Provide emoji char array, can be null.
+     * @property {string} [stickerPackName=undefined] - Sets the name of the sticker pack, (if sendMediaAsStickerPack is true).
+     * @property {string} [stickerPackPublisher=undefined] - Sets the publisher of the sticker pack, (if sendMediaAsStickerPack is true).
+     * @property {string} [stickerPackId=undefined] - Sets the ID of the sticker pack, (if sendMediaAsStickerPack is true).
+     * @property {?MessageMedia} [stickerPackTrayIcon=undefined] - Sets the tray icon of the sticker pack; if omitted, WhatsApp uses the first sticker (if sendMediaAsStickerPack is true).
      * @property {boolean} [ignoreQuoteErrors = true] - Should the bot send a quoted message without the quoted message if it fails to get the quote?
      * @property {boolean} [waitUntilMsgSent = false] - Should the bot wait for the message send result?
      * @property {MessageMedia} [media] - Media to be sent
@@ -1438,7 +1443,7 @@ class Client extends EventEmitter {
     /**
      * Send a message to a specific chatId
      * @param {string} chatId
-     * @param {string|MessageMedia|Location|Poll|Contact|Array<Contact>|Buttons|List} content
+     * @param {string|MessageMedia|MessageMedia[]|Location|Poll|Contact|Array<Contact>|Buttons|List} content
      * @param {MessageSendOptions} [options] - Options used when sending the message
      *
      * @returns {Promise<Message>} Message that was just sent
@@ -1451,6 +1456,7 @@ class Client extends EventEmitter {
             isChannel &&
             [
                 options.sendMediaAsDocument,
+                options.sendMediaAsStickerPack,
                 options.quotedMessageId,
                 options.parseVCards,
                 options.isViewOnce,
@@ -1471,6 +1477,7 @@ class Client extends EventEmitter {
             isStatus &&
             [
                 options.sendMediaAsDocument,
+                options.sendMediaAsStickerPack,
                 options.quotedMessageId,
                 options.parseVCards,
                 options.isViewOnce,
@@ -1517,6 +1524,7 @@ class Client extends EventEmitter {
             sendAudioAsVoice: options.sendAudioAsVoice,
             sendVideoAsGif: options.sendVideoAsGif,
             sendMediaAsSticker: options.sendMediaAsSticker,
+            sendMediaAsStickerPack: options.sendMediaAsStickerPack,
             sendMediaAsDocument: options.sendMediaAsDocument,
             sendMediaAsHd: options.sendMediaAsHd,
             caption: options.caption,
@@ -1575,6 +1583,21 @@ class Client extends EventEmitter {
                 'Lists are now deprecated. See more at https://www.youtube.com/watch?v=hv1R1rLeVVE.',
             );
             internalOptions.list = content;
+            content = '';
+        }
+
+        if (internalOptions.sendMediaAsStickerPack) {
+            internalOptions.stickerPack = await Util.formatToWebpStickerPack(
+                content,
+                {
+                    name: options.stickerPackName,
+                    publisher: options.stickerPackPublisher,
+                    id: options.stickerPackId,
+                    categories: options.stickerCategories,
+                    trayIcon: options.stickerPackTrayIcon,
+                },
+                this.pupPage,
+            );
             content = '';
         }
 
