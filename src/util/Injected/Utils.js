@@ -43,14 +43,14 @@ exports.LoadUtils = () => {
         return operator === '>'
             ? lOperand > rOperand
             : operator === '>='
-              ? lOperand >= rOperand
-              : operator === '<'
-                ? lOperand < rOperand
-                : operator === '<='
-                  ? lOperand <= rOperand
-                  : operator === '='
-                    ? lOperand === rOperand
-                    : false;
+                ? lOperand >= rOperand
+                : operator === '<'
+                    ? lOperand < rOperand
+                    : operator === '<='
+                        ? lOperand <= rOperand
+                        : operator === '='
+                            ? lOperand === rOperand
+                            : false;
     };
 
     /**
@@ -156,14 +156,14 @@ exports.LoadUtils = () => {
                 options.sendMediaAsSticker && !isChannel && !isStatus
                     ? await window.WWebJS.processStickerData(options.media)
                     : await window.WWebJS.processMediaData(options.media, {
-                          forceSticker: options.sendMediaAsSticker,
-                          forceGif: options.sendVideoAsGif,
-                          forceVoice: options.sendAudioAsVoice,
-                          forceDocument: options.sendMediaAsDocument,
-                          forceMediaHd: options.sendMediaAsHd,
-                          sendToChannel: isChannel,
-                          sendToStatus: isStatus,
-                      });
+                        forceSticker: options.sendMediaAsSticker,
+                        forceGif: options.sendVideoAsGif,
+                        forceVoice: options.sendAudioAsVoice,
+                        forceDocument: options.sendMediaAsDocument,
+                        forceMediaHd: options.sendMediaAsHd,
+                        sendToChannel: isChannel,
+                        sendToStatus: isStatus,
+                    });
             mediaOptions.caption = options.caption;
             content = options.sendMediaAsSticker
                 ? undefined
@@ -270,11 +270,11 @@ exports.LoadUtils = () => {
                     eventSendOptions.callType === 'none'
                         ? null
                         : await window
-                              .require('WAWebGenerateEventCallLink')
-                              .createEventCallLink(
-                                  startTimeTs,
-                                  eventSendOptions.callType,
-                              ),
+                            .require('WAWebGenerateEventCallLink')
+                            .createEventCallLink(
+                                startTimeTs,
+                                eventSendOptions.callType,
+                            ),
                 isEventCanceled: eventSendOptions.isEventCanceled,
                 messageSecret:
                     Array.isArray(messageSecret) && messageSecret.length === 32
@@ -510,16 +510,16 @@ exports.LoadUtils = () => {
                         message.type === 'chat'
                             ? 'text'
                             : isMedia
-                              ? 'media'
-                              : 'pollCreation',
+                                ? 'media'
+                                : 'pollCreation',
                     newsletterJid: chat.id.toJid(),
                     ...(isMedia
                         ? {
-                              mediaMetadata: msg.avParams(),
-                              mediaHandle: isMedia
-                                  ? mediaOptions.mediaHandle
-                                  : null,
-                          }
+                            mediaMetadata: msg.avParams(),
+                            mediaHandle: isMedia
+                                ? mediaOptions.mediaHandle
+                                : null,
+                        }
                         : {}),
                 });
 
@@ -564,11 +564,11 @@ exports.LoadUtils = () => {
 
             await window
                 .require('WAWebSendStatusMsgAction')
-                [
-                    isMedia
-                        ? 'sendStatusMediaMsgAction'
-                        : 'sendStatusTextMsgAction'
-                ](...(isMedia ? [msg, mediaUpdate] : [statusOptions]));
+            [
+                isMedia
+                    ? 'sendStatusMediaMsgAction'
+                    : 'sendStatusTextMsgAction'
+            ](...(isMedia ? [msg, mediaUpdate] : [statusOptions]));
 
             return msg;
         }
@@ -764,9 +764,9 @@ exports.LoadUtils = () => {
             mediaType,
             ...(sendToChannel
                 ? {
-                      calculateToken: window.require('WAMediaCalculateFilehash')
-                          .getRandomFilehash,
-                  }
+                    calculateToken: window.require('WAMediaCalculateFilehash')
+                        .getRandomFilehash,
+                }
                 : {}),
         };
 
@@ -981,23 +981,27 @@ exports.LoadUtils = () => {
 
         model.lastMessage = null;
         if (model.msgs && model.msgs.length) {
-            const lastMessage = chat.lastReceivedKey
-                ? window
-                      .require('WAWebCollections')
-                      .Msg.get(chat.lastReceivedKey._serialized) ||
-                  (
-                      await window
-                          .require('WAWebCollections')
-                          .Msg.getMessagesById([
-                              chat.lastReceivedKey._serialized,
-                          ])
-                  )?.messages?.[0]
+
+            const key = typeof chat.lastReceivedKey === "string"
+                ? chat.lastReceivedKey
+                : chat.lastReceivedKey._serialized ??
+                chat.lastReceivedKey.toString?.();
+
+            const msgStore = window.require("WAWebCollections").Msg;
+
+
+            const lastMessage = key
+                ? msgStore.get(key) ||
+                (
+                    await msgStore.getMessagesById([
+                        key,
+                    ])
+                )?.messages?.[0]
                 : null;
             lastMessage &&
                 (model.lastMessage =
                     window.WWebJS.getMessageModel(lastMessage));
         }
-
         delete model.msgs;
         delete model.msgUnsyncedButtonReplyMsgs;
         delete model.unsyncedButtonReplies;
@@ -1082,7 +1086,7 @@ exports.LoadUtils = () => {
                     await window
                         .require('WAWebCollections')
                         .BusinessProfile.find(contact.id)
-                        .catch(() => {});
+                        .catch(() => { });
                 }
                 return window.WWebJS.getContactModel(contact);
             }),
@@ -1114,8 +1118,8 @@ exports.LoadUtils = () => {
     window.WWebJS.resolveMediaBlob = async (msgId) => {
         const { Msg } = window.require('WAWebCollections');
         const msg =
-            Msg.get(msgId) ||
-            (await Msg.getMessagesById([msgId]))?.messages?.[0];
+            Msg.get(msgId.$1) ||
+            (await Msg.getMessagesById([msgId.$1]))?.messages?.[0];
 
         if (
             !msg ||
@@ -1626,25 +1630,25 @@ exports.LoadUtils = () => {
                         const [_] = value.participant.map((p) => {
                             const error = toApprove
                                 ? value.participant[0]
-                                      .membershipRequestsActionAcceptParticipantMixins
-                                      ?.value.error
+                                    .membershipRequestsActionAcceptParticipantMixins
+                                    ?.value.error
                                 : value.participant[0]
-                                      .membershipRequestsActionRejectParticipantMixins
-                                      ?.value.error;
+                                    .membershipRequestsActionRejectParticipantMixins
+                                    ?.value.error;
                             return {
                                 requesterId: window
                                     .require('WAWebWidFactory')
                                     .createWid(p.jid)._serialized,
                                 ...(error
                                     ? {
-                                          error: +error,
-                                          message:
-                                              membReqResCodes[error] ||
-                                              membReqResCodes.default,
-                                      }
+                                        error: +error,
+                                        message:
+                                            membReqResCodes[error] ||
+                                            membReqResCodes.default,
+                                    }
                                     : {
-                                          message: `${toApprove ? 'Approved' : 'Rejected'} successfully`,
-                                      }),
+                                        message: `${toApprove ? 'Approved' : 'Rejected'} successfully`,
+                                    }),
                             };
                         });
                         _ && result.push(_);
@@ -1663,7 +1667,7 @@ exports.LoadUtils = () => {
                 sleep &&
                     participantArgs.length > 1 &&
                     participantArgs.indexOf(participant) !==
-                        participantArgs.length - 1 &&
+                    participantArgs.length - 1 &&
                     (await new Promise((resolve) =>
                         setTimeout(resolve, _getSleepTime(sleep)),
                     ));
