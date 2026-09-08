@@ -527,7 +527,7 @@ class Message extends Base {
                 filename: resolved.filename,
                 filesize: resolved.filesize,
             };
-        }, this.id._serialized);
+        }, this.id);
 
         if (!result) return undefined;
         return new MessageMedia(

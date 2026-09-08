@@ -1118,8 +1118,8 @@ exports.LoadUtils = () => {
     window.WWebJS.resolveMediaBlob = async (msgId) => {
         const { Msg } = window.require('WAWebCollections');
         const msg =
-            Msg.get(msgId) ||
-            (await Msg.getMessagesById([msgId]))?.messages?.[0];
+            Msg.get(msgId.$1) ||
+            (await Msg.getMessagesById([msgId.$1]))?.messages?.[0];
 
         if (
             !msg ||
