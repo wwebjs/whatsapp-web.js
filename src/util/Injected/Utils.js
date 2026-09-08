@@ -1152,6 +1152,40 @@ exports.LoadUtils = () => {
             blob = msg.mediaObject.mediaBlob.forceToBlob();
         }
 
+        if (!blob && msg.directPath) {
+            const mockQpl = {
+                addAnnotations() {
+                    return this;
+                },
+                addPoint() {
+                    return this;
+                },
+            };
+
+            try {
+                const decryptedMedia = await window
+                    .require('WAWebDownloadManager')
+                    .downloadManager.downloadAndMaybeDecrypt({
+                        directPath: msg.directPath,
+                        encFilehash: msg.encFilehash,
+                        filehash: msg.filehash,
+                        mediaKey: msg.mediaKey,
+                        mediaKeyTimestamp: msg.mediaKeyTimestamp,
+                        type: msg.type,
+                        mimetype: msg.mimetype,
+                        signal: new AbortController().signal,
+                        downloadQpl: mockQpl,
+                    });
+
+                blob = new Blob([decryptedMedia], {
+                    type: msg.mimetype,
+                });
+            } catch (err) {
+                if (err?.status === 404) return null;
+                throw err;
+            }
+        }
+
         if (!blob) return null;
 
         return {
