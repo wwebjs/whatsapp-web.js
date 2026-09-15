@@ -1893,9 +1893,22 @@ class Client extends EventEmitter {
      */
     async acceptInvite(inviteCode) {
         const res = await this.pupPage.evaluate(async (inviteCode) => {
-            return await window
-                .require('WAWebGroupInviteJob')
-                .joinGroupViaInvite(inviteCode);
+            const inviteInfo = await window
+                .require('WAWebGroupQueryJob')
+                .queryGroupInvite(inviteCode);
+            let groupInviteJob = window.require('WAWebGroupInviteJob');
+
+            if (!groupInviteJob) {
+                await window
+                    .require('WAWebGroupInviteLinkDrawerLoadable')
+                    .requireBundle();
+                groupInviteJob = window.require('WAWebGroupInviteJob');
+            }
+
+            return await groupInviteJob.joinGroupViaInvite(
+                inviteCode,
+                inviteInfo.membershipApprovalMode,
+            );
         }, inviteCode);
 
         return res.gid._serialized;
