@@ -442,13 +442,23 @@ exports.LoadUtils = () => {
                 .asUserWidOrThrow(from);
         }
 
-        const newMsgKey = new (window.require('WAWebMsgKey'))({
-            from: from,
-            to: chat.id,
-            id: newId,
-            participant: participant,
-            selfDir: 'out',
-        });
+        let newMsgKey;
+        try {
+            newMsgKey = new (window.require('WAWebMsgKey'))({
+                fromMe: true,
+                remote: chat.id,
+                id: newId,
+                participant: participant,
+            });
+        } catch {
+            newMsgKey = new (window.require('WAWebMsgKey'))({
+                from: from,
+                to: chat.id,
+                id: newId,
+                participant: participant,
+                selfDir: 'out',
+            });
+        }
 
         const extraOptions = options.extraOptions || {};
         delete options.extraOptions;
@@ -457,9 +467,13 @@ exports.LoadUtils = () => {
             .require('WAWebGetEphemeralFieldsMsgActionsUtils')
             .getEphemeralFields(chat);
 
+        const cleanMediaOptions = { ...mediaOptions };
+        const cleanMediaJson = mediaOptions.toJSON ? mediaOptions.toJSON() : {};
+        delete cleanMediaOptions.id;
+        delete cleanMediaJson.id;
+
         const message = {
             ...options,
-            id: newMsgKey,
             ack: 0,
             body: content,
             from: from,
@@ -470,8 +484,8 @@ exports.LoadUtils = () => {
             isNewMsg: true,
             type: 'chat',
             ...ephemeralFields,
-            ...mediaOptions,
-            ...(mediaOptions.toJSON ? mediaOptions.toJSON() : {}),
+            ...cleanMediaOptions,
+            ...cleanMediaJson,
             ...quotedMsgOptions,
             ...locationOptions,
             ...pollOptions,
@@ -481,6 +495,7 @@ exports.LoadUtils = () => {
             ...listOptions,
             ...botOptions,
             ...extraOptions,
+            id: newMsgKey,
         };
 
         // Bot's won't reply if canonicalUrl is set (linking)
@@ -580,9 +595,11 @@ exports.LoadUtils = () => {
 
         if (options.waitUntilMsgSent) await sendMsgResultPromise;
 
-        return window
-            .require('WAWebCollections')
-            .Msg.get(newMsgKey._serialized);
+        const keyStr = newMsgKey._serialized || (newMsgKey.toString ? newMsgKey.toString() : String(newMsgKey));
+        return (
+            window.require('WAWebCollections').Msg.get(keyStr) ||
+            message
+        );
     };
 
     window.WWebJS.editMessage = async (msg, content, options = {}) => {
