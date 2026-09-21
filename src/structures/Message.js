@@ -226,7 +226,9 @@ class Message extends Base {
          * Indicates the mentions in the message body.
          * @type {string[]}
          */
-        this.mentionedIds = data.mentionedJidList || [];
+        this.mentionedIds = (data.mentionedJidList || []).map((id) =>
+            typeof id === 'object' && id !== null ? id._serialized : id,
+        );
 
         /**
          * @typedef {Object} GroupMention
