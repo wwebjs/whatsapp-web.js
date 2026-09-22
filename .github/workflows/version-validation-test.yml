@@ -1,0 +1,32 @@
+name: Version Validation Test
+
+on:
+    push:
+        paths:
+            - 'tools/version-checker/**'
+            - '.github/workflows/version-validation-test.yml'
+    pull_request:
+        paths:
+            - 'tools/version-checker/**'
+    workflow_dispatch:
+
+permissions:
+    contents: read
+
+jobs:
+    test:
+        runs-on: ubuntu-latest
+        defaults:
+            run:
+                working-directory: ./tools/version-checker
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Setup Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: '20'
+
+            - name: Run version validation tests
+              run: node test-version-validation.js
