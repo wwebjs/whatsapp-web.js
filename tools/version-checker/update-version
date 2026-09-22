@@ -65,6 +65,12 @@ const getLatestVersion = async () => {
     });
 
     await browser.close();
+
+    // Validate scraped version: must be purely numeric dotted segments
+    if (!/^[0-9]+(\.[0-9]+)+$/.test(version)) {
+        throw new Error(`Invalid version scraped from page: ${JSON.stringify(version)}`);
+    }
+
     return version;
 };
 
@@ -91,6 +97,10 @@ const updateVersion = async (oldVersion, newVersion) => {
         updateInFile(file, oldVersion, newVersion);
     }
 
+    // Double-check before persisting to .version
+    if (!/^[0-9]+(\.[0-9]+)+$/.test(newVersion)) {
+        throw new Error(`Refusing to write invalid version to .version: ${JSON.stringify(newVersion)}`);
+    }
     fs.writeFileSync('./.version', newVersion);
 };
 
