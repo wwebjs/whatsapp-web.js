@@ -3,6 +3,30 @@
 exports.LoadUtils = () => {
     window.WWebJS = {};
 
+    // Newer WA Web builds (2.3000.1043xxx+) no longer expose `_serialized` on a
+    // MsgKey; the same string is only reachable through `toString()`. Every
+    // page-side `Msg.get(key._serialized)` then looks messages up by `undefined`.
+    // Restore it as a prototype getter. The setter keeps builds that still assign
+    // `_serialized` in the constructor working: it stores an own property, which
+    // shadows the getter exactly as before.
+    const MsgKeyProto = window.require('WAWebMsgKey').prototype;
+    if (!Object.getOwnPropertyDescriptor(MsgKeyProto, '_serialized')) {
+        Object.defineProperty(MsgKeyProto, '_serialized', {
+            get() {
+                return this.toString();
+            },
+            set(value) {
+                Object.defineProperty(this, '_serialized', {
+                    value,
+                    writable: true,
+                    enumerable: true,
+                    configurable: true,
+                });
+            },
+            configurable: true,
+        });
+    }
+
     /**
      * Helper function that compares between two WWeb versions. Its purpose is to help the developer to choose the correct code implementation depending on the comparison value and the WWeb version.
      * @param {string} lOperand The left operand for the WWeb version string to compare with
@@ -580,19 +604,9 @@ exports.LoadUtils = () => {
 
         if (options.waitUntilMsgSent) await sendMsgResultPromise;
 
-        // Newer WA Web builds (2.3000.1043xxx+) no longer expose `_serialized` on a
-        // MsgKey; the same value is only reachable through `$1` or `toString()`.
-        // Without a fallback the just-created message is looked up by `undefined`,
-        // so this resolves to `undefined` and `Client.sendMessage` returns
-        // `undefined` even though the message was sent.
-        const sentMsgId =
-            newMsgKey._serialized ??
-            newMsgKey.$1 ??
-            (typeof newMsgKey.toString === 'function'
-                ? newMsgKey.toString()
-                : undefined);
-
-        return window.require('WAWebCollections').Msg.get(sentMsgId);
+        return window
+            .require('WAWebCollections')
+            .Msg.get(newMsgKey._serialized);
     };
 
     window.WWebJS.editMessage = async (msg, content, options = {}) => {
