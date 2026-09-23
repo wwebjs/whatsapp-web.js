@@ -580,9 +580,19 @@ exports.LoadUtils = () => {
 
         if (options.waitUntilMsgSent) await sendMsgResultPromise;
 
-        return window
-            .require('WAWebCollections')
-            .Msg.get(newMsgKey._serialized);
+        // Newer WA Web builds (2.3000.1043xxx+) no longer expose `_serialized` on a
+        // MsgKey; the same value is only reachable through `$1` or `toString()`.
+        // Without a fallback the just-created message is looked up by `undefined`,
+        // so this resolves to `undefined` and `Client.sendMessage` returns
+        // `undefined` even though the message was sent.
+        const sentMsgId =
+            newMsgKey._serialized ??
+            newMsgKey.$1 ??
+            (typeof newMsgKey.toString === 'function'
+                ? newMsgKey.toString()
+                : undefined);
+
+        return window.require('WAWebCollections').Msg.get(sentMsgId);
     };
 
     window.WWebJS.editMessage = async (msg, content, options = {}) => {
