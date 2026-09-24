@@ -1430,7 +1430,7 @@ class Client extends EventEmitter {
      * @property {string} [stickerName=undefined] - Sets the name of the sticker, (if sendMediaAsSticker is true).
      * @property {string[]} [stickerCategories=undefined] - Sets the categories of the sticker, (if sendMediaAsSticker is true). Provide emoji char array, can be null.
      * @property {boolean} [ignoreQuoteErrors = true] - Should the bot send a quoted message without the quoted message if it fails to get the quote?
-     * @property {boolean} [waitUntilMsgSent = false] - Should the bot wait for the message send result?
+     * @property {boolean} [waitUntilMsgSent = false] - Should the bot wait for the message send result? If WhatsApp reports the message as not sent, the promise is rejected
      * @property {MessageMedia} [media] - Media to be sent
      * @property {any} [extra] - Extra options
      */

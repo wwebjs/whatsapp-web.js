@@ -1599,6 +1599,7 @@ declare namespace WAWebJS {
         ignoreQuoteErrors?: boolean;
         /**
          * Should the bot wait for the message send result?
+         * If WhatsApp reports the message as not sent, the promise is rejected
          * @default false
          */
         waitUntilMsgSent?: boolean;
