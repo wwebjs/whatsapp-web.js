@@ -1524,6 +1524,7 @@ exports.LoadUtils = () => {
         await callStart.startWAWebVoipGroupCallFromWids(
             contactWids,
             options.video === true,
+            { entryTrust: 'user_gesture' },
         );
 
         const startedAt = Date.now();
