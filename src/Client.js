@@ -499,6 +499,19 @@ class Client extends EventEmitter {
             // navigator.webdriver fix
             browserArgs.push('--disable-blink-features=AutomationControlled');
 
+            // Required for the calling feature: allow the audio graph to run
+            // without a user gesture and auto-grant the microphone permission.
+            const callArgs = [
+                '--autoplay-policy=no-user-gesture-required',
+                '--use-fake-ui-for-media-stream',
+            ];
+            for (const arg of callArgs) {
+                const flag = arg.split('=')[0];
+                if (!browserArgs.find((a) => a.startsWith(flag))) {
+                    browserArgs.push(arg);
+                }
+            }
+
             browser = await puppeteer.launch({
                 ...puppeteerOpts,
                 args: browserArgs,
@@ -1131,26 +1144,63 @@ class Client extends EventEmitter {
                 WAWebCallCollection &&
                 typeof WAWebCallCollection.on === 'function'
             ) {
+                const emitCall = (call) => {
+                    if (
+                        !call ||
+                        !call.id ||
+                        window._wwjsLastCallId === call.id
+                    ) {
+                        return;
+                    }
+                    window._wwjsLastCallId = call.id;
+                    window.onIncomingCall({
+                        id: call.id,
+                        peerJid: call.peerJid,
+                        isVideo: call.isVideo,
+                        isGroup: call.isGroup,
+                        canHandleLocally: call.canHandleLocally,
+                        outgoing: call.outgoing,
+                        webClientShouldHandle: call.webClientShouldHandle,
+                        participants: call.participants,
+                    });
+                };
+
+                // Newer WhatsApp Web surfaces calls through the collection's
+                // activeCall attribute instead of inserting them into the map.
+                // The changed call is passed as the handler argument; the
+                // lastActiveCall getter is not yet updated at this point.
+                if (!window._wwjsCallListener) {
+                    window._wwjsCallListener = true;
+                    WAWebCallCollection.on('change:activeCall', (call) => {
+                        if (call) {
+                            emitCall(call);
+                        }
+                        // Restore the real microphone once the call is over so a
+                        // following normal call is not fed the injected stream.
+                        if (
+                            !call ||
+                            (typeof call.getState === 'function' &&
+                                call.getState() === 0)
+                        ) {
+                            window.WWebJS.teardownCallMediaStream?.();
+                        }
+                    });
+                }
+
+                // Fallback for versions that still populate the internal map.
                 const mapKey = Object.keys(WAWebCallCollection).find(
                     (k) => WAWebCallCollection[k] instanceof Map,
                 );
-                const internalCallMap = WAWebCallCollection[mapKey];
-                const originalMapSet =
-                    internalCallMap.set.bind(internalCallMap);
+                if (mapKey) {
+                    const internalCallMap = WAWebCallCollection[mapKey];
+                    const originalMapSet =
+                        internalCallMap.set.bind(internalCallMap);
 
-                internalCallMap.set = function (key, value) {
-                    window.onIncomingCall({
-                        id: value.id,
-                        peerJid: value.peerJid,
-                        isVideo: value.isVideo,
-                        isGroup: value.isGroup,
-                        canHandleLocally: value.canHandleLocally,
-                        outgoing: value.outgoing,
-                        webClientShouldHandle: value.webClientShouldHandle,
-                        participants: value.participants,
-                    });
-                    return originalMapSet(key, value);
-                };
+                    internalCallMap.set = function (key, value) {
+                        emitCall(value);
+                        return originalMapSet(key, value);
+                    };
+                }
             }
             Chat.on('remove', async (chat) => {
                 window.onRemoveChatEvent(
@@ -3276,6 +3326,253 @@ class Client extends EventEmitter {
             },
             startTime,
             callType,
+        );
+    }
+
+    /**
+     * Places an outgoing call to the provided chat or phone number
+     * @param {string} chatId The chat ID ("@c.us" is automatically appended) or phone number to call
+     * @param {object} [options] Call options
+     * @param {boolean} [options.video=false] Whether to place a video call instead of a voice call
+     * @param {boolean} [options.waitForAnswer=false] If true, waits until the callee answers (or the timeout elapses) before resolving
+     * @param {number} [options.answerTimeout=60000] Maximum time to wait for an answer, in milliseconds, when waitForAnswer is true
+     * @param {boolean} [options.injectAudio=true] Route the outgoing audio from injected clips (via Call.playAudio) instead of the real microphone. Set false to place a normal call
+     * @returns {Promise<Call>} The placed call
+     */
+    async call(chatId, options = {}) {
+        const callData = await this.pupPage.evaluate(
+            (id, isVideo, waitForAnswer, answerTimeout, injectAudio) => {
+                return window.WWebJS.startCall(
+                    id,
+                    isVideo,
+                    waitForAnswer,
+                    answerTimeout,
+                    injectAudio,
+                );
+            },
+            chatId,
+            options.video ?? false,
+            options.waitForAnswer ?? false,
+            options.answerTimeout ?? 60000,
+            options.injectAudio ?? true,
+        );
+
+        return new Call(this, callData);
+    }
+
+    /**
+     * Starts an outgoing WhatsApp group call using WhatsApp Web internals.
+     * This API is experimental and depends on private WhatsApp Web modules. In
+     * versions where no supported internal group call controller can be
+     * detected, the method rejects without sending custom signaling stanzas.
+     * @param {Array<string>} contactIds Individual WhatsApp contact IDs, e.g. `['123456789@c.us', '987654321@c.us']`
+     * @param {object} [options]
+     * @param {boolean} [options.video=false] Start a video call instead of a voice call
+     * @returns {Promise<Call>}
+     */
+    async startGroupCall(contactIds, options = {}) {
+        if (!Array.isArray(contactIds)) {
+            throw new Error('Invalid contactIds: expected an array.');
+        }
+
+        const normalizedContactIds = contactIds.map((contactId) => {
+            if (typeof contactId !== 'string' || contactId.trim() === '') {
+                throw new Error(
+                    'Invalid contactId: expected a non-empty string.',
+                );
+            }
+
+            contactId = contactId.trim();
+
+            if (contactId.endsWith('@g.us')) {
+                throw new Error(
+                    'Group chat IDs cannot be used as group call participants.',
+                );
+            }
+
+            if (!contactId.endsWith('@c.us')) {
+                throw new Error(
+                    "Invalid contactId: expected an individual WhatsApp ID ending with '@c.us'.",
+                );
+            }
+
+            return contactId;
+        });
+
+        if (normalizedContactIds.length < 2) {
+            throw new Error(
+                'At least two participants are required to start a group call.',
+            );
+        }
+
+        if (!this.pupPage || !this.info) {
+            throw new Error(
+                'Client is not ready. Wait for the ready event first.',
+            );
+        }
+
+        const contactWids = await Promise.all(
+            normalizedContactIds.map(async (contactId) => {
+                const contactWid = await this.getNumberId(contactId);
+                if (!contactWid) {
+                    throw new Error(
+                        `Contact is not registered or reachable: ${contactId}`,
+                    );
+                }
+
+                return contactWid._serialized || contactId;
+            }),
+        );
+
+        const call = await this.pupPage.evaluate(
+            async (ids, callOptions) =>
+                window.WWebJS.startGroupCall(ids, callOptions),
+            contactWids,
+            {
+                video: options && options.video === true,
+            },
+        );
+
+        return new Call(this, call);
+    }
+
+    /**
+     * Gets the call that is currently ongoing (ringing, being placed or connected), if any
+     * @returns {Promise<Call|null>} The current call, or null if there is no ongoing call
+     */
+    async getActiveCall() {
+        const call = await this.pupPage.evaluate(async () =>
+            window.WWebJS.getActiveCall(),
+        );
+
+        return call ? new Call(this, call) : null;
+    }
+
+    /**
+     * Gets the number of participants in the currently active WhatsApp call.
+     * This API is experimental and depends on private WhatsApp Web modules.
+     * @returns {Promise<number|null>} The participant count, or null when no
+     * active call or countable participant roster is available.
+     */
+    async getActiveCallParticipantCount() {
+        return this.pupPage.evaluate(() => {
+            const WAWebCallCollection = window.require('WAWebCallCollection');
+            const activeCall =
+                WAWebCallCollection?.activeCall ||
+                WAWebCallCollection?.get?.()?.activeCall;
+            try {
+                const participants =
+                    activeCall?.msg?.serialize?.()?.callParticipants;
+                return Array.isArray(participants) ? participants.length : null;
+            } catch (ignoredError) {
+                return null;
+            }
+        });
+    }
+
+    /**
+     * Adds an individual WhatsApp contact to the currently active call using
+     * WhatsApp Web internals.
+     * This API is experimental and depends on private WhatsApp Web modules. In
+     * versions where no supported internal call controller can be detected, the
+     * method rejects without sending custom signaling stanzas.
+     * @param {string} contactId Individual WhatsApp contact ID, e.g. `123456789@c.us`
+     * @param {string} [callId] Optional active call ID guard
+     * @returns {Promise<void>}
+     */
+    async addParticipantToCall(contactId, callId) {
+        if (typeof contactId !== 'string' || contactId.trim() === '') {
+            throw new Error('Invalid contactId: expected a non-empty string.');
+        }
+
+        contactId = contactId.trim();
+
+        if (contactId.endsWith('@g.us')) {
+            throw new Error('Group IDs cannot be added as call participants.');
+        }
+
+        if (!contactId.endsWith('@c.us')) {
+            throw new Error(
+                "Invalid contactId: expected an individual WhatsApp ID ending with '@c.us'.",
+            );
+        }
+
+        if (callId !== undefined && typeof callId !== 'string') {
+            throw new Error('Invalid callId: expected a string when provided.');
+        }
+
+        if (!this.pupPage || !this.info) {
+            throw new Error(
+                'Client is not ready. Wait for the ready event first.',
+            );
+        }
+
+        const contactWid = await this.getNumberId(contactId);
+        if (!contactWid) {
+            throw new Error(
+                `Contact is not registered or reachable: ${contactId}`,
+            );
+        }
+
+        await this.pupPage.evaluate(
+            async (id, activeCallId) =>
+                window.WWebJS.addParticipantToCall(id, activeCallId),
+            contactWid._serialized || contactId,
+            callId,
+        );
+    }
+
+    /**
+     * Removes an individual WhatsApp contact from the currently active call
+     * using WhatsApp Web internals.
+     * This API is experimental and depends on private WhatsApp Web modules. In
+     * versions where no supported internal call controller can be detected, the
+     * method rejects without sending custom signaling stanzas.
+     * @param {string} contactId Individual WhatsApp contact ID, e.g. `123456789@c.us`
+     * @param {string} [callId] Optional active call ID guard
+     * @returns {Promise<void>}
+     */
+    async removeParticipantFromCall(contactId, callId) {
+        if (typeof contactId !== 'string' || contactId.trim() === '') {
+            throw new Error('Invalid contactId: expected a non-empty string.');
+        }
+
+        contactId = contactId.trim();
+
+        if (contactId.endsWith('@g.us')) {
+            throw new Error(
+                'Group IDs cannot be removed as call participants.',
+            );
+        }
+
+        if (!contactId.endsWith('@c.us')) {
+            throw new Error(
+                "Invalid contactId: expected an individual WhatsApp ID ending with '@c.us'.",
+            );
+        }
+
+        if (callId !== undefined && typeof callId !== 'string') {
+            throw new Error('Invalid callId: expected a string when provided.');
+        }
+
+        if (!this.pupPage || !this.info) {
+            throw new Error(
+                'Client is not ready. Wait for the ready event first.',
+            );
+        }
+
+        const contactWid = await this.getNumberId(contactId);
+        if (!contactWid) {
+            throw new Error(
+                `Contact is not registered or reachable: ${contactId}`,
+            );
+        }
+
+        await this.pupPage.evaluate(
+            async (id, activeCallId) =>
+                window.WWebJS.removeParticipantFromCall(id, activeCallId),
+            contactWid._serialized || contactId,
+            callId,
         );
     }
 

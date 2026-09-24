@@ -212,10 +212,7 @@ declare namespace WAWebJS {
         ): Promise<Message>;
 
         /** Send a reaction to a specific messageId */
-        sendReaction(
-            messageId: string,
-            reaction: string,
-        ): Promise<void>;
+        sendReaction(messageId: string, reaction: string): Promise<void>;
 
         /** Sends a channel admin invitation to a user, allowing them to become an admin of the channel */
         sendChannelAdminInvite(
@@ -344,6 +341,56 @@ declare namespace WAWebJS {
 
         /** Generates a WhatsApp call link (video call or voice call) */
         createCallLink(startTime: Date, callType: string): Promise<string>;
+
+        /** Places an outgoing call to the provided chat or phone number */
+        call(
+            chatId: string,
+            options?: {
+                video?: boolean;
+                waitForAnswer?: boolean;
+                answerTimeout?: number;
+                injectAudio?: boolean;
+            },
+        ): Promise<Call>;
+
+        /** Gets the call that is currently ongoing (ringing, being placed or connected), if any */
+        getActiveCall(): Promise<Call | null>;
+
+        /**
+         * Starts an outgoing WhatsApp group call.
+         * @experimental Depends on private WhatsApp Web internals and may reject
+         * when no supported internal group call controller is detected.
+         */
+        startGroupCall(
+            contactIds: string[],
+            options?: {
+                video?: boolean;
+            },
+        ): Promise<Call>;
+
+        /**
+         * Gets the number of participants in the currently active WhatsApp
+         * call, or null when no call or countable roster is available.
+         * @experimental Depends on private WhatsApp Web internals.
+         */
+        getActiveCallParticipantCount(): Promise<number | null>;
+
+        /**
+         * Adds an individual WhatsApp contact to the currently active call.
+         * @experimental Depends on private WhatsApp Web internals and may reject
+         * when no supported internal call controller is detected.
+         */
+        addParticipantToCall(contactId: string, callId?: string): Promise<void>;
+
+        /**
+         * Removes an individual WhatsApp contact from the currently active call.
+         * @experimental Depends on private WhatsApp Web internals and may reject
+         * when no supported internal call controller is detected.
+         */
+        removeParticipantFromCall(
+            contactId: string,
+            callId?: string,
+        ): Promise<void>;
 
         /**
          * Sends a response to the scheduled event message, indicating whether a user is going to attend the event or not
@@ -2444,6 +2491,27 @@ declare namespace WAWebJS {
 
         /** Reject the call */
         reject: () => Promise<void>;
+
+        /** Accept the call (audio only by default, even for incoming video calls) */
+        accept: (options?: {
+            video?: boolean;
+            injectAudio?: boolean;
+        }) => Promise<boolean>;
+
+        /** End an ongoing call */
+        end: () => Promise<boolean>;
+
+        /** Play an audio clip into the ongoing call so the other party can hear it */
+        playAudio: (media: MessageMedia | string) => Promise<number>;
+
+        /** Indicates whether the call is currently connected (the other party has answered) */
+        isConnected: () => Promise<boolean>;
+
+        /** Add an individual WhatsApp contact to the active call */
+        addParticipant: (contactId: string) => Promise<void>;
+
+        /** Remove an individual WhatsApp contact from the active call */
+        removeParticipant: (contactId: string) => Promise<void>;
     }
 
     /** Message type List */
