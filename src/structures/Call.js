@@ -75,6 +75,56 @@ class Call extends Base {
             this.id,
         );
     }
+
+    /**
+     * Accept the call
+     * @param {object} [options] Accept options
+     * @param {boolean} [options.video=false] Whether to answer with video (requires a camera). Defaults to audio only, even for incoming video calls
+     * @param {boolean} [options.injectAudio=true] Route the outgoing audio from injected clips (via playAudio) instead of the real microphone. Set false to answer with the real microphone
+     * @returns {Promise<boolean>}
+     */
+    async accept(options = {}) {
+        return this.client.pupPage.evaluate(
+            (id, isVideo, injectAudio) => {
+                return window.WWebJS.acceptCall(id, isVideo, injectAudio);
+            },
+            this.id,
+            options.video ?? false,
+            options.injectAudio ?? true,
+        );
+    }
+
+    /**
+     * End an ongoing call
+     * @returns {Promise<boolean>}
+     */
+    async end() {
+        return this.client.pupPage.evaluate((id) => {
+            return window.WWebJS.endCall(id);
+        }, this.id);
+    }
+
+    /**
+     * Play an audio clip into the ongoing call so the other party can hear it
+     * @param {MessageMedia|string} media A MessageMedia instance or a base64 encoded audio string
+     * @returns {Promise<number>} The duration of the played audio in seconds
+     */
+    async playAudio(media) {
+        const data = typeof media === 'string' ? media : media.data;
+        return this.client.pupPage.evaluate((base64) => {
+            return window.WWebJS.playCallAudio(base64);
+        }, data);
+    }
+
+    /**
+     * Indicates whether the call is currently connected (the other party has answered)
+     * @returns {Promise<boolean>}
+     */
+    async isConnected() {
+        return this.client.pupPage.evaluate((id) => {
+            return window.WWebJS.isCallConnected(id);
+        }, this.id);
+    }
 }
 
 module.exports = Call;

@@ -499,6 +499,19 @@ class Client extends EventEmitter {
             // navigator.webdriver fix
             browserArgs.push('--disable-blink-features=AutomationControlled');
 
+            // Required for the calling feature: allow the audio graph to run
+            // without a user gesture and auto-grant the microphone permission.
+            const callArgs = [
+                '--autoplay-policy=no-user-gesture-required',
+                '--use-fake-ui-for-media-stream',
+            ];
+            for (const arg of callArgs) {
+                const flag = arg.split('=')[0];
+                if (!browserArgs.find((a) => a.startsWith(flag))) {
+                    browserArgs.push(arg);
+                }
+            }
+
             browser = await puppeteer.launch({
                 ...puppeteerOpts,
                 args: browserArgs,
@@ -1131,26 +1144,63 @@ class Client extends EventEmitter {
                 WAWebCallCollection &&
                 typeof WAWebCallCollection.on === 'function'
             ) {
+                const emitCall = (call) => {
+                    if (
+                        !call ||
+                        !call.id ||
+                        window._wwjsLastCallId === call.id
+                    ) {
+                        return;
+                    }
+                    window._wwjsLastCallId = call.id;
+                    window.onIncomingCall({
+                        id: call.id,
+                        peerJid: call.peerJid,
+                        isVideo: call.isVideo,
+                        isGroup: call.isGroup,
+                        canHandleLocally: call.canHandleLocally,
+                        outgoing: call.outgoing,
+                        webClientShouldHandle: call.webClientShouldHandle,
+                        participants: call.participants,
+                    });
+                };
+
+                // Newer WhatsApp Web surfaces calls through the collection's
+                // activeCall attribute instead of inserting them into the map.
+                // The changed call is passed as the handler argument; the
+                // lastActiveCall getter is not yet updated at this point.
+                if (!window._wwjsCallListener) {
+                    window._wwjsCallListener = true;
+                    WAWebCallCollection.on('change:activeCall', (call) => {
+                        if (call) {
+                            emitCall(call);
+                        }
+                        // Restore the real microphone once the call is over so a
+                        // following normal call is not fed the injected stream.
+                        if (
+                            !call ||
+                            (typeof call.getState === 'function' &&
+                                call.getState() === 0)
+                        ) {
+                            window.WWebJS.teardownCallMediaStream?.();
+                        }
+                    });
+                }
+
+                // Fallback for versions that still populate the internal map.
                 const mapKey = Object.keys(WAWebCallCollection).find(
                     (k) => WAWebCallCollection[k] instanceof Map,
                 );
-                const internalCallMap = WAWebCallCollection[mapKey];
-                const originalMapSet =
-                    internalCallMap.set.bind(internalCallMap);
+                if (mapKey) {
+                    const internalCallMap = WAWebCallCollection[mapKey];
+                    const originalMapSet =
+                        internalCallMap.set.bind(internalCallMap);
 
-                internalCallMap.set = function (key, value) {
-                    window.onIncomingCall({
-                        id: value.id,
-                        peerJid: value.peerJid,
-                        isVideo: value.isVideo,
-                        isGroup: value.isGroup,
-                        canHandleLocally: value.canHandleLocally,
-                        outgoing: value.outgoing,
-                        webClientShouldHandle: value.webClientShouldHandle,
-                        participants: value.participants,
-                    });
-                    return originalMapSet(key, value);
-                };
+                    internalCallMap.set = function (key, value) {
+                        emitCall(value);
+                        return originalMapSet(key, value);
+                    };
+                }
             }
             Chat.on('remove', async (chat) => {
                 window.onRemoveChatEvent(
@@ -3277,6 +3327,49 @@ class Client extends EventEmitter {
             startTime,
             callType,
         );
+    }
+
+    /**
+     * Places an outgoing call to the provided chat or phone number
+     * @param {string} chatId The chat ID ("@c.us" is automatically appended) or phone number to call
+     * @param {object} [options] Call options
+     * @param {boolean} [options.video=false] Whether to place a video call instead of a voice call
+     * @param {boolean} [options.waitForAnswer=false] If true, waits until the callee answers (or the timeout elapses) before resolving
+     * @param {number} [options.answerTimeout=60000] Maximum time to wait for an answer, in milliseconds, when waitForAnswer is true
+     * @param {boolean} [options.injectAudio=true] Route the outgoing audio from injected clips (via Call.playAudio) instead of the real microphone. Set false to place a normal call
+     * @returns {Promise<Call>} The placed call
+     */
+    async call(chatId, options = {}) {
+        const callData = await this.pupPage.evaluate(
+            (id, isVideo, waitForAnswer, answerTimeout, injectAudio) => {
+                return window.WWebJS.startCall(
+                    id,
+                    isVideo,
+                    waitForAnswer,
+                    answerTimeout,
+                    injectAudio,
+                );
+            },
+            chatId,
+            options.video ?? false,
+            options.waitForAnswer ?? false,
+            options.answerTimeout ?? 60000,
+            options.injectAudio ?? true,
+        );
+
+        return new Call(this, callData);
+    }
+
+    /**
+     * Gets the call that is currently ongoing (ringing, being placed or connected), if any
+     * @returns {Promise<Call|null>} The current call, or null if there is no ongoing call
+     */
+    async getActiveCall() {
+        const callData = await this.pupPage.evaluate(() => {
+            return window.WWebJS.getActiveCall();
+        });
+
+        return callData ? new Call(this, callData) : null;
     }
 
     /**
