@@ -1523,10 +1523,22 @@ exports.LoadUtils = () => {
             wid = result.wid;
         }
 
+        // Calls not flagged as a user gesture are treated as deep links and
+        // wait on a confirmation popup before the offer is sent.
         const { CALL_FROM_UI } = window.require('WAWebWamEnumCallFromUi');
+        const { LOBBY_ENTRY_POINT_TYPE } = window.require(
+            'WAWebWamEnumLobbyEntryPointType',
+        );
         await window
             .require('WAWebVoipStartCall')
-            .startWAWebVoipCall(wid, isVideo, CALL_FROM_UI.CONVERSATION);
+            .startWAWebVoipCall(
+                wid,
+                isVideo,
+                CALL_FROM_UI.CONVERSATION,
+                LOBBY_ENTRY_POINT_TYPE.NOT_OPENED,
+                null,
+                { entryTrust: 'user_gesture' },
+            );
 
         // The call is registered in the collection shortly after the offer is
         // sent, so wait for the newly placed call to become available before
