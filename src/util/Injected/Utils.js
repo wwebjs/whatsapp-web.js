@@ -515,7 +515,9 @@ exports.LoadUtils = () => {
                     newsletterJid: chat.id.toJid(),
                     ...(isMedia
                         ? {
-                              mediaMetadata: msg.avParams(),
+                              mediaMetadata: window
+                                  .require('WAWebMediaMetadata')
+                                  .mediaMetadata(msg),
                               mediaHandle: isMedia
                                   ? mediaOptions.mediaHandle
                                   : null,
