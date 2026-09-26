@@ -1137,15 +1137,34 @@ exports.LoadUtils = () => {
         // Always call internal downloadMedia - never skip based on
         // mediaStage, because cache eviction can leave stage=RESOLVED
         // with empty InMemoryMediaBlobCache.
-        await msg.downloadMedia({
-            downloadEvenIfExpensive: true,
-            rmrReason: 1,
-            isUserInitiated: true,
+        // When the file has expired on the server, WhatsApp asks the sender's
+        // phone to upload it again and downloadMedia waits for that reply,
+        // which may never come. Stop waiting once that happens.
+        const { mediaData } = msg;
+        let onStageChange;
+        const reuploading = new Promise((resolve) => {
+            onStageChange = () => {
+                if (mediaData.mediaStage === 'REUPLOADING') resolve();
+            };
+            mediaData.on('change:mediaStage', onStageChange);
         });
+        try {
+            await Promise.race([
+                msg.downloadMedia({
+                    downloadEvenIfExpensive: true,
+                    rmrReason: 1,
+                    isUserInitiated: true,
+                }),
+                reuploading,
+            ]);
+        } finally {
+            mediaData.off('change:mediaStage', onStageChange);
+        }
 
         if (
             msg.mediaData.mediaStage.includes('ERROR') ||
-            msg.mediaData.mediaStage === 'FETCHING'
+            msg.mediaData.mediaStage === 'FETCHING' ||
+            msg.mediaData.mediaStage === 'REUPLOADING'
         ) {
             return null;
         }
