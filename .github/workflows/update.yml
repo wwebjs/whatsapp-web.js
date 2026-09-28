@@ -37,15 +37,22 @@ jobs:
               run: ./update-version
 
             - name: Store WA Version
-              run: echo "WA_VERSION=$(cat ./.version)" >> $GITHUB_ENV
+              id: wa_version
+              run: |
+                  VERSION=$(cat ./.version)
+                  if ! echo "$VERSION" | grep -qE '^[0-9]+(\.[0-9]+)+$'; then
+                    echo "Invalid version: $VERSION" >&2
+                    exit 1
+                  fi
+                  printf 'version=%s\n' "$VERSION" >> "$GITHUB_OUTPUT"
 
             - name: Create Pull Request
               uses: peter-evans/create-pull-request@v7
               with:
                   branch: auto-wa-web-update/patch
                   delete-branch: true
-                  commit-message: 'chore: update supported WhatsApp Web version to v${{ env.WA_VERSION }}'
-                  title: 'chore: update WhatsApp Web version (${{ env.WA_VERSION }})'
+                  commit-message: 'chore: update supported WhatsApp Web version to v${{ steps.wa_version.outputs.version }}'
+                  title: 'chore: update WhatsApp Web version (${{ steps.wa_version.outputs.version }})'
                   body: |
                       A new version of WhatsApp Web has been detected!
 
