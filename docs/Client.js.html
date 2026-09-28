@@ -42,7 +42,6 @@ const {
     WAState,
     MessageTypes,
 } &#x3D; require(&#x27;./util/Constants&#x27;);
-const { ExposeAuthStore } &#x3D; require(&#x27;./util/Injected/AuthStore/AuthStore&#x27;);
 const { LoadUtils } &#x3D; require(&#x27;./util/Injected/Utils&#x27;);
 const ChatFactory &#x3D; require(&#x27;./factories/ChatFactory&#x27;);
 const ContactFactory &#x3D; require(&#x27;./factories/ContactFactory&#x27;);
@@ -143,314 +142,355 @@ class Client extends EventEmitter {
      * Private function
      */
     async inject() {
-        if (
-            this.options.authTimeoutMs &#x3D;&#x3D;&#x3D; undefined ||
-            this.options.authTimeoutMs &#x3D;&#x3D; 0
-        ) {
-            this.options.authTimeoutMs &#x3D; 30000;
-        }
-        let start &#x3D; Date.now();
-        let timeout &#x3D; this.options.authTimeoutMs;
-        let res &#x3D; false;
-        while (start &gt; Date.now() - timeout) {
-            res &#x3D; await this.pupPage.evaluate(
-                &#x27;window.Debug?.VERSION !&#x3D; undefined&#x27;,
+        // Cancel any previous inject still running
+        if (this._injectAbort) this._injectAbort.abort();
+        const abort &#x3D; new AbortController();
+        this._injectAbort &#x3D; abort;
+
+        try {
+            const authTimeout &#x3D; this.options.authTimeoutMs || 30000;
+            await this.pupPage
+                .waitForFunction(&#x27;window.Debug?.VERSION !&#x3D; undefined&#x27;, {
+                    timeout: authTimeout,
+                    signal: abort.signal,
+                })
+                .catch((err) &#x3D;&gt; {
+                    if (abort.signal.aborted) throw err;
+                    throw &#x27;auth timeout&#x27;;
+                });
+            if (abort.signal.aborted) return;
+            await this.setDeviceName(
+                this.options.deviceName,
+                this.options.browserName,
             );
-            if (res) {
-                break;
-            }
-            await new Promise((r) &#x3D;&gt; setTimeout(r, 200));
-        }
-        if (!res) {
-            throw &#x27;auth timeout&#x27;;
-        }
-        await this.setDeviceName(
-            this.options.deviceName,
-            this.options.browserName,
-        );
-        const pairWithPhoneNumber &#x3D; this.options.pairWithPhoneNumber;
-        const version &#x3D; await this.getWWebVersion();
+            const pairWithPhoneNumber &#x3D; this.options.pairWithPhoneNumber;
+            const version &#x3D; await this.getWWebVersion();
 
-        await this.pupPage.evaluate(ExposeAuthStore);
-
-        const needAuthentication &#x3D; await this.pupPage.evaluate(async () &#x3D;&gt; {
-            let state &#x3D; window.require(&#x27;WAWebSocketModel&#x27;).Socket.state;
-
-            if (
-                state &#x3D;&#x3D;&#x3D; &#x27;OPENING&#x27; ||
-                state &#x3D;&#x3D;&#x3D; &#x27;UNLAUNCHED&#x27; ||
-                state &#x3D;&#x3D;&#x3D; &#x27;PAIRING&#x27;
-            ) {
-                // wait till state changes
-                await new Promise((r) &#x3D;&gt; {
-                    window
-                        .require(&#x27;WAWebSocketModel&#x27;)
-                        .Socket.on(
-                            &#x27;change:state&#x27;,
-                            function waitTillInit(_AppState, state) {
-                                if (
-                                    state !&#x3D;&#x3D; &#x27;OPENING&#x27; &amp;amp;&amp;amp;
-                                    state !&#x3D;&#x3D; &#x27;UNLAUNCHED&#x27; &amp;amp;&amp;amp;
-                                    state !&#x3D;&#x3D; &#x27;PAIRING&#x27;
-                                ) {
-                                    window
-                                        .require(&#x27;WAWebSocketModel&#x27;)
-                                        .Socket.off(
-                                            &#x27;change:state&#x27;,
-                                            waitTillInit,
-                                        );
-                                    r();
-                                }
-                            },
-                        );
-                });
-            }
-            state &#x3D; window.require(&#x27;WAWebSocketModel&#x27;).Socket.state;
-            return state &#x3D;&#x3D; &#x27;UNPAIRED&#x27; || state &#x3D;&#x3D; &#x27;UNPAIRED_IDLE&#x27;;
-        });
-
-        if (needAuthentication) {
-            const { failed, failureEventPayload, restart } &#x3D;
-                await this.authStrategy.onAuthenticationNeeded();
-
-            if (failed) {
-                /**
-                 * Emitted when there has been an error while trying to restore an existing session
-                 * @event Client#auth_failure
-                 * @param {string} message
-                 */
-                this.emit(Events.AUTHENTICATION_FAILURE, failureEventPayload);
-                await this.destroy();
-                if (restart) {
-                    // session restore failed so try again but without session to force new authentication
-                    return this.initialize();
-                }
-                return;
-            }
-
-            // Register qr/code events
-            if (pairWithPhoneNumber.phoneNumber) {
-                await exposeFunctionIfAbsent(
-                    this.pupPage,
-                    &#x27;onCodeReceivedEvent&#x27;,
-                    async (code) &#x3D;&gt; {
-                        /**
-                         * Emitted when a pairing code is received
-                         * @event Client#code
-                         * @param {string} code Code
-                         * @returns {string} Code that was just received
-                         */
-                        this.emit(Events.CODE_RECEIVED, code);
-                        return code;
-                    },
-                );
-                this.requestPairingCode(
-                    pairWithPhoneNumber.phoneNumber,
-                    pairWithPhoneNumber.showNotification,
-                    pairWithPhoneNumber.intervalMs,
-                );
-            } else {
-                let qrRetries &#x3D; 0;
-                await exposeFunctionIfAbsent(
-                    this.pupPage,
-                    &#x27;onQRChangedEvent&#x27;,
-                    async (qr) &#x3D;&gt; {
-                        /**
-                         * Emitted when a QR code is received
-                         * @event Client#qr
-                         * @param {string} qr QR Code
-                         */
-                        this.emit(Events.QR_RECEIVED, qr);
-                        if (this.options.qrMaxRetries &gt; 0) {
-                            qrRetries++;
-                            if (qrRetries &gt; this.options.qrMaxRetries) {
-                                this.emit(
-                                    Events.DISCONNECTED,
-                                    &#x27;Max qrcode retries reached&#x27;,
-                                );
-                                await this.destroy();
-                            }
-                        }
-                    },
-                );
-
-                await this.pupPage.evaluate(async () &#x3D;&gt; {
-                    const registrationInfo &#x3D;
-                        await window.AuthStore.RegistrationUtils.waSignalStore.getRegistrationInfo();
-                    const noiseKeyPair &#x3D;
-                        await window.AuthStore.RegistrationUtils.waNoiseInfo.get();
-                    const staticKeyB64 &#x3D; window.AuthStore.Base64Tools.encodeB64(
-                        noiseKeyPair.staticKeyPair.pubKey,
-                    );
-                    const identityKeyB64 &#x3D;
-                        window.AuthStore.Base64Tools.encodeB64(
-                            registrationInfo.identityKeyPair.pubKey,
-                        );
-                    const platform &#x3D;
-                        window.AuthStore.RegistrationUtils.DEVICE_PLATFORM;
-                    const getQR &#x3D; (ref) &#x3D;&gt;
-                        ref +
-                        &#x27;,&#x27; +
-                        staticKeyB64 +
-                        &#x27;,&#x27; +
-                        identityKeyB64 +
-                        &#x27;,&#x27; +
-                        window
-                            .require(&#x27;WAWebUserPrefsMultiDevice&#x27;)
-                            .getADVSecretKey() +
-                        &#x27;,&#x27; +
-                        platform;
-                    window.onQRChangedEvent(getQR(window.AuthStore.Conn.ref)); // initial qr
-                    window.AuthStore.Conn.on(&#x27;change:ref&#x27;, (_, ref) &#x3D;&gt; {
-                        window.onQRChangedEvent(getQR(ref));
-                    }); // future QR changes
-                });
-            }
-        }
-
-        await exposeFunctionIfAbsent(
-            this.pupPage,
-            &#x27;onAuthAppStateChangedEvent&#x27;,
-            async (state) &#x3D;&gt; {
-                if (
-                    state &#x3D;&#x3D; &#x27;UNPAIRED_IDLE&#x27; &amp;amp;&amp;amp;
-                    !pairWithPhoneNumber.phoneNumber
-                ) {
-                    // refresh qr code
-                    window.require(&#x27;WAWebCmd&#x27;).Cmd.refreshQR();
-                }
-            },
-        );
-
-        await exposeFunctionIfAbsent(
-            this.pupPage,
-            &#x27;onAppStateHasSyncedEvent&#x27;,
-            async () &#x3D;&gt; {
-                const authEventPayload &#x3D;
-                    await this.authStrategy.getAuthEventPayload();
-                /**
-                 * Emitted when authentication is successful
-                 * @event Client#authenticated
-                 */
-                this.emit(Events.AUTHENTICATED, authEventPayload);
-
-                const injected &#x3D; await this.pupPage.evaluate(async () &#x3D;&gt; {
-                    return typeof window.WWebJS !&#x3D;&#x3D; &#x27;undefined&#x27;;
-                });
-
-                if (!injected) {
+            const needAuthHandle &#x3D; await this.pupPage.waitForFunction(
+                () &#x3D;&gt; {
+                    const state &#x3D;
+                        window.require?.(&#x27;WAWebSocketModel&#x27;)?.Socket?.state;
                     if (
-                        this.options.webVersionCache.type &#x3D;&#x3D;&#x3D; &#x27;local&#x27; &amp;amp;&amp;amp;
-                        this.currentIndexHtml
+                        !state ||
+                        state &#x3D;&#x3D;&#x3D; &#x27;OPENING&#x27; ||
+                        state &#x3D;&#x3D;&#x3D; &#x27;UNLAUNCHED&#x27; ||
+                        state &#x3D;&#x3D;&#x3D; &#x27;PAIRING&#x27;
                     ) {
-                        const { type: webCacheType, ...webCacheOptions } &#x3D;
-                            this.options.webVersionCache;
-                        const webCache &#x3D; WebCacheFactory.createWebCache(
-                            webCacheType,
-                            webCacheOptions,
-                        );
-
-                        await webCache.persist(this.currentIndexHtml, version);
+                        return false;
                     }
+                    return {
+                        need: state &#x3D;&#x3D;&#x3D; &#x27;UNPAIRED&#x27; || state &#x3D;&#x3D;&#x3D; &#x27;UNPAIRED_IDLE&#x27;,
+                        state,
+                    };
+                },
+                { timeout: authTimeout },
+            );
+            const needAuthentication &#x3D; await needAuthHandle.jsonValue();
 
-                    // Load util functions (serializers, helper functions)
-                    await this.pupPage.evaluate(LoadUtils);
+            if (needAuthentication.need) {
+                const { failed, failureEventPayload, restart } &#x3D;
+                    await this.authStrategy.onAuthenticationNeeded();
 
-                    let start &#x3D; Date.now();
-                    let res &#x3D; false;
-                    while (start &gt; Date.now() - 30000) {
-                        // Check window.WWebJS Injection
-                        res &#x3D; await this.pupPage.evaluate(
-                            &#x27;window.WWebJS !&#x3D; undefined&#x27;,
-                        );
-                        if (res) {
-                            break;
-                        }
-                        await new Promise((r) &#x3D;&gt; setTimeout(r, 200));
-                    }
-                    if (!res) {
-                        throw &#x27;ready timeout&#x27;;
-                    }
-
+                if (failed) {
                     /**
-                     * Current connection information
-                     * @type {ClientInfo}
+                     * Emitted when there has been an error while trying to restore an existing session
+                     * @event Client#auth_failure
+                     * @param {string} message
                      */
-                    this.info &#x3D; new ClientInfo(
-                        this,
-                        await this.pupPage.evaluate(() &#x3D;&gt; {
-                            return {
-                                ...window
-                                    .require(&#x27;WAWebConnModel&#x27;)
-                                    .Conn.serialize(),
-                                wid:
-                                    window
-                                        .require(&#x27;WAWebUserPrefsMeUser&#x27;)
-                                        .getMaybeMePnUser() ||
-                                    window
-                                        .require(&#x27;WAWebUserPrefsMeUser&#x27;)
-                                        .getMaybeMeLidUser(),
-                            };
-                        }),
+                    this.emit(
+                        Events.AUTHENTICATION_FAILURE,
+                        failureEventPayload,
+                    );
+                    await this.destroy();
+                    if (restart) {
+                        // session restore failed so try again but without session to force new authentication
+                        return this.initialize();
+                    }
+                    return;
+                }
+
+                // Register qr/code events
+                if (pairWithPhoneNumber.phoneNumber) {
+                    this.requestPairingCode(
+                        pairWithPhoneNumber.phoneNumber,
+                        pairWithPhoneNumber.showNotification,
+                        pairWithPhoneNumber.intervalMs,
+                    );
+                } else {
+                    let qrRetries &#x3D; 0;
+
+                    this.on(Events.LOADING_SCREEN, () &#x3D;&gt; {
+                        qrRetries &#x3D; 0;
+                    });
+
+                    await exposeFunctionIfAbsent(
+                        this.pupPage,
+                        &#x27;onQRChangedEvent&#x27;,
+                        async (qr) &#x3D;&gt; {
+                            /**
+                             * Emitted when a QR code is received
+                             * @event Client#qr
+                             * @param {string} qr QR Code
+                             */
+                            this.emit(Events.QR_RECEIVED, qr);
+                            if (this.options.qrMaxRetries &gt; 0) {
+                                qrRetries++;
+                                if (qrRetries &gt; this.options.qrMaxRetries) {
+                                    this.emit(
+                                        Events.DISCONNECTED,
+                                        &#x27;Max qrcode retries reached&#x27;,
+                                    );
+                                    await this.destroy();
+                                }
+                            }
+                        },
                     );
 
-                    this.interface &#x3D; new InterfaceController(this);
+                    await this.pupPage.evaluate(async () &#x3D;&gt; {
+                        const registrationInfo &#x3D; await window
+                            .require(&#x27;WAWebSignalStoreApi&#x27;)
+                            .waSignalStore.getRegistrationInfo();
+                        const noiseKeyPair &#x3D; await window
+                            .require(&#x27;WAWebUserPrefsInfoStore&#x27;)
+                            .waNoiseInfo.get();
+                        const staticKeyB64 &#x3D; window
+                            .require(&#x27;WABase64&#x27;)
+                            .encodeB64(noiseKeyPair.staticKeyPair.pubKey);
+                        const identityKeyB64 &#x3D; window
+                            .require(&#x27;WABase64&#x27;)
+                            .encodeB64(registrationInfo.identityKeyPair.pubKey);
+                        const advSecretKey &#x3D; await window
+                            .require(&#x27;WAWebUserPrefsMultiDevice&#x27;)
+                            .getADVSecretKey();
+                        const platform &#x3D; window.require(
+                            &#x27;WAWebCompanionRegClientUtils&#x27;,
+                        ).DEVICE_PLATFORM;
+                        const getQR &#x3D; (ref) &#x3D;&gt;
+                            ref +
+                            &#x27;,&#x27; +
+                            staticKeyB64 +
+                            &#x27;,&#x27; +
+                            identityKeyB64 +
+                            &#x27;,&#x27; +
+                            advSecretKey +
+                            &#x27;,&#x27; +
+                            platform;
 
-                    await this.attachEventListeners();
+                        const onRefChange &#x3D; (_, ref) &#x3D;&gt; {
+                            if (ref &#x3D;&#x3D; null) return;
+                            window.onQRChangedEvent(getQR(ref));
+                        };
+
+                        window.onQRChangedEvent(
+                            getQR(window.require(&#x27;WAWebConnModel&#x27;).Conn.ref),
+                        ); // initial qr
+                        window
+                            .require(&#x27;WAWebConnModel&#x27;)
+                            .Conn.on(&#x27;change:ref&#x27;, onRefChange); // future QR changes
+
+                        // Remove QR listener once authentication succeeds
+                        window
+                            .require(&#x27;WAWebSocketModel&#x27;)
+                            .Socket.on(&#x27;change:hasSynced&#x27;, () &#x3D;&gt; {
+                                window
+                                    .require(&#x27;WAWebConnModel&#x27;)
+                                    .Conn.off(&#x27;change:ref&#x27;, onRefChange);
+                            });
+                    });
                 }
-                /**
-                 * Emitted when the client has initialized and is ready to receive messages.
-                 * @event Client#ready
-                 */
-                this.emit(Events.READY);
-                this.authStrategy.afterAuthReady();
-            },
-        );
-        let lastPercent &#x3D; null;
-        await exposeFunctionIfAbsent(
-            this.pupPage,
-            &#x27;onOfflineProgressUpdateEvent&#x27;,
-            async (percent) &#x3D;&gt; {
-                if (lastPercent !&#x3D;&#x3D; percent) {
-                    lastPercent &#x3D; percent;
-                    this.emit(Events.LOADING_SCREEN, percent, &#x27;WhatsApp&#x27;); // Message is hardcoded as &quot;WhatsApp&quot; for now
+            }
+
+            await exposeFunctionIfAbsent(
+                this.pupPage,
+                &#x27;onAuthAppStateChangedEvent&#x27;,
+                async (state) &#x3D;&gt; {
+                    if (
+                        state &#x3D;&#x3D; &#x27;UNPAIRED_IDLE&#x27; &amp;amp;&amp;amp;
+                        !pairWithPhoneNumber.phoneNumber
+                    ) {
+                        // refresh qr code
+                        await this.pupPage.evaluate(() &#x3D;&gt; {
+                            window.require(&#x27;WAWebCmd&#x27;).Cmd.refreshQR();
+                        });
+                    }
+                },
+            );
+
+            await exposeFunctionIfAbsent(
+                this.pupPage,
+                &#x27;onAppStateHasSyncedEvent&#x27;,
+                async () &#x3D;&gt; {
+                    const authEventPayload &#x3D;
+                        await this.authStrategy.getAuthEventPayload();
+                    /**
+                     * Emitted when authentication is successful
+                     * @event Client#authenticated
+                     */
+                    this.emit(Events.AUTHENTICATED, authEventPayload);
+
+                    const injected &#x3D; await this.pupPage.evaluate(async () &#x3D;&gt; {
+                        return typeof window.WWebJS !&#x3D;&#x3D; &#x27;undefined&#x27;;
+                    });
+
+                    if (!injected) {
+                        if (
+                            this.options.webVersionCache.type &#x3D;&#x3D;&#x3D; &#x27;local&#x27; &amp;amp;&amp;amp;
+                            this.currentIndexHtml
+                        ) {
+                            const { type: webCacheType, ...webCacheOptions } &#x3D;
+                                this.options.webVersionCache;
+                            const webCache &#x3D; WebCacheFactory.createWebCache(
+                                webCacheType,
+                                webCacheOptions,
+                            );
+
+                            await webCache.persist(
+                                this.currentIndexHtml,
+                                version,
+                            );
+                        }
+
+                        // Load util functions (serializers, helper functions)
+                        await this.pupPage.evaluate(LoadUtils);
+
+                        await this.pupPage
+                            .waitForFunction(
+                                &#x27;typeof window.WWebJS !&#x3D;&#x3D; &quot;undefined&quot;&#x27;,
+                                { timeout: 30000 },
+                            )
+                            .catch(() &#x3D;&gt; {
+                                throw &#x27;ready timeout&#x27;;
+                            });
+
+                        /**
+                         * Current connection information
+                         * @type {ClientInfo}
+                         */
+                        this.info &#x3D; new ClientInfo(
+                            this,
+                            await this.pupPage.evaluate(() &#x3D;&gt; {
+                                return {
+                                    ...window
+                                        .require(&#x27;WAWebConnModel&#x27;)
+                                        .Conn.serialize(),
+                                    wid:
+                                        window
+                                            .require(&#x27;WAWebUserPrefsMeUser&#x27;)
+                                            .getMaybeMePnUser() ||
+                                        window
+                                            .require(&#x27;WAWebUserPrefsMeUser&#x27;)
+                                            .getMaybeMeLidUser(),
+                                };
+                            }),
+                        );
+
+                        this.interface &#x3D; new InterfaceController(this);
+
+                        await this.attachEventListeners();
+                    }
+                    /**
+                     * Emitted when the client has initialized and is ready to receive messages.
+                     * @event Client#ready
+                     */
+                    this.emit(Events.READY);
+                    this.authStrategy.afterAuthReady();
+                },
+            );
+            let lastPercent &#x3D; null;
+            await exposeFunctionIfAbsent(
+                this.pupPage,
+                &#x27;onOfflineProgressUpdateEvent&#x27;,
+                async (percent) &#x3D;&gt; {
+                    if (lastPercent !&#x3D;&#x3D; percent) {
+                        lastPercent &#x3D; percent;
+                        this.emit(Events.LOADING_SCREEN, percent, &#x27;WhatsApp&#x27;); // Message is hardcoded as &quot;WhatsApp&quot; for now
+                    }
+                },
+            );
+            await exposeFunctionIfAbsent(
+                this.pupPage,
+                &#x27;onLogoutEvent&#x27;,
+                async () &#x3D;&gt; {
+                    this.lastLoggedOut &#x3D; true;
+                    await this.pupPage
+                        .waitForNavigation({ waitUntil: &#x27;load&#x27;, timeout: 5000 })
+                        .catch((_) &#x3D;&gt; _);
+                },
+            );
+            await this.pupPage.evaluate(() &#x3D;&gt; {
+                const Socket &#x3D; window.require(&#x27;WAWebSocketModel&#x27;).Socket;
+                const Cmd &#x3D; window.require(&#x27;WAWebCmd&#x27;).Cmd;
+
+                const listeners &#x3D; [
+                    [
+                        Socket,
+                        &#x27;change:state&#x27;,
+                        (_AppState, state) &#x3D;&gt; {
+                            window.onAuthAppStateChangedEvent(state);
+                        },
+                    ],
+                    [
+                        Socket,
+                        &#x27;change:hasSynced&#x27;,
+                        () &#x3D;&gt; {
+                            window.onAppStateHasSyncedEvent();
+                        },
+                    ],
+                    [
+                        Cmd,
+                        &#x27;offline_progress_update_from_bridge&#x27;,
+                        () &#x3D;&gt; {
+                            window.onOfflineProgressUpdateEvent(
+                                window
+                                    .require(&#x27;WAWebOfflineHandler&#x27;)
+                                    .OfflineMessageHandler.getOfflineDeliveryProgress(),
+                            );
+                        },
+                    ],
+                    [
+                        Cmd,
+                        &#x27;logout&#x27;,
+                        async () &#x3D;&gt; {
+                            await window.onLogoutEvent();
+                        },
+                    ],
+                    [
+                        Cmd,
+                        &#x27;logout_from_bridge&#x27;,
+                        async () &#x3D;&gt; {
+                            await window.onLogoutEvent();
+                        },
+                    ],
+                ];
+
+                // Clean up old listeners to prevent accumulation on re-inject
+                if (window._wwjsListeners) {
+                    for (const [obj, event, handler] of window._wwjsListeners) {
+                        obj.off(event, handler);
+                    }
                 }
-            },
-        );
-        await exposeFunctionIfAbsent(
-            this.pupPage,
-            &#x27;onLogoutEvent&#x27;,
-            async () &#x3D;&gt; {
-                this.lastLoggedOut &#x3D; true;
-                await this.pupPage
-                    .waitForNavigation({ waitUntil: &#x27;load&#x27;, timeout: 5000 })
-                    .catch((_) &#x3D;&gt; _);
-            },
-        );
-        await this.pupPage.evaluate(() &#x3D;&gt; {
-            window
-                .require(&#x27;WAWebSocketModel&#x27;)
-                .Socket.on(&#x27;change:state&#x27;, (_AppState, state) &#x3D;&gt; {
-                    window.onAuthAppStateChangedEvent(state);
-                });
-            window
-                .require(&#x27;WAWebSocketModel&#x27;)
-                .Socket.on(&#x27;change:hasSynced&#x27;, () &#x3D;&gt; {
+
+                for (const [obj, event, handler] of listeners) {
+                    obj.on(event, handler);
+                }
+                window._wwjsListeners &#x3D; listeners;
+
+                // Atomic hasSynced check in the same synchronous block as listener registration.
+                // If hasSynced is already true, Backbone won&#x27;t fire change:hasSynced (no transition).
+                // If hasSynced is false, the listener above will catch the future transition.
+                const storeInjected &#x3D; typeof window.WWebJS !&#x3D;&#x3D; &#x27;undefined&#x27;;
+                if (Socket.hasSynced &#x3D;&#x3D;&#x3D; true &amp;amp;&amp;amp; !storeInjected) {
                     window.onAppStateHasSyncedEvent();
-                });
-            const Cmd &#x3D; window.require(&#x27;WAWebCmd&#x27;).Cmd;
-            Cmd.on(&#x27;offline_progress_update_from_bridge&#x27;, () &#x3D;&gt; {
-                window.onOfflineProgressUpdateEvent(
-                    window.AuthStore.OfflineMessageHandler.getOfflineDeliveryProgress(),
-                );
+                }
             });
-            Cmd.on(&#x27;logout&#x27;, async () &#x3D;&gt; {
-                await window.onLogoutEvent();
-            });
-            Cmd.on(&#x27;logout_from_bridge&#x27;, async () &#x3D;&gt; {
-                await window.onLogoutEvent();
-            });
-        });
+        } catch (err) {
+            if (abort.signal.aborted) return; // superseded by newer inject
+            throw err;
+        } finally {
+            if (this._injectAbort &#x3D;&#x3D;&#x3D; abort) {
+                this._injectAbort &#x3D; null;
+            }
+        }
     }
 
     /**
@@ -520,16 +560,37 @@ class Client extends EventEmitter {
             referer: &#x27;https://whatsapp.com/&#x27;,
         });
 
+        // Register framenavigated BEFORE inject so that if navigation
+        // interrupts inject, the handler triggers a fresh inject.
+        this._registerFramenavigatedHandler();
+
         await this.inject();
+    }
+
+    _registerFramenavigatedHandler() {
+        if (this._framenavigatedRegistered) return;
+        this._framenavigatedRegistered &#x3D; true;
 
         this.pupPage.on(&#x27;framenavigated&#x27;, async (frame) &#x3D;&gt; {
-            if (frame.url().includes(&#x27;post_logout&#x3D;1&#x27;) || this.lastLoggedOut) {
+            if (frame.parentFrame() !&#x3D;&#x3D; null) return;
+
+            const isLogout &#x3D;
+                frame.url().includes(&#x27;post_logout&#x3D;1&#x27;) || this.lastLoggedOut;
+
+            if (isLogout) {
                 this.emit(Events.DISCONNECTED, &#x27;LOGOUT&#x27;);
                 await this.authStrategy.logout();
                 await this.authStrategy.beforeBrowserInitialized();
                 await this.authStrategy.afterBrowserInitialized();
                 this.lastLoggedOut &#x3D; false;
             }
+
+            const storeAvailable &#x3D; await this.pupPage.evaluate(() &#x3D;&gt; {
+                return typeof window.WWebJS !&#x3D;&#x3D; &#x27;undefined&#x27;;
+            });
+
+            if (!isLogout &amp;amp;&amp;amp; storeAvailable) return;
+
             await this.inject();
         });
     }
@@ -557,19 +618,15 @@ class Client extends EventEmitter {
         return await this.pupPage.evaluate(
             async (phoneNumber, showNotification, intervalMs) &#x3D;&gt; {
                 const getCode &#x3D; async () &#x3D;&gt; {
-                    while (!window.AuthStore.PairingCodeLinkUtils) {
-                        await new Promise((resolve) &#x3D;&gt;
-                            setTimeout(resolve, 250),
-                        );
-                    }
-                    window.AuthStore.PairingCodeLinkUtils.setPairingType(
-                        &#x27;ALT_DEVICE_LINKING&#x27;,
-                    );
-                    await window.AuthStore.PairingCodeLinkUtils.initializeAltDeviceLinking();
-                    return window.AuthStore.PairingCodeLinkUtils.startAltLinkingFlow(
-                        phoneNumber,
-                        showNotification,
-                    );
+                    window
+                        .require(&#x27;WAWebAltDeviceLinkingApi&#x27;)
+                        .setPairingType(&#x27;ALT_DEVICE_LINKING&#x27;);
+                    await window
+                        .require(&#x27;WAWebAltDeviceLinkingApi&#x27;)
+                        .initializeAltDeviceLinking();
+                    return window
+                        .require(&#x27;WAWebAltDeviceLinkingApi&#x27;)
+                        .startAltLinkingFlow(phoneNumber, showNotification);
                 };
                 if (window.codeInterval) {
                     clearInterval(window.codeInterval); // remove existing interval
@@ -1305,6 +1362,9 @@ class Client extends EventEmitter {
      * Closes the client
      */
     async destroy() {
+        if (this._injectAbort) this._injectAbort.abort();
+        this._framenavigatedRegistered &#x3D; false;
+
         const browser &#x3D; this.pupBrowser;
         const isConnected &#x3D; browser?.isConnected?.();
         if (isConnected) {
@@ -3472,7 +3532,7 @@ module.exports &#x3D; Client;
                     <footer id="jsdoc-footer" class="jsdoc-footer">
                             <div id="jsdoc-footer-container">
                                     <p>
-                                      Generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc</a> 3.6.11 on April 24, 2026.
+                                      Generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc</a> 3.6.11 on August 5, 2026.
                                     </p>
                             </div>
                     </footer>
