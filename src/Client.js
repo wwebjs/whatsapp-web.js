@@ -520,6 +520,25 @@ class Client extends EventEmitter {
         await this.authStrategy.afterBrowserInitialized();
         await this.initWebVersionCache();
 
+        await page.evaluateOnNewDocument(() => {
+            if (typeof navigator !== 'undefined' && navigator.storage) {
+                const origPersist = navigator.storage.persist
+                    ? navigator.storage.persist.bind(navigator.storage)
+                    : null;
+                navigator.storage.persist = async () => {
+                    if (origPersist) {
+                        try {
+                            await origPersist();
+                        } catch (ignoredError) {
+                            // ignore error and force grant
+                        }
+                    }
+                    return true;
+                };
+                navigator.storage.persisted = async () => true;
+            }
+        });
+
         if (this.options.evalOnNewDoc !== undefined) {
             await page.evaluateOnNewDocument(this.options.evalOnNewDoc);
         }
