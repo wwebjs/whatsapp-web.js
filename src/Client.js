@@ -470,6 +470,7 @@ class Client extends EventEmitter {
      */
     async initialize() {
         this._unregisterFramenavigatedHandler();
+        this.lastLoggedOut = false;
 
         let /**
              * @type {puppeteer.Browser}

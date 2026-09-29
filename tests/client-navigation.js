@@ -198,6 +198,22 @@ describe('Client navigation lifecycle (account-free)', function () {
         expect(fixture.client.inject.calledOnce).to.equal(true);
     });
 
+    it('does not carry a previous page logout flag into a new initialization', async function () {
+        fixture.client.lastLoggedOut = true;
+        await fixture.client.destroy();
+        const nextPage = fixture.createPage();
+        nextPage.evaluate.resolves(true);
+        await fixture.initialize(nextPage);
+        fixture.client.inject.resetHistory();
+
+        const handler = nextPage.listeners('framenavigated')[0];
+        await handler(nextPage.frame);
+
+        expect(fixture.client.lastLoggedOut).to.equal(false);
+        expect(fixture.auth.logout.called).to.equal(false);
+        expect(fixture.client.inject.called).to.equal(false);
+    });
+
     for (const boundary of [
         'logout',
         'beforeBrowserInitialized',
