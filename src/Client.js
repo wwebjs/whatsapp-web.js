@@ -482,59 +482,80 @@ class Client extends EventEmitter {
         await this.authStrategy.beforeBrowserInitialized();
 
         const puppeteerOpts = this.options.puppeteer;
-        if (
+        const connectingToExistingBrowser = !!(
             puppeteerOpts &&
             (puppeteerOpts.browserWSEndpoint || puppeteerOpts.browserURL)
-        ) {
-            browser = await puppeteer.connect(puppeteerOpts);
-            page = await browser.newPage();
-        } else {
-            const browserArgs = [...(puppeteerOpts.args || [])];
-            if (
-                this.options.userAgent !== false &&
-                !browserArgs.find((arg) => arg.includes('--user-agent'))
-            ) {
-                browserArgs.push(`--user-agent=${this.options.userAgent}`);
+        );
+
+        try {
+            if (connectingToExistingBrowser) {
+                browser = await puppeteer.connect(puppeteerOpts);
+                page = await browser.newPage();
+            } else {
+                const browserArgs = [...(puppeteerOpts.args || [])];
+                if (
+                    this.options.userAgent !== false &&
+                    !browserArgs.find((arg) => arg.includes('--user-agent'))
+                ) {
+                    browserArgs.push(`--user-agent=${this.options.userAgent}`);
+                }
+                // navigator.webdriver fix
+                browserArgs.push(
+                    '--disable-blink-features=AutomationControlled',
+                );
+
+                browser = await puppeteer.launch({
+                    ...puppeteerOpts,
+                    args: browserArgs,
+                });
+                page = (await browser.pages())[0];
             }
-            // navigator.webdriver fix
-            browserArgs.push('--disable-blink-features=AutomationControlled');
 
-            browser = await puppeteer.launch({
-                ...puppeteerOpts,
-                args: browserArgs,
+            if (this.options.proxyAuthentication !== undefined) {
+                await page.authenticate(this.options.proxyAuthentication);
+            }
+            if (this.options.userAgent !== false) {
+                await page.setUserAgent(this.options.userAgent);
+            }
+            if (this.options.bypassCSP) await page.setBypassCSP(true);
+
+            this.pupBrowser = browser;
+            this.pupPage = page;
+
+            await this.authStrategy.afterBrowserInitialized();
+            await this.initWebVersionCache();
+
+            if (this.options.evalOnNewDoc !== undefined) {
+                await page.evaluateOnNewDocument(this.options.evalOnNewDoc);
+            }
+
+            await page.goto(WhatsWebURL, {
+                waitUntil: 'load',
+                timeout: 0,
+                referer: 'https://whatsapp.com/',
             });
-            page = (await browser.pages())[0];
+
+            // Register framenavigated BEFORE inject so that if navigation
+            // interrupts inject, the handler triggers a fresh inject.
+            this._registerFramenavigatedHandler();
+
+            await this.inject();
+        } catch (err) {
+            // A browser we launched ourselves (as opposed to one we merely
+            // connected to via browserWSEndpoint/browserURL, which the
+            // caller owns and is responsible for closing) must be closed
+            // here on failure. Without this, a rejected initialize() still
+            // leaves `this.pupBrowser` pointing at a live Chromium process
+            // tree with nothing left to close it - callers that retry
+            // initialize() after a failure (a common and reasonable pattern,
+            // since a transient CDP/protocol error is often recoverable)
+            // leak one full Chromium instance per failed attempt, which
+            // compounds quickly under load. See #3976.
+            if (!connectingToExistingBrowser && browser?.isConnected?.()) {
+                await browser.close().catch(() => {});
+            }
+            throw err;
         }
-
-        if (this.options.proxyAuthentication !== undefined) {
-            await page.authenticate(this.options.proxyAuthentication);
-        }
-        if (this.options.userAgent !== false) {
-            await page.setUserAgent(this.options.userAgent);
-        }
-        if (this.options.bypassCSP) await page.setBypassCSP(true);
-
-        this.pupBrowser = browser;
-        this.pupPage = page;
-
-        await this.authStrategy.afterBrowserInitialized();
-        await this.initWebVersionCache();
-
-        if (this.options.evalOnNewDoc !== undefined) {
-            await page.evaluateOnNewDocument(this.options.evalOnNewDoc);
-        }
-
-        await page.goto(WhatsWebURL, {
-            waitUntil: 'load',
-            timeout: 0,
-            referer: 'https://whatsapp.com/',
-        });
-
-        // Register framenavigated BEFORE inject so that if navigation
-        // interrupts inject, the handler triggers a fresh inject.
-        this._registerFramenavigatedHandler();
-
-        await this.inject();
     }
 
     _registerFramenavigatedHandler() {
