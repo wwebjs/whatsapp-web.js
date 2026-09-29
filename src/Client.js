@@ -103,6 +103,9 @@ class Client extends EventEmitter {
 
         this.currentIndexHtml = null;
         this.lastLoggedOut = false;
+        // Keep injection work isolated per Client. Different Client instances
+        // still inject in parallel, while calls for this page are serialized.
+        this._injectQueue = Promise.resolve();
 
         Util.setFfmpegPath(this.options.ffmpegPath);
     }
@@ -111,9 +114,15 @@ class Client extends EventEmitter {
      * Injection logic
      * Private function
      */
-    async inject() {
-        // Cancel any previous inject still running
-        if (this._injectAbort) this._injectAbort.abort();
+    inject() {
+        const injection = this._injectQueue
+            .catch(() => undefined)
+            .then(() => this._inject());
+        this._injectQueue = injection;
+        return injection;
+    }
+
+    async _inject() {
         const abort = new AbortController();
         this._injectAbort = abort;
 
@@ -174,7 +183,10 @@ class Client extends EventEmitter {
                     await this.destroy();
                     if (restart) {
                         // session restore failed so try again but without session to force new authentication
-                        return this.initialize();
+                        // This restart is already running inside the per-client
+                        // injection queue, so inject directly to avoid waiting
+                        // for the queue entry that is currently executing.
+                        return this.initialize({ bypassInjectQueue: true });
                     }
                     return;
                 }
@@ -466,7 +478,7 @@ class Client extends EventEmitter {
     /**
      * Sets up events and requirements, kicks off authentication request
      */
-    async initialize() {
+    async initialize({ bypassInjectQueue = false } = {}) {
         let /**
              * @type {puppeteer.Browser}
              */
@@ -534,35 +546,48 @@ class Client extends EventEmitter {
         // interrupts inject, the handler triggers a fresh inject.
         this._registerFramenavigatedHandler();
 
-        await this.inject();
+        if (bypassInjectQueue) {
+            await this._inject();
+        } else {
+            await this.inject();
+        }
     }
 
     _registerFramenavigatedHandler() {
         if (this._framenavigatedRegistered) return;
         this._framenavigatedRegistered = true;
 
-        this.pupPage.on('framenavigated', async (frame) => {
-            if (frame.parentFrame() !== null) return;
-
-            const isLogout =
-                frame.url().includes('post_logout=1') || this.lastLoggedOut;
-
-            if (isLogout) {
-                this.emit(Events.DISCONNECTED, 'LOGOUT');
-                await this.authStrategy.logout();
-                await this.authStrategy.beforeBrowserInitialized();
-                await this.authStrategy.afterBrowserInitialized();
-                this.lastLoggedOut = false;
-            }
-
-            const storeAvailable = await this.pupPage.evaluate(() => {
-                return typeof window.WWebJS !== 'undefined';
+        this.pupPage.on('framenavigated', (frame) => {
+            this._handleFrameNavigated(frame).catch((error) => {
+                // EventEmitter does not handle rejected promises returned by
+                // async listeners. Surface the client error without turning it
+                // into an unhandled rejection that terminates Node.js.
+                this.emit('inject_error', error);
             });
-
-            if (!isLogout && storeAvailable) return;
-
-            await this.inject();
         });
+    }
+
+    async _handleFrameNavigated(frame) {
+        if (frame.parentFrame() !== null) return;
+
+        const isLogout =
+            frame.url().includes('post_logout=1') || this.lastLoggedOut;
+
+        if (isLogout) {
+            this.emit(Events.DISCONNECTED, 'LOGOUT');
+            await this.authStrategy.logout();
+            await this.authStrategy.beforeBrowserInitialized();
+            await this.authStrategy.afterBrowserInitialized();
+            this.lastLoggedOut = false;
+        }
+
+        const storeAvailable = await this.pupPage.evaluate(() => {
+            return typeof window.WWebJS !== 'undefined';
+        });
+
+        if (!isLogout && storeAvailable) return;
+
+        await this.inject();
     }
 
     /**
