@@ -91,6 +91,7 @@ exports.MessageTypes = {
     VIDEO: 'video',
     DOCUMENT: 'document',
     STICKER: 'sticker',
+    STICKER_PACK: 'sticker-pack',
     LOCATION: 'location',
     CONTACT_CARD: 'vcard',
     CONTACT_CARD_MULTI: 'multi_vcard',
