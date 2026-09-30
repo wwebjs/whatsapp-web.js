@@ -19,7 +19,7 @@ class Broadcast extends Base {
          * ID that represents the chat
          * @type {object}
          */
-        this.id = data.id;
+        this.id = Base._normalizeId(data.id);
 
         /**
          * Unix timestamp of last status

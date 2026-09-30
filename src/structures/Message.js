@@ -35,7 +35,9 @@ class Message extends Base {
          * ID that represents the message
          * @type {object}
          */
-        this.id = data.id;
+        // Normalize id: WhatsApp Web changed _serialized to $1 in 2026-07 update.
+        // Keep _serialized always populated for backward compatibility.
+        this.id = Base._normalizeId(data.id);
 
         /**
          * ACK status for the message
@@ -75,7 +77,7 @@ class Message extends Base {
          */
         this.from =
             typeof data.from === 'object' && data.from !== null
-                ? data.from._serialized
+                ? data.from._serialized || data.from.$1
                 : data.from;
 
         /**
@@ -87,7 +89,7 @@ class Message extends Base {
          */
         this.to =
             typeof data.to === 'object' && data.to !== null
-                ? data.to._serialized
+                ? data.to._serialized || data.to.$1
                 : data.to;
 
         /**
@@ -96,7 +98,7 @@ class Message extends Base {
          */
         this.author =
             typeof data.author === 'object' && data.author !== null
-                ? data.author._serialized
+                ? data.author._serialized || data.author.$1
                 : data.author;
 
         /**
@@ -211,13 +213,13 @@ class Message extends Base {
                       groupName: data.inviteGrpName,
                       fromId:
                           typeof data.from === 'object' &&
-                          '_serialized' in data.from
-                              ? data.from._serialized
+                          (data.from._serialized || data.from.$1)
+                              ? data.from._serialized || data.from.$1
                               : data.from,
                       toId:
                           typeof data.to === 'object' &&
-                          '_serialized' in data.to
-                              ? data.to._serialized
+                          (data.to._serialized || data.to.$1)
+                              ? data.to._serialized || data.to.$1
                               : data.to,
                   }
                 : undefined;
