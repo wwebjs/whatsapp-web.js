@@ -1,0 +1,17 @@
+{
+    "name": "daily-articles",
+    "version": "1.0.0",
+    "private": true,
+    "description": "Standalone daily article publisher for dev.to (AI / Python / Cloud / ML), written with Claude and reviewed before publishing",
+    "main": "publish.js",
+    "scripts": {
+        "start": "node publish.js",
+        "test": "node test/run.js"
+    },
+    "engines": {
+        "node": ">=18"
+    },
+    "dependencies": {
+        "@anthropic-ai/sdk": "^0.131.0"
+    }
+}

@@ -1,0 +1,36 @@
+# Copy this file to  .github/workflows/daily-article.yml  in a NEW repository whose root is the contents of the
+# "daily-articles" folder (so package.json and publish.js sit at the top level of that repository).
+# If you keep it as a subfolder of another repository instead, add "daily-articles/" to the two run paths below.
+# Runs once a day in GitHub's cloud, so no computer of yours needs to be on.
+#
+# Setup: Settings -> Secrets and variables -> Actions
+#   Secrets:    ANTHROPIC_API_KEY, DEVTO_API_KEY
+#   Variables:  PUBLISH_MODE  (draft = save drafts, live = publish approved articles; default draft)
+#
+# Notes: scheduled workflows run only from the repository's default branch, and GitHub pauses them after
+# 60 days without repository activity (re-enable under the Actions tab). A failed run emails you.
+name: Daily article
+
+on:
+    schedule:
+        - cron: '17 6 * * *' # 06:17 UTC every day
+    workflow_dispatch: {}
+
+permissions:
+    contents: read
+
+jobs:
+    publish:
+        runs-on: ubuntu-latest
+        timeout-minutes: 20
+        steps:
+            - uses: actions/checkout@v4
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: 22
+            - run: npm install --omit=dev
+            - run: node publish.js
+              env:
+                  ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+                  DEVTO_API_KEY: ${{ secrets.DEVTO_API_KEY }}
+                  PUBLISH_MODE: ${{ vars.PUBLISH_MODE || 'draft' }}

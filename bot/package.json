@@ -1,0 +1,14 @@
+{
+    "name": "wa-personal-bot",
+    "version": "1.0.0",
+    "private": true,
+    "description": "Personal WhatsApp assistant (reminders, scheduled messages, expenses) built on whatsapp-web.js",
+    "main": "bot.js",
+    "scripts": {
+        "start": "node bot.js"
+    },
+    "dependencies": {
+        "@anthropic-ai/sdk": "^0.131.0",
+        "qrcode-terminal": "^0.12.0"
+    }
+}
