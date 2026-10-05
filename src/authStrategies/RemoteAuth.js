@@ -18,7 +18,11 @@ const BaseAuthStrategy = require('./BaseAuthStrategy');
 /**
  * Remote-based authentication
  * @param {object} options - options
- * @param {object} options.store - Remote database store instance
+ * @param {object} options.store - Remote database store instance. `save` and
+ * `extract` both receive `{ session, path }`, where `session` is the storage
+ * key and `path` is the absolute path of the session archive on disk: the file
+ * to upload for `save`, the destination to download to for `extract`. Stores
+ * must not resolve the archive from `session` alone, as it is only a name.
  * @param {string} options.clientId - Client id to distinguish instances if you are using multiple, otherwise keep null if you are using only one instance
  * @param {string} options.dataPath - Change the default path for saving session files, default is: "./.wwebjs_auth/"
  * @param {number} options.backupSyncIntervalMs - Sets the time interval for periodic session backups. Accepts values starting from 60000ms {1 minute}
@@ -127,7 +131,14 @@ class RemoteAuth extends BaseAuthStrategy {
         }
         var self = this;
         this.backupSync = setInterval(async function () {
-            await self.storeRemoteSession();
+            try {
+                await self.storeRemoteSession();
+            } catch (err) {
+                /* A rejection here has no caller to await it, so it would
+                 * surface as an unhandled rejection and can take the process
+                 * down. Keep the interval alive and let the next tick retry. */
+                console.error('Failed to store remote session', err);
+            }
         }, this.backupSyncIntervalMs);
     }
 
@@ -140,6 +151,7 @@ class RemoteAuth extends BaseAuthStrategy {
             compressedSessionPath = await this.compressSession();
             await this.store.save({
                 session: this.sessionName,
+                path: compressedSessionPath,
             });
             if (options && options.emit)
                 this.client.emit(Events.REMOTE_SESSION_SAVED);
