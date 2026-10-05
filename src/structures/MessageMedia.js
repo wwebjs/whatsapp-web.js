@@ -75,7 +75,7 @@ class MessageMedia {
 
         async function fetchData(url, options) {
             const reqOptions = Object.assign(
-                { headers: { accept: 'image/* video/* text/* audio/*' } },
+                { headers: { accept: 'image/*, video/*, text/*, audio/*' } },
                 options,
             );
             const response = await fetch(url, reqOptions);
