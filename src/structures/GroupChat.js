@@ -578,9 +578,22 @@ class GroupChat extends Chat {
     async getInviteCode() {
         const codeRes = await this.client.pupPage.evaluate(async (chatId) => {
             try {
-                return await window
-                    .require('WAWebMexFetchGroupInviteCodeJob')
-                    .fetchMexGroupInviteCode(chatId);
+                let fetchGroupInviteCodeJob = window.require(
+                    'WAWebMexFetchGroupInviteCodeJob',
+                );
+
+                if (!fetchGroupInviteCodeJob) {
+                    await window
+                        .require('WAWebGroupInviteLinkDrawerLoadable')
+                        .requireBundle();
+                    fetchGroupInviteCodeJob = window.require(
+                        'WAWebMexFetchGroupInviteCodeJob',
+                    );
+                }
+
+                return await fetchGroupInviteCodeJob.fetchMexGroupInviteCode(
+                    chatId,
+                );
             } catch (err) {
                 if (err.name === 'ServerStatusCodeError') return undefined;
                 throw err;
