@@ -582,13 +582,26 @@ exports.LoadUtils = () => {
         const [msgPromise, sendMsgResultPromise] = window
             .require('WAWebSendMsgChatAction')
             .addAndSendMsgToChat(chat, message);
-        await msgPromise;
+        const msg = await msgPromise;
 
-        if (options.waitUntilMsgSent) await sendMsgResultPromise;
+        if (options.waitUntilMsgSent) {
+            const { SendMsgResult } = window.require(
+                'WAWebSendMsgResultAction',
+            );
+            const result = await sendMsgResultPromise;
+            if (result?.messageSendResult !== SendMsgResult.OK) {
+                throw new Error(
+                    `Message was not sent: ${result?.messageSendResult}`,
+                );
+            }
+        }
 
-        return window
-            .require('WAWebCollections')
-            .Msg.get(newMsgKey._serialized || newMsgKey.$1);
+        return (
+            msg ||
+            window
+                .require('WAWebCollections')
+                .Msg.get(newMsgKey._serialized || newMsgKey.$1)
+        );
     };
 
     window.WWebJS.editMessage = async (msg, content, options = {}) => {
