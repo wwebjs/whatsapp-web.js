@@ -58,7 +58,7 @@
         "is-ci": "^4.1.0",
         "jsdoc": "^3.6.4",
         "jsdoc-baseline": "^0.1.5",
-        "lint-staged": "^16.3.2",
+        "lint-staged": "^17.4.1",
         "mocha": "^11.7.5",
         "prettier": "^3.8.1",
         "sinon": "^21.0.2"
