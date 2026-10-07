@@ -1,4 +1,30 @@
-<div align="center">
+const { Client, LocalAuth } = require('whatsapp-web.js');
+const qrcode = require('qrcode-terminal');
+
+const client = new Client({
+  authStrategy: new LocalAuth(),
+  puppeteer: { args: ['--no-sandbox'] }
+});
+
+client.on('qr', qr => {
+  qrcode.generate(qr, {small: true});
+  console.log('Escanea este QR con tu WhatsApp');
+});
+
+client.on('ready', () => {
+  console.log('Bot conectado! Ya es BK\'7');
+});
+
+client.on('message', async msg => {
+  if (msg.body === '#help') {
+    msg.reply('Soy BK\'7 Bot activo ✅\nComandos:\n#help - ayuda\n#ping - estoy vivo');
+  }
+  if (msg.body === '#ping') {
+    msg.reply('pong 🏓');
+  }
+});
+
+client.initialize();<div align="center">
     <p>
         <a href="https://wwebjs.dev">
             <img src="https://github.com/wwebjs/Assets/blob/main/Collection/GitHub/whatsapp-web.js.png?raw=true"
