@@ -214,6 +214,16 @@ declare namespace WAWebJS {
         /** Send a reaction to a specific messageId */
         sendReaction(messageId: string, reaction: string): Promise<void>;
 
+        /**
+         * Sends a presence state to a specific chat without fetching the chat from the database.
+         * @param chatId The ID of the chat
+         * @param state The presence state (e.g., 'typing', 'recording', 'paused')
+         */
+        sendPresenceUpdate(
+            chatId: string,
+            state?: 'typing' | 'recording' | 'paused',
+        ): Promise<boolean>;
+
         /** Sends a channel admin invitation to a user, allowing them to become an admin of the channel */
         sendChannelAdminInvite(
             chatId: string,
@@ -711,7 +721,7 @@ declare namespace WAWebJS {
         evalOnNewDoc?: Function;
         /** Puppeteer launch options. View docs here: https://github.com/puppeteer/puppeteer/ */
         puppeteer?: puppeteer.PuppeteerNodeLaunchOptions &
-            puppeteer.ConnectOptions;
+        puppeteer.ConnectOptions;
         /** Determines how to save and restore sessions. Will use LegacySessionAuth if options.session is set. Otherwise, NoAuth will be used. */
         authStrategy?: AuthStrategy;
         /** The version of WhatsApp Web to use. Use options.webVersionCache to configure how the version is retrieved. */
@@ -745,8 +755,8 @@ declare namespace WAWebJS {
         browserName?: string;
         /** Object with proxy autentication requirements @default: undefined */
         proxyAuthentication?:
-            | { username: string; password: string }
-            | undefined;
+        | { username: string; password: string }
+        | undefined;
         /** Phone number pairing configuration. Refer the requestPairingCode function of Client.
          * @default
          * {
@@ -806,7 +816,7 @@ declare namespace WAWebJS {
      * No session restoring functionality
      * Will need to authenticate via QR code every time
      */
-    export class NoAuth extends AuthStrategy {}
+    export class NoAuth extends AuthStrategy { }
 
     /**
      * Local directory-based authentication
@@ -1866,7 +1876,7 @@ declare namespace WAWebJS {
         };
     }
 
-    export interface PrivateContact extends Contact {}
+    export interface PrivateContact extends Contact { }
 
     /**
      * Represents a Chat on WhatsApp
@@ -2119,7 +2129,7 @@ declare namespace WAWebJS {
         _serialized: string;
     }
 
-    export interface PrivateChat extends Chat {}
+    export interface PrivateChat extends Chat { }
 
     export type GroupParticipant = {
         id: ContactId;
