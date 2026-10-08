@@ -342,6 +342,20 @@ declare namespace WAWebJS {
         /** Generates a WhatsApp call link (video call or voice call) */
         createCallLink(startTime: Date, callType: string): Promise<string>;
 
+        /** Places an outgoing call to the provided chat or phone number */
+        call(
+            chatId: string,
+            options?: {
+                video?: boolean;
+                waitForAnswer?: boolean;
+                answerTimeout?: number;
+                injectAudio?: boolean;
+            },
+        ): Promise<Call>;
+
+        /** Gets the call that is currently ongoing (ringing, being placed or connected), if any */
+        getActiveCall(): Promise<Call | null>;
+
         /**
          * Sends a response to the scheduled event message, indicating whether a user is going to attend the event or not
          * @param response The response code to the event message. Valid values are: `0` for NONE response (removes a previous response) | `1` for GOING | `2` for NOT GOING | `3` for MAYBE going
@@ -2441,6 +2455,35 @@ declare namespace WAWebJS {
 
         /** Reject the call */
         reject: () => Promise<void>;
+
+        /** Accept the call (audio only by default, even for incoming video calls) */
+        accept: (options?: {
+            video?: boolean;
+            injectAudio?: boolean;
+        }) => Promise<boolean>;
+
+        /** End an ongoing call */
+        end: () => Promise<boolean>;
+
+        /** Play an audio clip into the ongoing call so the other party can hear it */
+        playAudio: (media: MessageMedia | string) => Promise<number>;
+
+        /** Play live raw 16-bit little-endian mono PCM into the ongoing call as it arrives. Destroying the stream stops the playback */
+        playAudioStream: (
+            stream: Readable,
+            options?: { sampleRate?: number },
+        ) => Promise<number>;
+
+        /** Indicates whether the call is currently connected (the other party has answered) */
+        isConnected: () => Promise<boolean>;
+
+        /** Live stream of the audio the other party sends, as raw 16-bit little-endian PCM, mono, 16 kHz. Ends with the call */
+        getAudioStream: () => Promise<Readable>;
+
+        /** Records the audio the other party sends until the call ends (or maxDuration elapses) and returns it as a WAV file */
+        recordAudio: (options?: {
+            maxDuration?: number;
+        }) => Promise<MessageMedia>;
     }
 
     /** Message type List */
