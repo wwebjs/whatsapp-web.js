@@ -697,7 +697,36 @@ client.on('call', async (call) => {
         call.from,
         `[${call.fromMe ? 'Outgoing' : 'Incoming'}] Phone call from ${call.from}, type ${call.isGroup ? 'group' : ''} ${call.isVideo ? 'video' : 'audio'} call. ${rejectCalls ? 'This call was automatically rejected by the script.' : ''}`,
     );
+
+    // Instead of rejecting, a call can also be answered and an audio clip
+    // (e.g. a text-to-speech file you generated) can be played into it:
+    // await call.accept(); // answers with audio only, even for video calls
+    // await call.playAudio(MessageMedia.fromFilePath('./welcome.mp3'));
+    // await call.end();
 });
+
+// Placing an outgoing call and speaking once the other party answers:
+// const call = await client.call('1234567890', { waitForAnswer: true });
+// if (await call.isConnected()) {
+//     await call.playAudio(MessageMedia.fromFilePath('./message.mp3'));
+//     await call.end();
+// }
+
+// Checking for an ongoing call and hanging it up:
+// const activeCall = await client.getActiveCall();
+// if (activeCall) await activeCall.end();
+
+// Answering machine: play a greeting, then record what the caller says
+// (16 kHz mono WAV) until they hang up or a minute passes:
+// await call.accept();
+// await call.playAudio(MessageMedia.fromFilePath('./greeting.mp3'));
+// const recording = await call.recordAudio({ maxDuration: 60000 });
+// await client.sendMessage(myNumber, recording);
+
+// Streaming the other party's audio live, as raw 16-bit PCM at 16 kHz mono
+// (e.g. to feed a speech-to-text service):
+// const audio = await call.getAudioStream();
+// audio.on('data', (pcm) => transcriber.write(pcm));
 
 client.on('disconnected', (reason) => {
     console.log('Client was logged out', reason);

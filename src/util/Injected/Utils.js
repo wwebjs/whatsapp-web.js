@@ -1335,6 +1335,13 @@ exports.LoadUtils = () => {
     };
 
     window.WWebJS.rejectCall = async (peerJid, id) => {
+        const stack = await window.WWebJS.getCallStackInterface();
+        if (stack && typeof stack.rejectCall === 'function') {
+            await stack.rejectCall();
+            return;
+        }
+
+        // Fallback signaling stanza for older WhatsApp Web builds.
         const _meUser = window
             .require('WAWebUserPrefsMeUser')
             .getMaybeMePnUser();
@@ -1356,6 +1363,382 @@ exports.LoadUtils = () => {
             ],
         );
         await window.require('WADeprecatedSendIq').deprecatedCastStanza(stanza);
+    };
+
+    window.WWebJS.getCallStackInterface = async () => {
+        return window
+            .require('WAWebVoipStackInterface')
+            .getVoipStackInterface();
+    };
+
+    window.WWebJS.setupCallMediaStream = () => {
+        const store = window.WWebJS;
+        // Route the outgoing microphone through our own graph only while an
+        // injected call is active, so ordinary calls keep using the real
+        // microphone (see teardownCallMediaStream).
+        store._callMediaActive = true;
+
+        if (store._callMedia && store._callMedia.context.state !== 'closed') {
+            return store._callMedia;
+        }
+
+        const AudioContextClass =
+            window.AudioContext || window.webkitAudioContext;
+        const context = new AudioContextClass();
+        const master = context.createGain();
+        master.gain.value = 1;
+
+        store._callMedia = { context, master, destinations: [] };
+
+        // WhatsApp acquires the microphone through this single entry point.
+        // Patch it once so the outgoing audio track is fed from our own graph
+        // instead of a physical device, but only while injection is active so
+        // normal calls are left untouched. A fresh destination is handed out on
+        // every call because WhatsApp stops the track when the stream is
+        // disposed, which would permanently silence a shared destination.
+        const mediaModule = window.require('WAGetUserMedia');
+        if (!mediaModule._wwebjsPatched) {
+            const original = mediaModule.getUserMedia;
+            mediaModule._wwebjsPatched = true;
+            mediaModule.getUserMedia = (constraints) => {
+                const media = window.WWebJS._callMedia;
+                if (
+                    (constraints && constraints.video) ||
+                    !media ||
+                    !window.WWebJS._callMediaActive
+                ) {
+                    return original(constraints);
+                }
+                const destination =
+                    media.context.createMediaStreamDestination();
+                media.master.connect(destination);
+                media.destinations.push(destination);
+                return Promise.resolve(destination.stream);
+            };
+        }
+
+        return store._callMedia;
+    };
+
+    window.WWebJS.teardownCallMediaStream = () => {
+        const media = window.WWebJS._callMedia;
+        window.WWebJS._callMediaActive = false;
+        if (!media) return;
+
+        // Detach the destinations handed out during the call so the next call
+        // starts from a clean graph and the real microphone is used again.
+        for (const destination of media.destinations) {
+            try {
+                media.master.disconnect(destination);
+            } catch {
+                // The destination was already disconnected by WhatsApp.
+            }
+        }
+        media.destinations = [];
+    };
+
+    window.WWebJS.playCallAudio = async (base64) => {
+        const { context, master } = window.WWebJS.setupCallMediaStream();
+        if (context.state === 'suspended') {
+            await context.resume();
+        }
+
+        const binary = atob(base64);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) {
+            bytes[i] = binary.charCodeAt(i);
+        }
+
+        const buffer = await context.decodeAudioData(bytes.buffer);
+        const source = context.createBufferSource();
+        source.buffer = buffer;
+        source.connect(master);
+
+        return new Promise((resolve) => {
+            source.onended = () => resolve(buffer.duration);
+            source.start();
+        });
+    };
+
+    // The peer connections of a call only carry data channels: the far end's
+    // audio is decoded by WhatsApp's voip engine and played through an
+    // AudioWorkletNode connected to the speakers. Keep track of those playback
+    // nodes so their output can be mirrored for capture. WhatsApp rebuilds the
+    // playback graph several times during a call, so every new node counts, and
+    // the patch has to be in place before the call starts.
+    window.WWebJS.trackCallPlayback = () => {
+        if (AudioNode.prototype._wwebjsPatched) {
+            return;
+        }
+        const original = AudioNode.prototype.connect;
+        AudioNode.prototype._wwebjsPatched = true;
+        AudioNode.prototype.connect = function (destination, ...args) {
+            const result = original.call(this, destination, ...args);
+            if (
+                destination instanceof AudioDestinationNode &&
+                this instanceof AudioWorkletNode
+            ) {
+                window.WWebJS.addCallPlaybackNode?.(this);
+            }
+            return result;
+        };
+    };
+
+    window.WWebJS.addCallPlaybackNode = (node) => {
+        const store = window.WWebJS;
+        store._callPlayback = (store._callPlayback || []).filter(
+            (playback) => playback.context.state !== 'closed',
+        );
+        store._callPlayback.push(node);
+        for (const capture of Object.values(store._callAudioCaptures || {})) {
+            window.WWebJS.mirrorCallPlayback(capture, node);
+        }
+    };
+
+    window.WWebJS.mirrorCallPlayback = (capture, node) => {
+        if (node.context.state === 'closed') {
+            return;
+        }
+        // Playback nodes live in WhatsApp's own audio contexts, so they are
+        // bridged into the capture context through a MediaStream.
+        const destination = node.context.createMediaStreamDestination();
+        node.connect(destination);
+        const source = capture.context.createMediaStreamSource(
+            destination.stream,
+        );
+        source.connect(capture.mixer);
+        capture.sources.push({ node, destination, source });
+    };
+
+    window.WWebJS.startCallAudioCapture = async (callId) => {
+        const store = window.WWebJS;
+        // activeCall is only cleared once WhatsApp has processed the hang-up,
+        // so a call ended through endCall is also checked explicitly.
+        const call = window.require('WAWebCallCollection').activeCall;
+        if (!call || call.id !== callId || store._endedCallId === callId) {
+            return false;
+        }
+        window.WWebJS.trackCallPlayback();
+        store._callAudioCaptures = store._callAudioCaptures || {};
+        if (store._callAudioCaptures[callId]) {
+            return true;
+        }
+
+        // WhatsApp plays call audio at 16 kHz mono, so capturing at the same
+        // rate hands raw PCM to Node without resampling.
+        const context = new AudioContext({ sampleRate: 16000 });
+        if (context.state === 'suspended') {
+            await context.resume();
+        }
+        const mixer = context.createGain();
+        const processor = context.createScriptProcessor(4096, 1, 1);
+        // A ScriptProcessorNode only runs while connected to a destination; the
+        // muted gain keeps the captured audio from playing twice.
+        const mute = context.createGain();
+        mute.gain.value = 0;
+        mixer.connect(processor);
+        processor.connect(mute);
+        mute.connect(context.destination);
+
+        processor.onaudioprocess = (event) => {
+            const input = event.inputBuffer.getChannelData(0);
+            const pcm = new Int16Array(input.length);
+            for (let i = 0; i < input.length; i++) {
+                const sample = Math.max(-1, Math.min(1, input[i]));
+                pcm[i] = sample < 0 ? sample * 0x8000 : sample * 0x7fff;
+            }
+            window.onCallAudioChunk(
+                callId,
+                window.WWebJS.arrayBufferToBase64(pcm.buffer),
+            );
+        };
+
+        const capture = { context, mixer, processor, sources: [] };
+        store._callAudioCaptures[callId] = capture;
+        for (const node of store._callPlayback || []) {
+            window.WWebJS.mirrorCallPlayback(capture, node);
+        }
+        return true;
+    };
+
+    // notify is false when Node stopped the capture itself (its streams are
+    // already gone): a late end notification would otherwise close a stream
+    // opened right after for the same call.
+    window.WWebJS.stopCallAudioCapture = (callId, notify = true) => {
+        const captures = window.WWebJS._callAudioCaptures || {};
+        const capture = captures[callId];
+        if (!capture) {
+            return false;
+        }
+        delete captures[callId];
+
+        for (const { node, destination, source } of capture.sources) {
+            try {
+                node.disconnect(destination);
+            } catch {
+                // WhatsApp already tore the playback node down.
+            }
+            source.disconnect();
+        }
+        capture.processor.onaudioprocess = null;
+        capture.context.close();
+        if (notify) {
+            window.onCallAudioEnd(callId);
+        }
+        return true;
+    };
+
+    window.WWebJS.stopCallAudioCaptures = () => {
+        for (const callId of Object.keys(
+            window.WWebJS._callAudioCaptures || {},
+        )) {
+            window.WWebJS.stopCallAudioCapture(callId);
+        }
+    };
+
+    window.WWebJS.acceptCall = async (
+        callId,
+        isVideo = false,
+        injectAudio = true,
+    ) => {
+        if (injectAudio) {
+            window.WWebJS.setupCallMediaStream();
+        }
+        window.WWebJS.trackCallPlayback();
+        const stack = await window.WWebJS.getCallStackInterface();
+        await stack.acceptCall(callId, isVideo);
+        return true;
+    };
+
+    window.WWebJS.endCall = async (callId) => {
+        const stack = await window.WWebJS.getCallStackInterface();
+        const { CALL_TERM_REASON } = window.require(
+            'WAWebWamEnumCallTermReason',
+        );
+        await stack.endCall(callId, CALL_TERM_REASON.ENDED_BY_USER);
+        window.WWebJS._endedCallId = callId;
+        window.WWebJS.teardownCallMediaStream();
+        window.WWebJS.stopCallAudioCaptures();
+        return true;
+    };
+
+    window.WWebJS.getOngoingCall = () => {
+        // lastActiveCall keeps pointing at the previous call even after it ends,
+        // so a call in the ended state (0) is treated as no ongoing call.
+        const call = window.require('WAWebCallCollection').lastActiveCall;
+        if (
+            !call ||
+            (typeof call.getState === 'function' && call.getState() === 0)
+        ) {
+            return null;
+        }
+        return call;
+    };
+
+    window.WWebJS.startCall = async (
+        chatId,
+        isVideo = false,
+        waitForAnswer = false,
+        timeout = 60000,
+        injectAudio = true,
+    ) => {
+        if (injectAudio) {
+            window.WWebJS.setupCallMediaStream();
+        }
+        window.WWebJS.trackCallPlayback();
+
+        let wid;
+        const target = String(chatId);
+        if (target.includes('@')) {
+            wid = window.require('WAWebWidFactory').createWid(target);
+        } else {
+            const result = await window
+                .require('WAWebQueryExistsJob')
+                .queryPhoneExists('+' + target.replace(/\D/g, ''));
+            if (!result || !result.wid) {
+                throw new Error(
+                    'The provided phone number is not registered on WhatsApp',
+                );
+            }
+            wid = result.wid;
+        }
+
+        // Calls not flagged as a user gesture are treated as deep links and
+        // wait on a confirmation popup before the offer is sent.
+        const { CALL_FROM_UI } = window.require('WAWebWamEnumCallFromUi');
+        const { LOBBY_ENTRY_POINT_TYPE } = window.require(
+            'WAWebWamEnumLobbyEntryPointType',
+        );
+        await window
+            .require('WAWebVoipStartCall')
+            .startWAWebVoipCall(
+                wid,
+                isVideo,
+                CALL_FROM_UI.CONVERSATION,
+                LOBBY_ENTRY_POINT_TYPE.NOT_OPENED,
+                null,
+                { entryTrust: 'user_gesture' },
+            );
+
+        // The call is registered in the collection shortly after the offer is
+        // sent, so wait for the newly placed call to become available before
+        // returning its data.
+        const collection = window.require('WAWebCallCollection');
+        let call = null;
+        for (let i = 0; i < 30 && !call; i++) {
+            await new Promise((resolve) => setTimeout(resolve, 100));
+            call = window.WWebJS.getOngoingCall();
+        }
+
+        // Optionally block until the callee answers (or the timeout elapses).
+        if (call && waitForAnswer) {
+            const deadline = Date.now() + timeout;
+            while (Date.now() < deadline) {
+                const current = window.WWebJS.getOngoingCall();
+                if (
+                    collection.isInConnectedCall &&
+                    current &&
+                    current.id === call.id
+                ) {
+                    break;
+                }
+                await new Promise((resolve) => setTimeout(resolve, 200));
+            }
+        }
+
+        return call
+            ? {
+                  id: call.id,
+                  peerJid: call.peerJid?._serialized,
+                  isVideo: call.isVideo,
+                  isGroup: call.isGroup,
+                  outgoing: call.outgoing,
+              }
+            : null;
+    };
+
+    window.WWebJS.isCallConnected = (callId) => {
+        const collection = window.require('WAWebCallCollection');
+        return (
+            collection.isInConnectedCall === true &&
+            !!collection.lastActiveCall &&
+            collection.lastActiveCall.id === callId
+        );
+    };
+
+    window.WWebJS.getActiveCall = () => {
+        const call = window.WWebJS.getOngoingCall();
+        if (!call) {
+            return null;
+        }
+        return {
+            id: call.id,
+            peerJid: call.peerJid?._serialized,
+            offerTime: call.offerTime,
+            isVideo: call.isVideo,
+            isGroup: call.isGroup,
+            outgoing: call.outgoing,
+        };
     };
 
     window.WWebJS.cropAndResizeImage = async (media, options = {}) => {
