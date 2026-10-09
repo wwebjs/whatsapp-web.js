@@ -1895,9 +1895,11 @@ class Client extends EventEmitter {
      */
     async acceptInvite(inviteCode) {
         const res = await this.pupPage.evaluate(async (inviteCode) => {
-            return await window
-                .require('WAWebGroupInviteJob')
-                .joinGroupViaInvite(inviteCode);
+            const { joinGroupViaInvite } = await window.WWebJS.requireLazy(
+                'WAWebGroupInviteJob',
+                'WAWebGroupInviteLinkDrawer.react',
+            );
+            return await joinGroupViaInvite(inviteCode);
         }, inviteCode);
 
         return res.gid._serialized || res.gid.$1;
@@ -2021,9 +2023,11 @@ class Client extends EventEmitter {
         const couldSet = await this.pupPage.evaluate(async (displayName) => {
             if (!window.require('WAWebConnModel').Conn.canSetMyPushname())
                 return false;
-            await window
-                .require('WAWebSetPushnameConnAction')
-                .setPushname(displayName);
+            const { setPushname } = await window.WWebJS.requireLazy(
+                'WAWebSetPushnameConnAction',
+                'WAWebProfileDrawer.react',
+            );
+            await setPushname(displayName);
             return true;
         }, displayName);
 
@@ -2415,25 +2419,27 @@ class Client extends EventEmitter {
                         .createWid(parentGroupId));
 
                 try {
-                    createGroupResult = await window
-                        .require('WAWebGroupCreateJob')
-                        .createGroup(
-                            {
-                                addressingModeOverride: 'lid',
-                                memberAddMode: options.memberAddMode ?? false,
-                                membershipApprovalMode:
-                                    options.membershipApprovalMode ?? false,
-                                announce: options.announce ?? false,
-                                restrict:
-                                    options.isRestrict !== undefined
-                                        ? !options.isRestrict
-                                        : false,
-                                ephemeralDuration: messageTimer,
-                                parentGroupId: parentGroupWid,
-                                title: title,
-                            },
-                            participantWids,
-                        );
+                    const { createGroup } = await window.WWebJS.requireLazy(
+                        'WAWebGroupCreateJob',
+                        'WAWebNewGroupFlow.react',
+                    );
+                    createGroupResult = await createGroup(
+                        {
+                            addressingModeOverride: 'lid',
+                            memberAddMode: options.memberAddMode ?? false,
+                            membershipApprovalMode:
+                                options.membershipApprovalMode ?? false,
+                            announce: options.announce ?? false,
+                            restrict:
+                                options.isRestrict !== undefined
+                                    ? !options.isRestrict
+                                    : false,
+                            ephemeralDuration: messageTimer,
+                            parentGroupId: parentGroupWid,
+                            title: title,
+                        },
+                        participantWids,
+                    );
                 } catch (ignoredError) {
                     return 'CreateGroupError: An unknown error occupied while creating a group';
                 }
@@ -2875,9 +2881,12 @@ class Client extends EventEmitter {
             if (!msg.id.fromMe || !msg.id.remote.isStatus())
                 throw 'Invalid usage! Can only revoke the message its from own status broadcast';
 
-            return await window
-                .require('WAWebRevokeStatusAction')
-                .sendStatusRevokeMsgAction(status, msg);
+            const { sendStatusRevokeMsgAction } =
+                await window.WWebJS.requireLazy(
+                    'WAWebRevokeStatusAction',
+                    'WAWebStatusDrawerFlow.react',
+                );
+            return await sendStatusRevokeMsgAction(status, msg);
         }, messageId);
     }
 
@@ -3275,9 +3284,14 @@ class Client extends EventEmitter {
 
         return await this.pupPage.evaluate(
             async (startTimeTs, callType) => {
-                const response = await window
-                    .require('WAWebGenerateEventCallLink')
-                    .createEventCallLink(startTimeTs, callType);
+                const { createEventCallLink } = await window.WWebJS.requireLazy(
+                    'WAWebGenerateEventCallLink',
+                    'WAWebEventsCreateEventModalFlow.react',
+                );
+                const response = await createEventCallLink(
+                    startTimeTs,
+                    callType,
+                );
                 return response ?? '';
             },
             startTime,
