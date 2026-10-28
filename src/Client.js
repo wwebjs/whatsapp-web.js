@@ -46,6 +46,8 @@ const { exposeFunctionIfAbsent } = require('./util/Puppeteer');
  * @param {number} options.authTimeoutMs - Timeout for authentication selector in puppeteer
  * @param {function} options.evalOnNewDoc - function to eval on new doc
  * @param {object} options.puppeteer - Puppeteer launch options. View docs here: https://github.com/puppeteer/puppeteer/
+ * @param {puppeteer.Browser} [options.puppeteer.browser] - An existing puppeteer Browser to use instead of launching or connecting to one. The client will not close it on destoy(). Tip: create the connection with `defaultViewport: null` to keep the host window size.
+ * @param {puppeteer.Page} [options.puppeteer.existingPage] - An existing page inside options.puppeteer.browser to run WhatsApp Web in. The client will not close it, and only removes its own listeners on destroy(). Requires options.puppeteer.browser.
  * @param {number} options.qrMaxRetries - How many times should the qrcode be refreshed before giving up
  * @param {number} options.takeoverOnConflict - If another whatsapp web session is detected (another browser), take over the session in the current browser
  * @param {number} options.takeoverTimeoutMs - How much time to wait before taking over the session
@@ -103,6 +105,9 @@ class Client extends EventEmitter {
 
         this.currentIndexHtml = null;
         this.lastLoggedOut = false;
+
+        this._ownsBrowser = true;
+        this._ownsPage = true;
 
         Util.setFfmpegPath(this.options.ffmpegPath);
     }
@@ -479,15 +484,39 @@ class Client extends EventEmitter {
         browser = null;
         page = null;
 
+        let usingExistingPage = false;
+
         await this.authStrategy.beforeBrowserInitialized();
 
-        const puppeteerOpts = this.options.puppeteer;
-        if (
-            puppeteerOpts &&
-            (puppeteerOpts.browserWSEndpoint || puppeteerOpts.browserURL)
+        const puppeteerOpts = this.options.puppeteer || {};
+
+        if (puppeteerOpts.existingPage && !puppeteerOpts.browser) {
+            throw new Error(
+                'options.puppeteer.existingPage requires options.puppeteer.browser',
+            );
+        }
+
+        if (puppeteerOpts.browser) {
+            browser = puppeteerOpts.browser;
+            this._ownsBrowser = false;
+
+            if (puppeteerOpts.existingPage) {
+                page = puppeteerOpts.existingPage;
+                this._ownsPage = false;
+                usingExistingPage = true;
+            } else {
+                page = await browser.newPage();
+                this._ownsPage = true;
+            }
+        } else if (
+            puppeteerOpts.browserWSEndpoint ||
+            puppeteerOpts.browserURL
         ) {
             browser = await puppeteer.connect(puppeteerOpts);
+
             page = await browser.newPage();
+            this._ownsBrowser = true;
+            this._ownsPage = true;
         } else {
             const browserArgs = [...(puppeteerOpts.args || [])];
             if (
@@ -524,11 +553,13 @@ class Client extends EventEmitter {
             await page.evaluateOnNewDocument(this.options.evalOnNewDoc);
         }
 
-        await page.goto(WhatsWebURL, {
-            waitUntil: 'load',
-            timeout: 0,
-            referer: 'https://whatsapp.com/',
-        });
+        if (!(usingExistingPage && page.url().startsWith(WhatsWebURL))) {
+            await page.goto(WhatsWebURL, {
+                waitUntil: 'load',
+                timeout: 0,
+                referer: 'https://whatsapp.com/',
+            });
+        }
 
         // Register framenavigated BEFORE inject so that if navigation
         // interrupts inject, the handler triggers a fresh inject.
@@ -541,7 +572,7 @@ class Client extends EventEmitter {
         if (this._framenavigatedRegistered) return;
         this._framenavigatedRegistered = true;
 
-        this.pupPage.on('framenavigated', async (frame) => {
+        this._onFrameNavigated = async (frame) => {
             if (frame.parentFrame() !== null) return;
 
             const isLogout =
@@ -562,7 +593,9 @@ class Client extends EventEmitter {
             if (!isLogout && storeAvailable) return;
 
             await this.inject();
-        });
+        };
+
+        this.pupPage.on('framenavigated', this._onFrameNavigated);
     }
 
     /**
@@ -1309,7 +1342,9 @@ class Client extends EventEmitter {
 
         if (versionContent) {
             await this.pupPage.setRequestInterception(true);
-            this.pupPage.on('request', async (req) => {
+            this._interceptionEnabled = true;
+
+            this._onRequest = async (req) => {
                 if (req.url() === WhatsWebURL) {
                     req.respond({
                         status: 200,
@@ -1319,14 +1354,16 @@ class Client extends EventEmitter {
                 } else {
                     req.continue();
                 }
-            });
+            };
+            this.pupPage.on('request', this._onRequest);
         } else {
-            this.pupPage.on('response', async (res) => {
+            this._onResponse = async (res) => {
                 if (res.ok() && res.url() === WhatsWebURL) {
                     const indexHtml = await res.text();
                     this.currentIndexHtml = indexHtml;
                 }
-            });
+            };
+            this.pupPage.on('response', this._onResponse);
         }
     }
 
@@ -1337,11 +1374,7 @@ class Client extends EventEmitter {
         if (this._injectAbort) this._injectAbort.abort();
         this._framenavigatedRegistered = false;
 
-        const browser = this.pupBrowser;
-        const isConnected = browser?.isConnected?.();
-        if (isConnected) {
-            await browser.close();
-        }
+        await this._releaseBrowser();
         await this.authStrategy.destroy();
     }
 
@@ -1352,16 +1385,55 @@ class Client extends EventEmitter {
         await this.pupPage.evaluate(() => {
             return window.require('WAWebSocketModel').Socket.logout();
         });
-        await this.pupBrowser.close();
+        await this._releaseBrowser();
 
-        let maxDelay = 0;
-        while (this.pupBrowser.isConnected() && maxDelay < 10) {
-            // waits a maximum of 1 second before calling the AuthStrategy
-            await new Promise((resolve) => setTimeout(resolve, 100));
-            maxDelay++;
+        if (this._ownsBrowser) {
+            let maxDelay = 0;
+            while (this.pupBrowser.isConnected() && maxDelay < 10) {
+                // waits a maximum of 1 second before calling the AuthStrategy
+                await new Promise((resolve) => setTimeout(resolve, 100));
+                maxDelay++;
+            }
         }
 
         await this.authStrategy.logout();
+    }
+
+    /**
+     * Releases browser resources according to ownership.
+     * Private function
+     */
+    async _releaseBrowser() {
+        if (this._ownsBrowser) {
+            if (this.pupBrowser?.isConnected?.()) {
+                await this.pupBrowser.close();
+            }
+            return;
+        }
+
+        if (!this.pupPage || this.pupPage.isClosed()) return;
+
+        if (this._ownsPage) {
+            await this.pupPage.close();
+            return;
+        }
+
+        if (this._onFrameNavigated) {
+            this.pupPage.off('framenavigated', this._onFrameNavigated);
+            this._onFrameNavigated = null;
+        }
+        if (this._onRequest) {
+            this.pupPage.off('request', this._onRequest);
+            this._onRequest = null;
+        }
+        if (this._onResponse) {
+            this.pupPage.off('response', this._onResponse);
+            this._onResponse = null;
+        }
+        if (this._interceptionEnabled) {
+            await this.pupPage.setRequestInterception(false);
+            this._interceptionEnabled = false;
+        }
     }
 
     /**
