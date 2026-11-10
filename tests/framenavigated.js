@@ -101,15 +101,46 @@ describe('Navigation races', function () {
             expect(unhandled).to.deep.equal([]);
         });
 
-        it('reports a later logout again after a regular navigation', async function () {
-            page.evaluate.resolves(true);
+        it('reports one LOGOUT across logout and in-between regular navigations', async function () {
+            page.evaluate.resolves(false);
             const disconnected = sinon.spy();
             client.on(Events.DISCONNECTED, disconnected);
 
+            // WhatsApp Web rewrites ?post_logout=1 to / and may reload again.
+            for (const url of [LOGOUT_URL, APP_URL, LOGOUT_URL, APP_URL]) {
+                page.emit('framenavigated', mainFrame(url));
+                await settle();
+            }
+
+            expect(disconnected.callCount).to.equal(1);
+            expect(client.inject.callCount).to.equal(4);
+        });
+
+        it('reports a logout of a new session again after re-authentication', async function () {
+            page.evaluate.resolves(true);
+            const disconnected = sinon.spy();
+            client.on(Events.DISCONNECTED, disconnected);
+            let onSynced;
+            page.waitForFunction = sinon.stub().resolves({
+                jsonValue: async () => ({ need: false }),
+            });
+            page.exposeFunction = sinon.stub().callsFake(async (name, fn) => {
+                if (name === 'onAppStateHasSyncedEvent') onSynced = fn;
+            });
+            sinon.stub(client, 'setDeviceName').resolves();
+            sinon.stub(client, 'getWWebVersion').resolves('2.3000.0');
+
             page.emit('framenavigated', mainFrame(LOGOUT_URL));
             await settle();
-            page.emit('framenavigated', mainFrame(APP_URL));
-            await settle();
+
+            // Re-link: run the real inject() to register the auth callback.
+            page.evaluate.resolves(false);
+            client.inject.restore();
+            await client.inject();
+            client.attachEventListeners = sinon.stub().resolves();
+            await onSynced();
+
+            page.evaluate.resolves(true);
             client.lastLoggedOut = true;
             page.emit('framenavigated', mainFrame(APP_URL));
             await settle();
