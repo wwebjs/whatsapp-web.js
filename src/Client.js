@@ -588,9 +588,12 @@ class Client extends EventEmitter {
             frame.url().includes('post_logout=1') || this.lastLoggedOut;
 
         if (isLogout) {
-            // WhatsApp Web's logout flow navigates more than once. Update
-            // the state synchronously, because the handler for the next
-            // navigation can start before this one finishes awaiting.
+            // WhatsApp Web's logout flow navigates more than once (and
+            // rewrites ?post_logout=1 to / in between), so report a logout
+            // once per session; the flag resets when a new session
+            // authenticates. Update the state synchronously, because the
+            // handler for the next navigation can start before this one
+            // finishes awaiting.
             this.lastLoggedOut = false;
             const duplicate = this._logoutNavigationHandled;
             this._logoutNavigationHandled = true;
@@ -601,8 +604,6 @@ class Client extends EventEmitter {
                 await this.authStrategy.beforeBrowserInitialized();
                 await this.authStrategy.afterBrowserInitialized();
             }
-        } else {
-            this._logoutNavigationHandled = false;
         }
 
         const storeAvailable = await this.pupPage.evaluate(() => {
