@@ -34,7 +34,11 @@ const {
     ScheduledEvent,
 } = require('./structures');
 const NoAuth = require('./authStrategies/NoAuth');
-const { exposeFunctionIfAbsent } = require('./util/Puppeteer');
+const {
+    exposeFunctionIfAbsent,
+    isNavigationRaceError,
+    isContextDestroyedError,
+} = require('./util/Puppeteer');
 
 /**
  * Starting point for interacting with the WhatsApp Web API
@@ -103,6 +107,7 @@ class Client extends EventEmitter {
 
         this.currentIndexHtml = null;
         this.lastLoggedOut = false;
+        this._logoutNavigationHandled = false;
 
         Util.setFfmpegPath(this.options.ffmpegPath);
     }
@@ -290,6 +295,8 @@ class Client extends EventEmitter {
                 this.pupPage,
                 'onAppStateHasSyncedEvent',
                 async () => {
+                    // A new session exists, so the next logout is a new one.
+                    this._logoutNavigationHandled = false;
                     const authEventPayload =
                         await this.authStrategy.getAuthEventPayload();
                     /**
@@ -455,6 +462,17 @@ class Client extends EventEmitter {
             });
         } catch (err) {
             if (abort.signal.aborted) return; // superseded by newer inject
+            // A navigation replaced the page while injecting. The
+            // framenavigated handler re-runs inject() for the new document.
+            if (
+                this._framenavigatedRegistered &&
+                isContextDestroyedError(err)
+            ) {
+                this._debug(
+                    `inject interrupted by navigation: ${err?.message || err}`,
+                );
+                return;
+            }
             throw err;
         } finally {
             if (this._injectAbort === abort) {
@@ -554,28 +572,71 @@ class Client extends EventEmitter {
         if (this._framenavigatedRegistered) return;
         this._framenavigatedRegistered = true;
 
-        this.pupPage.on('framenavigated', async (frame) => {
-            if (frame.parentFrame() !== null) return;
+        // EventEmitter ignores the promise an async listener returns, so a
+        // rejection here would be unhandled and terminate the process.
+        this.pupPage.on('framenavigated', (frame) => {
+            this._onFrameNavigated(frame).catch((err) =>
+                this._handleFrameNavigatedError(err),
+            );
+        });
+    }
 
-            const isLogout =
-                frame.url().includes('post_logout=1') || this.lastLoggedOut;
+    async _onFrameNavigated(frame) {
+        if (frame.parentFrame() !== null) return;
 
-            if (isLogout) {
+        const isLogout =
+            frame.url().includes('post_logout=1') || this.lastLoggedOut;
+
+        if (isLogout) {
+            // WhatsApp Web's logout flow navigates more than once. Update
+            // the state synchronously, because the handler for the next
+            // navigation can start before this one finishes awaiting.
+            this.lastLoggedOut = false;
+            const duplicate = this._logoutNavigationHandled;
+            this._logoutNavigationHandled = true;
+
+            if (!duplicate) {
                 this.emit(Events.DISCONNECTED, 'LOGOUT');
                 await this.authStrategy.logout();
                 await this.authStrategy.beforeBrowserInitialized();
                 await this.authStrategy.afterBrowserInitialized();
-                this.lastLoggedOut = false;
             }
+        } else {
+            this._logoutNavigationHandled = false;
+        }
 
-            const storeAvailable = await this.pupPage.evaluate(() => {
-                return typeof window.WWebJS !== 'undefined';
-            });
-
-            if (!isLogout && storeAvailable) return;
-
-            await this.inject();
+        const storeAvailable = await this.pupPage.evaluate(() => {
+            return typeof window.WWebJS !== 'undefined';
         });
+
+        if (!isLogout && storeAvailable) return;
+
+        await this.inject();
+    }
+
+    _handleFrameNavigatedError(err) {
+        if (isNavigationRaceError(err)) {
+            // A newer navigation superseded this one; its own
+            // framenavigated event re-runs the handler.
+            this._debug(
+                `framenavigated handler superseded: ${err?.message || err}`,
+            );
+            return;
+        }
+        if (this.listenerCount('error') > 0) {
+            this.emit('error', err);
+        } else {
+            console.error(
+                'whatsapp-web.js framenavigated handler failed:',
+                err,
+            );
+        }
+    }
+
+    _debug(message) {
+        if (/\bwwebjs\b|\bwhatsapp-web\.js\b/.test(process.env.DEBUG || '')) {
+            console.debug(`[wwebjs] ${message}`);
+        }
     }
 
     /**
