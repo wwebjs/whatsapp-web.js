@@ -258,6 +258,16 @@ class Client extends EventEmitter {
                             .require('WAWebConnModel')
                             .Conn.on('change:ref', onRefChange); // future QR changes
 
+                        // The synced handler subscribes too late for a scan.
+                        const { Stream, StreamMode } =
+                            window.require('WAWebStreamModel');
+                        const onScanned = () => {
+                            if (Stream.mode !== StreamMode.SYNCING) return;
+                            Stream.off('change:mode', onScanned);
+                            window.onConnectionStateEvent?.('LOADING', 0);
+                        };
+                        Stream.on('change:mode', onScanned);
+
                         // Remove QR listener once authentication succeeds
                         window
                             .require('WAWebSocketModel')
@@ -286,6 +296,26 @@ class Client extends EventEmitter {
                 },
             );
 
+            /**
+             * Maps WhatsApp's resolved connection screen onto the public client
+             * events. QR and ERROR are intentionally absent: they keep their own
+             * code paths and emit nothing here.
+             * @event Client#ready
+             * @event Client#loading_screen
+             */
+            const EMIT_BY_SCREEN = {
+                CONNECTED: () => [Events.READY],
+                LOADING: (percent) => [
+                    Events.LOADING_SCREEN,
+                    percent,
+                    'WhatsApp',
+                ],
+                DISCONNECTED: (percent) => [
+                    Events.LOADING_SCREEN,
+                    percent,
+                    'WhatsApp',
+                ],
+            };
             await exposeFunctionIfAbsent(
                 this.pupPage,
                 'onAppStateHasSyncedEvent',
@@ -357,24 +387,72 @@ class Client extends EventEmitter {
                         this.interface = new InterfaceController(this);
 
                         await this.attachEventListeners();
+
+                        // Connection lifecycle: subscribe to WhatsApp's own
+                        // Stream model (the same signals its loading screen
+                        // renders from) now that ClientInfo exists, then fire
+                        // once for the current state. Backbone only fires on
+                        // real changes, so there is no init race and no manual
+                        // de-dup.
+                        await this.pupPage.evaluate(() => {
+                            const {
+                                Stream,
+                                StreamMode: M,
+                                StreamInfo: I,
+                            } = window.require('WAWebStreamModel');
+                            // WA >= 2.3000.1046055909 moved displayInfo out of
+                            // the model into WAWebStreamGetters. Whichever a
+                            // build has answers; deriving it does not work, no
+                            // combination of the inputs is equivalent.
+                            const displayInfo = () =>
+                                window
+                                    .require('WAWebStreamGetters')
+                                    ?.getDisplayInfo?.(Stream) ??
+                                Stream.displayInfo;
+                            const resolveScreen = () => {
+                                switch (Stream.mode) {
+                                    case M.MAIN:
+                                        return displayInfo() === I.NORMAL
+                                            ? 'CONNECTED'
+                                            : 'LOADING';
+                                    case M.QR:
+                                        return 'QR';
+                                    case M.OFFLINE:
+                                        return 'DISCONNECTED';
+                                    case M.SYNCING:
+                                        return 'LOADING';
+                                    default:
+                                        return 'ERROR';
+                                }
+                            };
+                            let lastScreen = null;
+                            const notify = () => {
+                                const screen = resolveScreen();
+                                if (screen === lastScreen) return;
+                                lastScreen = screen;
+                                window.onConnectionStateEvent(
+                                    screen,
+                                    window
+                                        .require('WAWebOfflineHandler')
+                                        .OfflineMessageHandler.getOfflineDeliveryProgress(),
+                                );
+                            };
+                            // The generic event: change:displayInfo cannot fire
+                            // where the attribute is gone, and naming the inputs
+                            // would break the next time WA moves them.
+                            Stream.on('change', notify);
+                            notify();
+                        });
                     }
-                    /**
-                     * Emitted when the client has initialized and is ready to receive messages.
-                     * @event Client#ready
-                     */
-                    this.emit(Events.READY);
                     this.authStrategy.afterAuthReady();
                 },
             );
-            let lastPercent = null;
             await exposeFunctionIfAbsent(
                 this.pupPage,
-                'onOfflineProgressUpdateEvent',
-                async (percent) => {
-                    if (lastPercent !== percent) {
-                        lastPercent = percent;
-                        this.emit(Events.LOADING_SCREEN, percent, 'WhatsApp'); // Message is hardcoded as "WhatsApp" for now
-                    }
+                'onConnectionStateEvent',
+                (screen, percent) => {
+                    const args = EMIT_BY_SCREEN[screen]?.(percent);
+                    if (args) this.emit(...args);
                 },
             );
             await exposeFunctionIfAbsent(
@@ -404,17 +482,6 @@ class Client extends EventEmitter {
                         'change:hasSynced',
                         () => {
                             window.onAppStateHasSyncedEvent();
-                        },
-                    ],
-                    [
-                        Cmd,
-                        'offline_progress_update_from_bridge',
-                        () => {
-                            window.onOfflineProgressUpdateEvent(
-                                window
-                                    .require('WAWebOfflineHandler')
-                                    .OfflineMessageHandler.getOfflineDeliveryProgress(),
-                            );
                         },
                     ],
                     [
