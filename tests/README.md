@@ -8,6 +8,9 @@ npx mocha tests/call.js tests/call-injected.js tests/framenavigated.js --timeout
 
 The injected call tests execute the browser helpers against simulated WhatsApp
 modules, including the distinction between an active call and failure history.
+Live call validation additionally needs an account/session where WhatsApp enables
+Web calling. A successful login or a ready event does not establish call
+availability; calls reject explicitly if WhatsApp withholds its calling stack.
 
 These tests require an authenticated WhatsApp Web session, as well as an additional phone that you can send messages to.
 

@@ -39,6 +39,10 @@ describe('Injected call controls', function () {
         };
         modules = {
             WAWebCallCollection: collection,
+            WAWebVoipGatingUtils: {
+                isVoipDownloadEnabled: () => true,
+                getUnsupportedBrowserReason: () => null,
+            },
             WAWebWidFactory: {
                 createWid: (id) => ({
                     _serialized: id,
@@ -209,6 +213,36 @@ describe('Injected call controls', function () {
         expect(api.setupCallMediaStream.called).to.equal(false);
     });
 
+    it('reports disabled account availability before loading media or signaling', async function () {
+        modules.WAWebVoipGatingUtils.isVoipDownloadEnabled = () => false;
+        await expect(api.startCall('peer@c.us')).to.be.rejectedWith(
+            'not enabled for this account/session',
+        );
+        expect(api.setupCallMediaStream.called).to.equal(false);
+        expect(api.teardownCallMediaStream.called).to.equal(false);
+        expect(modules.WAWebVoipStartCall.startWAWebVoipCall.called).to.equal(
+            false,
+        );
+    });
+
+    it('reports an unsupported browser separately from disabled account access', async function () {
+        modules.WAWebVoipGatingUtils.isVoipDownloadEnabled = () => false;
+        modules.WAWebVoipGatingUtils.getUnsupportedBrowserReason = () =>
+            'missing_shared_array_buffer';
+        await expect(api.startCall('peer@c.us')).to.be.rejectedWith(
+            'not supported by this browser',
+        );
+    });
+
+    it('reports an unavailable stack even when the download is enabled', async function () {
+        modules.WAWebVoipStackInterface = {
+            getVoipStackInterface: async () => null,
+        };
+        await expect(api.getCallStackInterface()).to.be.rejectedWith(
+            'WhatsApp calling stack is unavailable',
+        );
+    });
+
     it('restores normal microphone capture after an earlier injected attempt', async function () {
         api._callMediaActive = true;
         const promise = api.startCall('peer@c.us', false, false, 1000, false);
@@ -296,6 +330,16 @@ describe('Injected call controls', function () {
         await expect(
             api.startGroupCall(['peer@c.us', 'other@c.us']),
         ).to.be.rejectedWith('declined to start');
+    });
+
+    it('applies the account availability check to group calls', async function () {
+        modules.WAWebVoipGatingUtils.isVoipDownloadEnabled = () => false;
+        await expect(
+            api.startGroupCall(['peer@c.us', 'other@c.us']),
+        ).to.be.rejectedWith('not enabled for this account/session');
+        expect(
+            modules.WAWebVoipStartCall.startWAWebVoipGroupCallFromWids.called,
+        ).to.equal(false);
     });
 
     it('rejects a group start when only a historical group call exists', async function () {

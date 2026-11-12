@@ -1365,10 +1365,35 @@ exports.LoadUtils = () => {
         await window.require('WADeprecatedSendIq').deprecatedCastStanza(stanza);
     };
 
+    window.WWebJS.assertCallAvailable = () => {
+        const gating = window.require('WAWebVoipGatingUtils');
+        const unsupportedReason = gating.getUnsupportedBrowserReason?.();
+        if (unsupportedReason) {
+            throw new Error(
+                'WhatsApp Web calling is not supported by this browser: ' +
+                    unsupportedReason,
+            );
+        }
+        // WhatsApp can mark initialization complete while withholding the
+        // stack download for accounts outside its web-calling rollout.
+        if (gating.isVoipDownloadEnabled?.() === false) {
+            throw new Error(
+                'WhatsApp Web calling is not enabled for this account/session.',
+            );
+        }
+    };
+
     window.WWebJS.getCallStackInterface = async () => {
-        return window
+        window.WWebJS.assertCallAvailable();
+        const stack = await window
             .require('WAWebVoipStackInterface')
             .getVoipStackInterface();
+        if (!stack) {
+            throw new Error(
+                'WhatsApp calling stack is unavailable. Reload WhatsApp Web and try again.',
+            );
+        }
+        return stack;
     };
 
     window.WWebJS.serializeCallModel = (call) => {
@@ -1502,6 +1527,7 @@ exports.LoadUtils = () => {
                 'A WhatsApp call is already active or being started.',
             );
         }
+        window.WWebJS.assertCallAvailable();
 
         const contactWids = contactIds.map((contactId) =>
             window.require('WAWebWidFactory').createWid(contactId),
@@ -1605,6 +1631,7 @@ exports.LoadUtils = () => {
                 'A WhatsApp call is already active or being started.',
             );
         }
+        window.WWebJS.assertCallAvailable();
 
         let wid;
         const target = String(chatId);
