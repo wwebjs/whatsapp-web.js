@@ -936,7 +936,24 @@ exports.LoadUtils = () => {
         const chatPromises = chats.map((chat) =>
             window.WWebJS.getChatModel(chat),
         );
-        return await Promise.all(chatPromises);
+
+        // A single chat whose model cannot be built (for example a group whose
+        // metadata or last message is not available) should not take down the
+        // whole list. Settle every model and keep the ones that were built.
+        const results = await Promise.allSettled(chatPromises);
+        const models = [];
+        results.forEach((result, index) => {
+            if (result.status === 'fulfilled') {
+                result.value && models.push(result.value);
+            } else {
+                console.warn(
+                    `[wwebjs] getChats: could not build ${String(
+                        chats[index].id,
+                    )}: ${result.reason}`,
+                );
+            }
+        });
+        return models;
     };
 
     window.WWebJS.getChannels = async () => {
