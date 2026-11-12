@@ -230,11 +230,19 @@ class Chat extends Base {
                         if (!loadedMessages || !loadedMessages.length) break;
                         msgs = [...loadedMessages.filter(msgFilter), ...msgs];
                     }
+                }
 
-                    if (msgs.length > searchOptions.limit) {
-                        msgs.sort((a, b) => (a.t > b.t ? 1 : -1));
-                        msgs = msgs.splice(msgs.length - searchOptions.limit);
-                    }
+                // Cached and loaded batches can interleave out of order, so
+                // sort first: trimming then keeps the newest messages and all
+                // paths uphold the documented earliest-to-latest order.
+                msgs.sort((a, b) => a.t - b.t);
+
+                if (
+                    searchOptions &&
+                    searchOptions.limit > 0 &&
+                    msgs.length > searchOptions.limit
+                ) {
+                    msgs = msgs.splice(msgs.length - searchOptions.limit);
                 }
 
                 return msgs.map((m) => window.WWebJS.getMessageModel(m));
