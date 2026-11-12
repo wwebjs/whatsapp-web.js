@@ -786,6 +786,10 @@ declare namespace WAWebJS {
         /** Sets bypassing of page's Content-Security-Policy
          * @default false */
         bypassCSP?: boolean;
+        /** Experimentally enable the local Web-calling feature gate and initialize
+         * the calling engine after authentication. Does not guarantee server acceptance.
+         * @default false */
+        forceWebCalling?: boolean;
         /** Sets the device name of a current linked device., i.e.: 'TEST' */
         deviceName?: string;
         /**
