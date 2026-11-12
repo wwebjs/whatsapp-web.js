@@ -3425,6 +3425,11 @@ class Client extends EventEmitter {
             options.injectAudio ?? true,
         );
 
+        if (typeof callData?.id !== 'string' || !callData.id) {
+            throw new Error(
+                'Outgoing WhatsApp call did not return a valid active call.',
+            );
+        }
         return new Call(this, callData);
     }
 
@@ -3501,6 +3506,11 @@ class Client extends EventEmitter {
             },
         );
 
+        if (typeof call?.id !== 'string' || !call.id) {
+            throw new Error(
+                'Outgoing WhatsApp group call did not return a valid active call.',
+            );
+        }
         return new Call(this, call);
     }
 

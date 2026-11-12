@@ -1,5 +1,14 @@
 # Running Tests
 
+The call and navigation regression tests do not require a browser or account:
+
+```bash
+npx mocha tests/call.js tests/call-injected.js tests/framenavigated.js --timeout 5000
+```
+
+The injected call tests execute the browser helpers against simulated WhatsApp
+modules, including the distinction between an active call and failure history.
+
 These tests require an authenticated WhatsApp Web session, as well as an additional phone that you can send messages to.
 
 This can be configured using the following environment variables:
