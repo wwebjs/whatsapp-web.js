@@ -103,6 +103,8 @@ class Client extends EventEmitter {
 
         this.currentIndexHtml = null;
         this.lastLoggedOut = false;
+        this._framenavigatedPage = null;
+        this._framenavigatedHandler = null;
 
         Util.setFfmpegPath(this.options.ffmpegPath);
     }
@@ -467,6 +469,9 @@ class Client extends EventEmitter {
      * Sets up events and requirements, kicks off authentication request
      */
     async initialize() {
+        this._unregisterFramenavigatedHandler();
+        this.lastLoggedOut = false;
+
         let /**
              * @type {puppeteer.Browser}
              */
@@ -538,31 +543,55 @@ class Client extends EventEmitter {
     }
 
     _registerFramenavigatedHandler() {
-        if (this._framenavigatedRegistered) return;
-        this._framenavigatedRegistered = true;
+        const page = this.pupPage;
+        if (this._framenavigatedPage === page) return;
+        this._unregisterFramenavigatedHandler();
 
-        this.pupPage.on('framenavigated', async (frame) => {
-            if (frame.parentFrame() !== null) return;
+        const isCurrentPage = () =>
+            this.pupPage === page &&
+            this._framenavigatedHandler === onFrameNavigated;
+        const onFrameNavigated = async (frame) => {
+            if (!isCurrentPage() || frame.parentFrame() !== null) return;
 
             const isLogout =
                 frame.url().includes('post_logout=1') || this.lastLoggedOut;
 
             if (isLogout) {
                 this.emit(Events.DISCONNECTED, 'LOGOUT');
+                if (!isCurrentPage()) return;
                 await this.authStrategy.logout();
+                if (!isCurrentPage()) return;
                 await this.authStrategy.beforeBrowserInitialized();
+                if (!isCurrentPage()) return;
                 await this.authStrategy.afterBrowserInitialized();
+                if (!isCurrentPage()) return;
                 this.lastLoggedOut = false;
             }
 
-            const storeAvailable = await this.pupPage.evaluate(() => {
+            const storeAvailable = await page.evaluate(() => {
                 return typeof window.WWebJS !== 'undefined';
             });
+            if (!isCurrentPage()) return;
 
             if (!isLogout && storeAvailable) return;
 
             await this.inject();
-        });
+        };
+
+        this._framenavigatedPage = page;
+        this._framenavigatedHandler = onFrameNavigated;
+        page.on('framenavigated', onFrameNavigated);
+    }
+
+    _unregisterFramenavigatedHandler() {
+        if (this._framenavigatedHandler) {
+            this._framenavigatedPage.off(
+                'framenavigated',
+                this._framenavigatedHandler,
+            );
+        }
+        this._framenavigatedPage = null;
+        this._framenavigatedHandler = null;
     }
 
     /**
@@ -1334,8 +1363,8 @@ class Client extends EventEmitter {
      * Closes the client
      */
     async destroy() {
+        this._unregisterFramenavigatedHandler();
         if (this._injectAbort) this._injectAbort.abort();
-        this._framenavigatedRegistered = false;
 
         const browser = this.pupBrowser;
         const isConnected = browser?.isConnected?.();
