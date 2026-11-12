@@ -855,38 +855,54 @@ exports.LoadUtils = () => {
 
     window.WWebJS.getChat = async (chatId, { getAsModel = true } = {}) => {
         const isChannel = /@\w*newsletter\b/.test(chatId);
-        const chatWid = window.require('WAWebWidFactory').createWid(chatId);
         let chat;
 
-        if (isChannel) {
-            try {
-                chat = window
-                    .require('WAWebCollections')
-                    .WAWebNewsletterCollection.get(chatId);
-                if (!chat) {
-                    await window
-                        .require('WAWebLoadNewsletterPreviewChatAction')
-                        .loadNewsletterPreviewChat(chatId);
-                    chat = await window
+        try {
+            const chatWid = window.require('WAWebWidFactory').createWid(chatId);
+
+            if (isChannel) {
+                try {
+                    chat = window
                         .require('WAWebCollections')
-                        .WAWebNewsletterCollection.find(chatWid);
+                        .WAWebNewsletterCollection.get(chatId);
+                    if (!chat) {
+                        await window
+                            .require('WAWebLoadNewsletterPreviewChatAction')
+                            .loadNewsletterPreviewChat(chatId);
+                        chat = await window
+                            .require('WAWebCollections')
+                            .WAWebNewsletterCollection.find(chatWid);
+                    }
+                } catch (ignoredError) {
+                    chat = null;
                 }
-            } catch (ignoredError) {
-                chat = null;
+            } else {
+                chat = window.require('WAWebCollections').Chat.get(chatWid);
+                if (!chat) {
+                    try {
+                        chat = (
+                            await window
+                                .require('WAWebFindChatAction')
+                                .findOrCreateLatestChat(chatWid)
+                        )?.chat;
+                    } catch (ignoredError) {
+                        chat = null;
+                    }
+                }
             }
-        } else {
-            chat =
-                window.require('WAWebCollections').Chat.get(chatWid) ||
-                (
-                    await window
-                        .require('WAWebFindChatAction')
-                        .findOrCreateLatestChat(chatWid)
-                )?.chat;
+        } catch (ignoredError) {
+            chat = null;
         }
 
-        return getAsModel && chat
-            ? await window.WWebJS.getChatModel(chat, { isChannel: isChannel })
-            : chat;
+        if (!getAsModel || !chat) return chat;
+
+        try {
+            return await window.WWebJS.getChatModel(chat, {
+                isChannel: isChannel,
+            });
+        } catch (ignoredError) {
+            return null;
+        }
     };
 
     window.WWebJS.getChannelMetadata = async (inviteCode) => {
@@ -1254,7 +1270,7 @@ exports.LoadUtils = () => {
 
     window.WWebJS.sendClearChat = async (chatId) => {
         let chat = await window.WWebJS.getChat(chatId, { getAsModel: false });
-        if (chat !== undefined) {
+        if (chat) {
             await window.require('WAWebChatClearBridge').sendClear(chat, false);
             return true;
         }
@@ -1263,7 +1279,7 @@ exports.LoadUtils = () => {
 
     window.WWebJS.sendDeleteChat = async (chatId) => {
         let chat = await window.WWebJS.getChat(chatId, { getAsModel: false });
-        if (chat !== undefined) {
+        if (chat) {
             await window.require('WAWebDeleteChatAction').sendDelete(chat);
             return true;
         }
