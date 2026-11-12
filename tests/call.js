@@ -187,6 +187,15 @@ describe('Calls', function () {
                 client.pupPage.evaluate.firstCall.args.slice(1),
             ).to.deep.equal(['15551234567', true, true, 1000, false]);
         });
+
+        it('rejects missing call data instead of resolving an empty Call', async function () {
+            for (const data of [null, {}, { id: '' }, { id: 42 }]) {
+                client.pupPage.evaluate.resolves(data);
+                await expect(
+                    Client.prototype.call.call(client, '15551234567'),
+                ).to.be.rejectedWith('did not return a valid active call');
+            }
+        });
     });
 
     describe('Client.startGroupCall', function () {
@@ -261,6 +270,13 @@ describe('Calls', function () {
             expect(client.pupPage.evaluate.firstCall.args[2]).to.deep.equal({
                 video: true,
             });
+        });
+
+        it('rejects missing group-call data', async function () {
+            client.pupPage.evaluate.resolves(null);
+            await expect(
+                client.startGroupCall(['123456789@c.us', '987654321@c.us']),
+            ).to.be.rejectedWith('did not return a valid active call');
         });
     });
 

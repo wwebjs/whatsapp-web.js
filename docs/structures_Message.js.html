@@ -4,7 +4,7 @@
 <head>
   <meta name="generator" content="JSDoc 3.6.11">
   <meta charset="utf-8">
-  <title>whatsapp-web.js 1.34.7 &raquo; Source: structures/Message.js</title>
+  <title>whatsapp-web.js 1.34.8 &raquo; Source: structures/Message.js</title>
   <link rel="stylesheet" href="https://brick.a.ssl.fastly.net/Karla:400,400i,700,700i" type="text/css">
   <link rel="stylesheet" href="https://brick.a.ssl.fastly.net/Noto+Serif:400,400i,700,700i" type="text/css">
   <link rel="stylesheet" href="https://brick.a.ssl.fastly.net/Inconsolata:500" type="text/css">
@@ -15,7 +15,7 @@
   <nav id="jsdoc-navbar" role="navigation" class="jsdoc-navbar">
     <div id="jsdoc-navbar-container">
       <div id="jsdoc-navbar-content">
-        <a href="index.html" class="jsdoc-navbar-package-name">whatsapp-web.<wbr>js 1.<wbr>34.<wbr>7</a>
+        <a href="index.html" class="jsdoc-navbar-package-name">whatsapp-web.<wbr>js 1.<wbr>34.<wbr>8</a>
       </div>
     </div>
   </nav>
@@ -31,6 +31,7 @@
           <article>
             <pre class="prettyprint linenums"><code>&#x27;use strict&#x27;;
 
+const { Readable } &#x3D; require(&#x27;stream&#x27;);
 const Base &#x3D; require(&#x27;./Base&#x27;);
 const MessageMedia &#x3D; require(&#x27;./MessageMedia&#x27;);
 const Location &#x3D; require(&#x27;./Location&#x27;);
@@ -65,7 +66,9 @@ class Message extends Base {
          * ID that represents the message
          * @type {object}
          */
-        this.id &#x3D; data.id;
+        // Normalize id: WhatsApp Web changed _serialized to $1 in 2026-07 update.
+        // Keep _serialized always populated for backward compatibility.
+        this.id &#x3D; Base._normalizeId(data.id);
 
         /**
          * ACK status for the message
@@ -105,7 +108,7 @@ class Message extends Base {
          */
         this.from &#x3D;
             typeof data.from &#x3D;&#x3D;&#x3D; &#x27;object&#x27; &amp;amp;&amp;amp; data.from !&#x3D;&#x3D; null
-                ? data.from._serialized
+                ? data.from._serialized || data.from.$1
                 : data.from;
 
         /**
@@ -117,7 +120,7 @@ class Message extends Base {
          */
         this.to &#x3D;
             typeof data.to &#x3D;&#x3D;&#x3D; &#x27;object&#x27; &amp;amp;&amp;amp; data.to !&#x3D;&#x3D; null
-                ? data.to._serialized
+                ? data.to._serialized || data.to.$1
                 : data.to;
 
         /**
@@ -126,7 +129,7 @@ class Message extends Base {
          */
         this.author &#x3D;
             typeof data.author &#x3D;&#x3D;&#x3D; &#x27;object&#x27; &amp;amp;&amp;amp; data.author !&#x3D;&#x3D; null
-                ? data.author._serialized
+                ? data.author._serialized || data.author.$1
                 : data.author;
 
         /**
@@ -241,13 +244,13 @@ class Message extends Base {
                       groupName: data.inviteGrpName,
                       fromId:
                           typeof data.from &#x3D;&#x3D;&#x3D; &#x27;object&#x27; &amp;amp;&amp;amp;
-                          &#x27;_serialized&#x27; in data.from
-                              ? data.from._serialized
+                          (data.from._serialized || data.from.$1)
+                              ? data.from._serialized || data.from.$1
                               : data.from,
                       toId:
                           typeof data.to &#x3D;&#x3D;&#x3D; &#x27;object&#x27; &amp;amp;&amp;amp;
-                          &#x27;_serialized&#x27; in data.to
-                              ? data.to._serialized
+                          (data.to._serialized || data.to.$1)
+                              ? data.to._serialized || data.to.$1
                               : data.to,
                   }
                 : undefined;
@@ -538,84 +541,25 @@ class Message extends Base {
     }
 
     /**
-     * Downloads and returns the attatched message media
-     * @returns {Promise&amp;lt;MessageMedia&gt;}
+     * Downloads and returns the attached message media
+     * @returns {Promise&amp;lt;MessageMedia|undefined&gt;}
      */
     async downloadMedia() {
-        if (!this.hasMedia) {
-            return undefined;
-        }
+        if (!this.hasMedia) return undefined;
 
         const result &#x3D; await this.client.pupPage.evaluate(async (msgId) &#x3D;&gt; {
-            const msg &#x3D;
-                window.require(&#x27;WAWebCollections&#x27;).Msg.get(msgId) ||
-                (
-                    await window
-                        .require(&#x27;WAWebCollections&#x27;)
-                        .Msg.getMessagesById([msgId])
-                )?.messages?.[0];
+            const resolved &#x3D; await window.WWebJS.resolveMediaBlob(msgId);
+            if (!resolved) return null;
 
-            // REUPLOADING mediaStage means the media is expired and the download button is spinning, cannot be downloaded now
-            if (
-                !msg ||
-                !msg.mediaData ||
-                msg.mediaData.mediaStage &#x3D;&#x3D;&#x3D; &#x27;REUPLOADING&#x27;
-            ) {
-                return null;
-            }
-            if (msg.mediaData.mediaStage !&#x3D; &#x27;RESOLVED&#x27;) {
-                // try to resolve media
-                await msg.downloadMedia({
-                    downloadEvenIfExpensive: true,
-                    rmrReason: 1,
-                });
-            }
-
-            if (
-                msg.mediaData.mediaStage.includes(&#x27;ERROR&#x27;) ||
-                msg.mediaData.mediaStage &#x3D;&#x3D;&#x3D; &#x27;FETCHING&#x27;
-            ) {
-                // media could not be downloaded
-                return undefined;
-            }
-
-            try {
-                const mockQpl &#x3D; {
-                    addAnnotations: function () {
-                        return this;
-                    },
-                    addPoint: function () {
-                        return this;
-                    },
-                };
-                const decryptedMedia &#x3D; await window
-                    .require(&#x27;WAWebDownloadManager&#x27;)
-                    .downloadManager.downloadAndMaybeDecrypt({
-                        directPath: msg.directPath,
-                        encFilehash: msg.encFilehash,
-                        filehash: msg.filehash,
-                        mediaKey: msg.mediaKey,
-                        mediaKeyTimestamp: msg.mediaKeyTimestamp,
-                        type: msg.type,
-                        signal: new AbortController().signal,
-                        downloadQpl: mockQpl,
-                    });
-
-                const data &#x3D;
-                    await window.WWebJS.arrayBufferToBase64Async(
-                        decryptedMedia,
-                    );
-
-                return {
-                    data,
-                    mimetype: msg.mimetype,
-                    filename: msg.filename,
-                    filesize: msg.size,
-                };
-            } catch (e) {
-                if (e.status &amp;amp;&amp;amp; e.status &#x3D;&#x3D;&#x3D; 404) return undefined;
-                throw e;
-            }
+            const data &#x3D; await window.WWebJS.arrayBufferToBase64Async(
+                await resolved.blob.arrayBuffer(),
+            );
+            return {
+                data,
+                mimetype: resolved.mimetype,
+                filename: resolved.filename,
+                filesize: resolved.filesize,
+            };
         }, this.id._serialized);
 
         if (!result) return undefined;
@@ -625,6 +569,67 @@ class Message extends Base {
             result.filename,
             result.filesize,
         );
+    }
+
+    /**
+     * Like downloadMedia(), but returns a Readable stream instead of loading the entire file into memory.
+     * @param {Object} [options]
+     * @param {number} [options.chunkSize&#x3D;10485760] Size in bytes of each chunk read from the browser (default 10MB)
+     * @returns {Promise&amp;lt;MessageMediaStream|undefined&gt;} undefined if media is unavailable
+     */
+    async downloadMediaStream({ chunkSize &#x3D; 10 * 1024 * 1024 } &#x3D; {}) {
+        if (!this.hasMedia) return undefined;
+
+        const blobHandle &#x3D; await this.client.pupPage.evaluateHandle(
+            async (msgId) &#x3D;&gt; {
+                const result &#x3D; await window.WWebJS.resolveMediaBlob(msgId);
+                return result?.blob ?? null;
+            },
+            this.id._serialized,
+        );
+
+        let metadata;
+        try {
+            metadata &#x3D; await blobHandle.evaluate((blob, msgId) &#x3D;&gt; {
+                if (!blob) return null;
+                const msg &#x3D; window.require(&#x27;WAWebCollections&#x27;).Msg.get(msgId);
+                return {
+                    blobSize: blob.size,
+                    mimetype: msg?.mimetype,
+                    filename: msg?.filename,
+                    filesize: msg?.size,
+                };
+            }, this.id._serialized);
+        } catch (err) {
+            await blobHandle.dispose().catch(() &#x3D;&gt; {});
+            throw err;
+        }
+        if (!metadata) {
+            await blobHandle.dispose().catch(() &#x3D;&gt; {});
+            return undefined;
+        }
+
+        const { blobSize, ...rest } &#x3D; metadata;
+
+        async function* readChunks() {
+            try {
+                for (let offset &#x3D; 0; offset &amp;lt; blobSize; offset +&#x3D; chunkSize) {
+                    const base64 &#x3D; await blobHandle.evaluate(
+                        async (blob, s, e) &#x3D;&gt;
+                            window.WWebJS.arrayBufferToBase64Async(
+                                await blob.slice(s, e).arrayBuffer(),
+                            ),
+                        offset,
+                        offset + chunkSize,
+                    );
+                    yield Buffer.from(base64, &#x27;base64&#x27;);
+                }
+            } finally {
+                await blobHandle.dispose().catch(() &#x3D;&gt; {});
+            }
+        }
+
+        return { stream: Readable.from(readChunks()), ...rest };
     }
 
     /**
@@ -1080,7 +1085,7 @@ module.exports &#x3D; Message;
   <footer id="jsdoc-footer" class="jsdoc-footer">
     <div id="jsdoc-footer-container">
       <p>
-        Generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc</a> 3.6.11 on April 24, 2026.
+        Generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc</a> 3.6.11 on November 12, 2026.
       </p>
     </div>
   </footer>

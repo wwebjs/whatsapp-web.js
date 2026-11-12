@@ -13,6 +13,7 @@ const {
     MessageTypes,
 } = require('./util/Constants');
 const { LoadUtils } = require('./util/Injected/Utils');
+const { ForceWebCalling } = require('./util/Injected/WebCalling');
 const ChatFactory = require('./factories/ChatFactory');
 const ContactFactory = require('./factories/ContactFactory');
 const WebCacheFactory = require('./webCache/WebCacheFactory');
@@ -56,6 +57,7 @@ const {
  * @param {string} options.userAgent - User agent to use in puppeteer
  * @param {string} options.ffmpegPath - Ffmpeg path to use when formatting videos to webp while sending stickers
  * @param {boolean} options.bypassCSP - Sets bypassing of page's Content-Security-Policy.
+ * @param {boolean} options.forceWebCalling - Experimental opt-in to enable the local Web-calling feature gate and initialize the calling engine. Defaults to false.
  * @param {string} options.deviceName - Sets the device name of a current linked device., i.e.: 'TEST'.
  * @param {string} options.browserName - Sets the browser name of a current linked device, i.e.: 'Firefox'.
  * @param {object} options.proxyAuthentication - Proxy Authentication object.
@@ -110,6 +112,15 @@ class Client extends EventEmitter {
         this._logoutNavigationHandled = false;
 
         Util.setFfmpegPath(this.options.ffmpegPath);
+    }
+
+    /**
+     * Prepare the experimental calling engine only for opted-in clients.
+     * @private
+     */
+    async _prepareWebCalling() {
+        if (!this.options.forceWebCalling) return;
+        return this.pupPage.evaluate(ForceWebCalling);
     }
 
     /**
@@ -308,6 +319,8 @@ class Client extends EventEmitter {
                     const injected = await this.pupPage.evaluate(async () => {
                         return typeof window.WWebJS !== 'undefined';
                     });
+
+                    await this._prepareWebCalling();
 
                     if (!injected) {
                         if (
@@ -3425,6 +3438,11 @@ class Client extends EventEmitter {
             options.injectAudio ?? true,
         );
 
+        if (typeof callData?.id !== 'string' || !callData.id) {
+            throw new Error(
+                'Outgoing WhatsApp call did not return a valid active call.',
+            );
+        }
         return new Call(this, callData);
     }
 
@@ -3501,6 +3519,11 @@ class Client extends EventEmitter {
             },
         );
 
+        if (typeof call?.id !== 'string' || !call.id) {
+            throw new Error(
+                'Outgoing WhatsApp group call did not return a valid active call.',
+            );
+        }
         return new Call(this, call);
     }
 

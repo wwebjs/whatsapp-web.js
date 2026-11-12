@@ -1365,10 +1365,35 @@ exports.LoadUtils = () => {
         await window.require('WADeprecatedSendIq').deprecatedCastStanza(stanza);
     };
 
+    window.WWebJS.assertCallAvailable = () => {
+        const gating = window.require('WAWebVoipGatingUtils');
+        const unsupportedReason = gating.getUnsupportedBrowserReason?.();
+        if (unsupportedReason) {
+            throw new Error(
+                'WhatsApp Web calling is not supported by this browser: ' +
+                    unsupportedReason,
+            );
+        }
+        // WhatsApp can mark initialization complete while withholding the
+        // stack download for accounts outside its web-calling rollout.
+        if (gating.isVoipDownloadEnabled?.() === false) {
+            throw new Error(
+                'WhatsApp Web calling is not enabled for this account/session.',
+            );
+        }
+    };
+
     window.WWebJS.getCallStackInterface = async () => {
-        return window
+        window.WWebJS.assertCallAvailable();
+        const stack = await window
             .require('WAWebVoipStackInterface')
             .getVoipStackInterface();
+        if (!stack) {
+            throw new Error(
+                'WhatsApp calling stack is unavailable. Reload WhatsApp Web and try again.',
+            );
+        }
+        return stack;
     };
 
     window.WWebJS.serializeCallModel = (call) => {
@@ -1378,6 +1403,7 @@ exports.LoadUtils = () => {
             id: call.id,
             peerJid:
                 call.peerJid?._serialized ||
+                call.peerJid?.$1 ||
                 call.peerJid?.toString?.() ||
                 call.peerJid,
             offerTime: call.offerTime,
@@ -1486,6 +1512,8 @@ exports.LoadUtils = () => {
     ) => {
         if (injectAudio) {
             window.WWebJS.setupCallMediaStream();
+        } else {
+            window.WWebJS.teardownCallMediaStream();
         }
         const stack = await window.WWebJS.getCallStackInterface();
         await stack.acceptCall(callId, isVideo);
@@ -1493,6 +1521,14 @@ exports.LoadUtils = () => {
     };
 
     window.WWebJS.startGroupCall = async (contactIds, options = {}) => {
+        const callCollection = window.require('WAWebCallCollection');
+        if (callCollection.activeCall || callCollection.pendingOutgoingCall) {
+            throw new Error(
+                'A WhatsApp call is already active or being started.',
+            );
+        }
+        window.WWebJS.assertCallAvailable();
+
         const contactWids = contactIds.map((contactId) =>
             window.require('WAWebWidFactory').createWid(contactId),
         );
@@ -1507,6 +1543,14 @@ exports.LoadUtils = () => {
             );
         }
 
+        if (
+            contactWids.some((wid) =>
+                window.require('WAWebUserPrefsMeUser').isMeAccount(wid),
+            )
+        ) {
+            throw new Error('Cannot call your own WhatsApp account.');
+        }
+
         const callStart = window.require('WAWebVoipStartCall');
         if (
             !callStart ||
@@ -1517,20 +1561,29 @@ exports.LoadUtils = () => {
             );
         }
 
-        const callCollectionModule = window.require('WAWebCallCollection');
-        const callCollection =
-            callCollectionModule.get?.() || callCollectionModule;
+        const { CALL_FROM_UI } = window.require('WAWebWamEnumCallFromUi');
+        const { LOBBY_ENTRY_POINT_TYPE } = window.require(
+            'WAWebWamEnumLobbyEntryPointType',
+        );
+        window.WWebJS.teardownCallMediaStream();
 
-        await callStart.startWAWebVoipGroupCallFromWids(
+        const started = await callStart.startWAWebVoipGroupCallFromWids(
             contactWids,
             options.video === true,
+            CALL_FROM_UI.CONVERSATION,
+            LOBBY_ENTRY_POINT_TYPE.NOT_OPENED,
             { entryTrust: 'user_gesture' },
         );
+        if (started === false) {
+            throw new Error(
+                'WhatsApp declined to start the outgoing group call.',
+            );
+        }
 
         const startedAt = Date.now();
         while (Date.now() - startedAt < 5000) {
-            const call = callCollection.activeCall;
-            if (call?.outgoing && call?.isGroup) {
+            const call = window.WWebJS.getOngoingCall();
+            if (call?.id && call.outgoing && call.isGroup) {
                 return window.WWebJS.serializeCallModel(call);
             }
 
@@ -1553,9 +1606,9 @@ exports.LoadUtils = () => {
     };
 
     window.WWebJS.getOngoingCall = () => {
-        // lastActiveCall keeps pointing at the previous call even after it ends,
-        // so a call in the ended state (0) is treated as no ongoing call.
-        const call = window.require('WAWebCallCollection').lastActiveCall;
+        // lastActiveCall is failure/survey history in current WhatsApp builds.
+        // activeCall is the authoritative current call and is cleared on hangup.
+        const call = window.require('WAWebCallCollection').activeCall;
         if (
             !call ||
             (typeof call.getState === 'function' && call.getState() === 0)
@@ -1572,9 +1625,13 @@ exports.LoadUtils = () => {
         timeout = 60000,
         injectAudio = true,
     ) => {
-        if (injectAudio) {
-            window.WWebJS.setupCallMediaStream();
+        const collection = window.require('WAWebCallCollection');
+        if (collection.activeCall || collection.pendingOutgoingCall) {
+            throw new Error(
+                'A WhatsApp call is already active or being started.',
+            );
         }
+        window.WWebJS.assertCallAvailable();
 
         let wid;
         const target = String(chatId);
@@ -1592,15 +1649,38 @@ exports.LoadUtils = () => {
             wid = result.wid;
         }
 
-        // Calls not flagged as a user gesture are treated as deep links and
-        // wait on a confirmation popup before the offer is sent.
+        if (!wid || wid.isGroup?.()) {
+            throw new Error('Only individual WhatsApp contacts can be called.');
+        }
+        if (window.require('WAWebUserPrefsMeUser').isMeAccount(wid)) {
+            throw new Error('Cannot call your own WhatsApp account.');
+        }
+        const callStart = window.require('WAWebVoipStartCall');
+        if (typeof callStart?.startWAWebVoipCall !== 'function') {
+            throw new Error(
+                'Outgoing WhatsApp calls are not supported by this WhatsApp Web version: no supported internal call controller was detected.',
+            );
+        }
+
         const { CALL_FROM_UI } = window.require('WAWebWamEnumCallFromUi');
         const { LOBBY_ENTRY_POINT_TYPE } = window.require(
             'WAWebWamEnumLobbyEntryPointType',
         );
-        await window
-            .require('WAWebVoipStartCall')
-            .startWAWebVoipCall(
+        // Resolving a phone number can yield while another call arrives.
+        if (collection.activeCall || collection.pendingOutgoingCall) {
+            throw new Error(
+                'A WhatsApp call is already active or being started.',
+            );
+        }
+        if (injectAudio) {
+            window.WWebJS.setupCallMediaStream();
+        } else {
+            window.WWebJS.teardownCallMediaStream();
+        }
+
+        try {
+            // Preserve WhatsApp's consent handling and its boolean rejection.
+            const started = await callStart.startWAWebVoipCall(
                 wid,
                 isVideo,
                 CALL_FROM_UI.CONVERSATION,
@@ -1608,50 +1688,64 @@ exports.LoadUtils = () => {
                 null,
                 { entryTrust: 'user_gesture' },
             );
+            if (started === false) {
+                throw new Error(
+                    'WhatsApp declined to start the outgoing call.',
+                );
+            }
 
-        // The call is registered in the collection shortly after the offer is
-        // sent, so wait for the newly placed call to become available before
-        // returning its data.
-        const collection = window.require('WAWebCallCollection');
-        let call = null;
-        for (let i = 0; i < 30 && !call; i++) {
-            await new Promise((resolve) => setTimeout(resolve, 100));
-            call = window.WWebJS.getOngoingCall();
-        }
-
-        // Optionally block until the callee answers (or the timeout elapses).
-        if (call && waitForAnswer) {
-            const deadline = Date.now() + timeout;
-            while (Date.now() < deadline) {
+            // The active model can arrive after the controller resolves. Never
+            // substitute a historical failed call or a racing incoming call.
+            let call = null;
+            for (let i = 0; i < 50; i++) {
                 const current = window.WWebJS.getOngoingCall();
-                if (
-                    collection.isInConnectedCall &&
-                    current &&
-                    current.id === call.id
-                ) {
+                if (current?.id && current.outgoing) {
+                    call = current;
                     break;
                 }
-                await new Promise((resolve) => setTimeout(resolve, 200));
+                await new Promise((resolve) => setTimeout(resolve, 100));
             }
-        }
+            if (!call) {
+                throw new Error(
+                    'Outgoing WhatsApp call was not promoted to an active call.',
+                );
+            }
 
-        return call
-            ? {
-                  id: call.id,
-                  peerJid: call.peerJid?._serialized,
-                  isVideo: call.isVideo,
-                  isGroup: call.isGroup,
-                  outgoing: call.outgoing,
-              }
-            : null;
+            // Optionally wait until the callee answers or the timeout elapses.
+            if (waitForAnswer) {
+                const deadline = Date.now() + timeout;
+                while (Date.now() < deadline) {
+                    const current = window.WWebJS.getOngoingCall();
+                    if (!current || current.id !== call.id) {
+                        throw new Error(
+                            'Outgoing WhatsApp call ended before it was answered.',
+                        );
+                    }
+                    if (collection.isInConnectedCall) break;
+                    await new Promise((resolve) => setTimeout(resolve, 200));
+                }
+            }
+
+            return window.WWebJS.serializeCallModel(call);
+        } catch (error) {
+            if (
+                injectAudio &&
+                !collection.activeCall &&
+                !collection.pendingOutgoingCall
+            ) {
+                window.WWebJS.teardownCallMediaStream();
+            }
+            throw error;
+        }
     };
 
     window.WWebJS.isCallConnected = (callId) => {
         const collection = window.require('WAWebCallCollection');
+        const call = window.WWebJS.getOngoingCall();
         return (
             collection.isInConnectedCall === true &&
-            !!collection.lastActiveCall &&
-            collection.lastActiveCall.id === callId
+            !!call &&
+            call.id === callId
         );
     };
 
@@ -1660,14 +1754,7 @@ exports.LoadUtils = () => {
         if (!call) {
             return null;
         }
-        return {
-            id: call.id,
-            peerJid: call.peerJid?._serialized,
-            offerTime: call.offerTime,
-            isVideo: call.isVideo,
-            isGroup: call.isGroup,
-            outgoing: call.outgoing,
-        };
+        return window.WWebJS.serializeCallModel(call);
     };
 
     window.WWebJS.addParticipantToCall = async (contactId, callId) => {

@@ -4,7 +4,7 @@
 <head>
   <meta name="generator" content="JSDoc 3.6.11">
   <meta charset="utf-8">
-  <title>whatsapp-web.js 1.34.7 &raquo; Source: util/Injected/Utils.js</title>
+  <title>whatsapp-web.js 1.34.8 &raquo; Source: util/Injected/Utils.js</title>
   <link rel="stylesheet" href="https://brick.a.ssl.fastly.net/Karla:400,400i,700,700i" type="text/css">
   <link rel="stylesheet" href="https://brick.a.ssl.fastly.net/Noto+Serif:400,400i,700,700i" type="text/css">
   <link rel="stylesheet" href="https://brick.a.ssl.fastly.net/Inconsolata:500" type="text/css">
@@ -15,7 +15,7 @@
   <nav id="jsdoc-navbar" role="navigation" class="jsdoc-navbar">
     <div id="jsdoc-navbar-container">
       <div id="jsdoc-navbar-content">
-        <a href="index.html" class="jsdoc-navbar-package-name">whatsapp-web.<wbr>js 1.<wbr>34.<wbr>7</a>
+        <a href="index.html" class="jsdoc-navbar-package-name">whatsapp-web.<wbr>js 1.<wbr>34.<wbr>8</a>
       </div>
     </div>
   </nav>
@@ -514,6 +514,12 @@ exports.LoadUtils &#x3D; () &#x3D;&gt; {
             ...extraOptions,
         };
 
+        // MediaData is a model whose private __x_id field collides with Msg&#x27;s
+        // internal id field when its enumerable properties are spread above,
+        // breaking getValidatedSender() during Msg initialization.
+        if (message.__x_id) {
+            delete message.__x_id;
+        }
         // Bot&#x27;s won&#x27;t reply if canonicalUrl is set (linking)
         if (botOptions) {
             delete message.canonicalUrl;
@@ -613,7 +619,7 @@ exports.LoadUtils &#x3D; () &#x3D;&gt; {
 
         return window
             .require(&#x27;WAWebCollections&#x27;)
-            .Msg.get(newMsgKey._serialized);
+            .Msg.get(newMsgKey._serialized || newMsgKey.$1);
     };
 
     window.WWebJS.editMessage &#x3D; async (msg, content, options &#x3D; {}) &#x3D;&gt; {
@@ -656,7 +662,9 @@ exports.LoadUtils &#x3D; () &#x3D;&gt; {
         await window
             .require(&#x27;WAWebSendMessageEditAction&#x27;)
             .sendMessageEdit(msg, content, internalOptions);
-        return window.require(&#x27;WAWebCollections&#x27;).Msg.get(msg.id._serialized);
+        return window
+            .require(&#x27;WAWebCollections&#x27;)
+            .Msg.get(msg.id._serialized || msg.id.$1);
     };
 
     window.WWebJS.toStickerData &#x3D; async (mediaInfo) &#x3D;&gt; {
@@ -861,8 +869,14 @@ exports.LoadUtils &#x3D; () &#x3D;&gt; {
 
         if (typeof msg.id.remote &#x3D;&#x3D;&#x3D; &#x27;object&#x27;) {
             msg.id &#x3D; Object.assign({}, msg.id, {
-                remote: msg.id.remote._serialized,
+                remote: msg.id.remote._serialized || msg.id.remote.$1,
             });
+        }
+
+        // WhatsApp Web changed _serialized to $1 in message IDs (2026-07 update).
+        // Normalize here so all downstream Node.js code can keep using _serialized.
+        if (msg.id &amp;amp;&amp;amp; msg.id._serialized &#x3D;&#x3D; null &amp;amp;&amp;amp; msg.id.$1 !&#x3D; null) {
+            msg.id &#x3D; Object.assign({}, msg.id, { _serialized: msg.id.$1 });
         }
 
         delete msg.pendingAckUpdate;
@@ -984,7 +998,7 @@ exports.LoadUtils &#x3D; () &#x3D;&gt; {
             model.isGroup &#x3D; true;
             const chatWid &#x3D; window
                 .require(&#x27;WAWebWidFactory&#x27;)
-                .createWid(chat.id._serialized);
+                .createWid(chat.id._serialized || chat.id.$1);
             const groupMetadata &#x3D;
                 window.require(&#x27;WAWebCollections&#x27;).GroupMetadata ||
                 window.require(&#x27;WAWebCollections&#x27;).WAWebGroupMetadataCollection;
@@ -1012,16 +1026,17 @@ exports.LoadUtils &#x3D; () &#x3D;&gt; {
 
         model.lastMessage &#x3D; null;
         if (model.msgs &amp;amp;&amp;amp; model.msgs.length) {
-            const lastMessage &#x3D; chat.lastReceivedKey
+            const _lastReceivedKeyId &#x3D; chat.lastReceivedKey
+                ? chat.lastReceivedKey._serialized || chat.lastReceivedKey.$1
+                : null;
+            const lastMessage &#x3D; _lastReceivedKeyId
                 ? window
                       .require(&#x27;WAWebCollections&#x27;)
-                      .Msg.get(chat.lastReceivedKey._serialized) ||
+                      .Msg.get(_lastReceivedKeyId) ||
                   (
                       await window
                           .require(&#x27;WAWebCollections&#x27;)
-                          .Msg.getMessagesById([
-                              chat.lastReceivedKey._serialized,
-                          ])
+                          .Msg.getMessagesById([_lastReceivedKeyId])
                   )?.messages?.[0]
                 : null;
             lastMessage &amp;amp;&amp;amp;
@@ -1134,6 +1149,63 @@ exports.LoadUtils &#x3D; () &#x3D;&gt; {
             type: mimetype,
             lastModified: Date.now(),
         });
+    };
+
+    /**
+     * Resolves the media blob and metadata for a message.
+     * Shared by downloadMedia and downloadMediaStream.
+     * @param {string} msgId
+     * @returns {Promise&amp;lt;{blob: Blob, mimetype: string, filename: string, filesize: number}|null&gt;}
+     */
+    window.WWebJS.resolveMediaBlob &#x3D; async (msgId) &#x3D;&gt; {
+        const { Msg } &#x3D; window.require(&#x27;WAWebCollections&#x27;);
+        const msg &#x3D;
+            Msg.get(msgId) ||
+            (await Msg.getMessagesById([msgId]))?.messages?.[0];
+
+        if (
+            !msg ||
+            !msg.mediaData ||
+            msg.mediaData.mediaStage &#x3D;&#x3D;&#x3D; &#x27;REUPLOADING&#x27;
+        ) {
+            return null;
+        }
+
+        // Always call internal downloadMedia - never skip based on
+        // mediaStage, because cache eviction can leave stage&#x3D;RESOLVED
+        // with empty InMemoryMediaBlobCache.
+        await msg.downloadMedia({
+            downloadEvenIfExpensive: true,
+            rmrReason: 1,
+            isUserInitiated: true,
+        });
+
+        if (
+            msg.mediaData.mediaStage.includes(&#x27;ERROR&#x27;) ||
+            msg.mediaData.mediaStage &#x3D;&#x3D;&#x3D; &#x27;FETCHING&#x27;
+        ) {
+            return null;
+        }
+
+        const cached &#x3D; window
+            .require(&#x27;WAWebMediaInMemoryBlobCache&#x27;)
+            .InMemoryMediaBlobCache.get(msg.mediaObject?.filehash);
+
+        let blob;
+        if (cached) {
+            blob &#x3D; cached;
+        } else if (msg.mediaObject?.mediaBlob) {
+            blob &#x3D; msg.mediaObject.mediaBlob.forceToBlob();
+        }
+
+        if (!blob) return null;
+
+        return {
+            blob,
+            mimetype: msg.mimetype,
+            filename: msg.filename,
+            filesize: msg.size,
+        };
     };
 
     window.WWebJS.arrayBufferToBase64 &#x3D; (arrayBuffer) &#x3D;&gt; {
@@ -1294,9 +1366,10 @@ exports.LoadUtils &#x3D; () &#x3D;&gt; {
     };
 
     window.WWebJS.rejectCall &#x3D; async (peerJid, id) &#x3D;&gt; {
-        let userId &#x3D; window
+        const _meUser &#x3D; window
             .require(&#x27;WAWebUserPrefsMeUser&#x27;)
-            .getMaybeMePnUser()._serialized;
+            .getMaybeMePnUser();
+        let userId &#x3D; _meUser._serialized || _meUser.$1;
 
         const stanza &#x3D; window.require(&#x27;WAWap&#x27;).wap(
             &#x27;call&#x27;,
@@ -1606,9 +1679,12 @@ exports.LoadUtils &#x3D; () &#x3D;&gt; {
                                       .membershipRequestsActionRejectParticipantMixins
                                       ?.value.error;
                             return {
-                                requesterId: window
-                                    .require(&#x27;WAWebWidFactory&#x27;)
-                                    .createWid(p.jid)._serialized,
+                                requesterId: (() &#x3D;&gt; {
+                                    const _w &#x3D; window
+                                        .require(&#x27;WAWebWidFactory&#x27;)
+                                        .createWid(p.jid);
+                                    return _w._serialized || _w.$1;
+                                })(),
                                 ...(error
                                     ? {
                                           error: +error,
@@ -1625,11 +1701,15 @@ exports.LoadUtils &#x3D; () &#x3D;&gt; {
                     }
                 } else {
                     result.push({
-                        requesterId: window
-                            .require(&#x27;WAWebJidToWid&#x27;)
-                            .userJidToUserWid(
-                                participant.participantArgs[0].participantJid,
-                            )._serialized,
+                        requesterId: (() &#x3D;&gt; {
+                            const _w &#x3D; window
+                                .require(&#x27;WAWebJidToWid&#x27;)
+                                .userJidToUserWid(
+                                    participant.participantArgs[0]
+                                        .participantJid,
+                                );
+                            return _w._serialized || _w.$1;
+                        })(),
                         message: &#x27;ServerStatusCodeError&#x27;,
                     });
                 }
@@ -1778,7 +1858,7 @@ exports.LoadUtils &#x3D; () &#x3D;&gt; {
   <footer id="jsdoc-footer" class="jsdoc-footer">
     <div id="jsdoc-footer-container">
       <p>
-        Generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc</a> 3.6.11 on April 24, 2026.
+        Generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc</a> 3.6.11 on November 12, 2026.
       </p>
     </div>
   </footer>
