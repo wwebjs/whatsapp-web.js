@@ -54,6 +54,20 @@ exports.LoadUtils = () => {
     };
 
     /**
+     * Requires a module that WhatsApp Web only loads when the screen using it is first opened
+     * (e.g. the new group flow), by loading that screen's bundle first if needed
+     * @param {string} moduleName The module to require
+     * @param {string} component The screen component whose bundle contains the module
+     * @returns {Promise<Object>} The module exports
+     */
+    window.WWebJS.requireLazy = async (moduleName, component) => {
+        if (!window.require(moduleName)) {
+            await window.require('JSResourceForInteraction')(component).load();
+        }
+        return window.require(moduleName);
+    };
+
+    /**
      * Target options object description
      * @typedef {Object} TargetOptions
      * @property {string|number} module The target module
@@ -119,7 +133,11 @@ exports.LoadUtils = () => {
                     .Msg.getMessagesById([msgId])
             )?.messages?.[0];
         const chat = await window.WWebJS.getChat(chatId, { getAsModel: false });
-        return await window.require('WAWebChatForwardMessage').forwardMessages({
+        const { forwardMessages } = await window.WWebJS.requireLazy(
+            'WAWebChatForwardMessage',
+            'WAWebForwardMessageFlow.react',
+        );
+        return await forwardMessages({
             chat: chat,
             msgs: [msg],
             multicast: true,
@@ -255,6 +273,17 @@ exports.LoadUtils = () => {
         if (options.event) {
             const { name, startTimeTs, eventSendOptions } = options.event;
             const { messageSecret } = eventSendOptions;
+            let eventJoinLink = null;
+            if (eventSendOptions.callType !== 'none') {
+                const { createEventCallLink } = await window.WWebJS.requireLazy(
+                    'WAWebGenerateEventCallLink',
+                    'WAWebEventsCreateEventModalFlow.react',
+                );
+                eventJoinLink = await createEventCallLink(
+                    startTimeTs,
+                    eventSendOptions.callType,
+                );
+            }
             eventOptions = {
                 type: 'event_creation',
                 eventName: name,
@@ -266,15 +295,7 @@ exports.LoadUtils = () => {
                     degreesLongitude: 0,
                     name: eventSendOptions.location,
                 },
-                eventJoinLink:
-                    eventSendOptions.callType === 'none'
-                        ? null
-                        : await window
-                              .require('WAWebGenerateEventCallLink')
-                              .createEventCallLink(
-                                  startTimeTs,
-                                  eventSendOptions.callType,
-                              ),
+                eventJoinLink: eventJoinLink,
                 isEventCanceled: eventSendOptions.isEventCanceled,
                 messageSecret:
                     Array.isArray(messageSecret) && messageSecret.length === 32

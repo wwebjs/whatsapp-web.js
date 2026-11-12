@@ -981,12 +981,15 @@ class Message extends Base {
                     isEventCanceled: eventSendOptions.isEventCanceled,
                 };
 
-                await window
-                    .require('WAWebSendEventEditMsgAction')
-                    .sendEventEditMessage(eventOptions, msg);
+                const { sendEventEditMessage } =
+                    await window.WWebJS.requireLazy(
+                        'WAWebSendEventEditMsgAction',
+                        'WAWebEventsCreateEventModalFlow.react',
+                    );
+                await sendEventEditMessage(eventOptions, msg);
                 const editedMsg = window
                     .require('WAWebCollections')
-                    .Msg.get(msg.id._serialized);
+                    .Msg.get(msgId);
                 return editedMsg?.serialize();
             },
             this.id._serialized,
