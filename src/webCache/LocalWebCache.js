@@ -17,8 +17,36 @@ class LocalWebCache extends WebCache {
         this.strict = options.strict || false;
     }
 
-    async resolve(version) {
+    /**
+     * Validates the version string and resolves the cache file path.
+     * Rejects traversal attempts and ensures the path stays within the cache directory.
+     * @param {string} version - The version string to validate
+     * @returns {string} The resolved file path
+     * @throws {VersionResolveError} If the version is invalid or escapes the cache directory
+     */
+    resolveVersionFilePath(version) {
+        // Validate version is a dotted numeric string (e.g. "2.3000.1017054665")
+        if (!/^\d+(\.\d+)*$/.test(String(version))) {
+            throw new VersionResolveError(
+                `Invalid version: ${version}`,
+            );
+        }
+
         const filePath = path.join(this.path, `${version}.html`);
+        const resolvedPath = path.resolve(filePath);
+        const cacheDir = path.resolve(this.path) + path.sep;
+
+        if (!resolvedPath.startsWith(cacheDir)) {
+            throw new VersionResolveError(
+                `Version ${version} resolves outside the cache directory`,
+            );
+        }
+
+        return resolvedPath;
+    }
+
+    async resolve(version) {
+        const filePath = this.resolveVersionFilePath(version);
 
         try {
             return fs.readFileSync(filePath, 'utf-8');
@@ -32,8 +60,7 @@ class LocalWebCache extends WebCache {
     }
 
     async persist(indexHtml, version) {
-        // version = (version+'').replace(/[^0-9.]/g,'');
-        const filePath = path.join(this.path, `${version}.html`);
+        const filePath = this.resolveVersionFilePath(version);
         fs.mkdirSync(this.path, { recursive: true });
         fs.writeFileSync(filePath, indexHtml);
     }
