@@ -17,7 +17,20 @@ async function exposeFunctionIfAbsent(page, name, fn) {
     if (exist) {
         return;
     }
-    await page.exposeFunction(name, fn);
+    try {
+        await page.exposeFunction(name, fn);
+    } catch (error) {
+        // The page may register the binding between evaluate() and
+        // exposeFunction(). Treat only that known race as an idempotent result.
+        const message = error?.message || String(error);
+        if (
+            message.includes(`binding with name ${name}`) &&
+            message.includes('already exists')
+        ) {
+            return;
+        }
+        throw error;
+    }
 }
 
 module.exports = { exposeFunctionIfAbsent };
