@@ -479,6 +479,16 @@ END:VCARD`;
             });
         });
 
+        describe('Presence Updates', function () {
+            it('can send a typing presence update via Client', async function () {
+                const result = await client.sendPresenceUpdate(
+                    remoteId,
+                    'typing',
+                );
+                expect(result).to.be.true;
+            });
+        });
+
         describe('Search messages', function () {
             it('can search for messages', async function () {
                 const m1 = await client.sendMessage(
