@@ -3,6 +3,30 @@
 exports.LoadUtils = () => {
     window.WWebJS = {};
 
+    // Restore _serialized on MsgKey prototype for WA Web 2.3000.1043xxx+ builds.
+    // In newer WhatsApp Web, _serialized was minified to $1 on MsgKey instances.
+    // Defining this prototype getter restores page-side lookups (Msg.get, editMessage, etc.)
+    // while the setter ensures backward-compatibility with older builds that assign _serialized directly.
+    try {
+        const MsgKeyProto = window.require('WAWebMsgKey')?.prototype;
+        if (MsgKeyProto && !Object.getOwnPropertyDescriptor(MsgKeyProto, '_serialized')) {
+            Object.defineProperty(MsgKeyProto, '_serialized', {
+                get() {
+                    return this.$1 || (typeof this.toString === 'function' ? this.toString() : undefined);
+                },
+                set(value) {
+                    Object.defineProperty(this, '_serialized', {
+                        value,
+                        writable: true,
+                        enumerable: true,
+                        configurable: true,
+                    });
+                },
+                configurable: true,
+            });
+        }
+    } catch (_) {}
+
     /**
      * Helper function that compares between two WWeb versions. Its purpose is to help the developer to choose the correct code implementation depending on the comparison value and the WWeb version.
      * @param {string} lOperand The left operand for the WWeb version string to compare with
@@ -854,39 +878,48 @@ exports.LoadUtils = () => {
     };
 
     window.WWebJS.getChat = async (chatId, { getAsModel = true } = {}) => {
-        const isChannel = /@\w*newsletter\b/.test(chatId);
-        const chatWid = window.require('WAWebWidFactory').createWid(chatId);
-        let chat;
+        try {
+            const isChannel = /@\w*newsletter\b/.test(chatId);
+            const chatWid = window.require('WAWebWidFactory').createWid(chatId);
+            let chat;
 
-        if (isChannel) {
-            try {
-                chat = window
-                    .require('WAWebCollections')
-                    .WAWebNewsletterCollection.get(chatId);
-                if (!chat) {
-                    await window
-                        .require('WAWebLoadNewsletterPreviewChatAction')
-                        .loadNewsletterPreviewChat(chatId);
-                    chat = await window
+            if (isChannel) {
+                try {
+                    chat = window
                         .require('WAWebCollections')
-                        .WAWebNewsletterCollection.find(chatWid);
+                        .WAWebNewsletterCollection.get(chatId);
+                    if (!chat) {
+                        await window
+                            .require('WAWebLoadNewsletterPreviewChatAction')
+                            .loadNewsletterPreviewChat(chatId);
+                        chat = await window
+                            .require('WAWebCollections')
+                            .WAWebNewsletterCollection.find(chatWid);
+                    }
+                } catch (ignoredError) {
+                    chat = null;
                 }
-            } catch (ignoredError) {
-                chat = null;
+            } else {
+                try {
+                    chat =
+                        window.require('WAWebCollections').Chat.get(chatWid) ||
+                        window.require('WAWebCollections').Chat.getModelsArray().find(c => (c.id?._serialized || c.id?.$1) === chatId) ||
+                        (
+                            await window
+                                .require('WAWebFindChatAction')
+                                .findOrCreateLatestChat(chatWid)
+                        )?.chat;
+                } catch (ignoredError) {
+                    chat = window.require('WAWebCollections').Chat.getModelsArray().find(c => (c.id?._serialized || c.id?.$1) === chatId) || null;
+                }
             }
-        } else {
-            chat =
-                window.require('WAWebCollections').Chat.get(chatWid) ||
-                (
-                    await window
-                        .require('WAWebFindChatAction')
-                        .findOrCreateLatestChat(chatWid)
-                )?.chat;
-        }
 
-        return getAsModel && chat
-            ? await window.WWebJS.getChatModel(chat, { isChannel: isChannel })
-            : chat;
+            return getAsModel && chat
+                ? await window.WWebJS.getChatModel(chat, { isChannel: isChannel })
+                : chat;
+        } catch (err) {
+            return null;
+        }
     };
 
     window.WWebJS.getChannelMetadata = async (inviteCode) => {
