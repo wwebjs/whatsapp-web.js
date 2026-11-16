@@ -1,4 +1,5 @@
 const fs = require('fs');
+const path = require('path');
 const { Client, Location, Poll, List, Buttons, LocalAuth } = require('./index');
 
 const client = new Client({
@@ -237,7 +238,20 @@ client.on('message', async (msg) => {
     } else if (msg.body === '!streamdownload' && msg.hasMedia) {
         const result = await msg.downloadMediaStream();
         if (result) {
-            const filePath = `./${result.filename || 'download'}`;
+            // Sanitize the sender-controlled filename to prevent path traversal (CWE-22).
+            const safeName = path.basename(result.filename || 'download');
+            if (safeName === '.' || safeName === '..') {
+                msg.reply('Invalid filename in media download.');
+                return;
+            }
+            const mediaDir = path.resolve('./media');
+            fs.mkdirSync(mediaDir, { recursive: true });
+            const filePath = path.resolve(mediaDir, safeName);
+            // Containment check: ensure the resolved path stays within ./media/
+            if (!filePath.startsWith(mediaDir + path.sep)) {
+                msg.reply('Invalid filename in media download.');
+                return;
+            }
             const writeStream = fs.createWriteStream(filePath);
             result.stream.pipe(writeStream);
             writeStream.on('finish', () => {
