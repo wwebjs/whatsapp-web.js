@@ -92,14 +92,6 @@ class RemoteAuth extends BaseAuthStrategy {
     }
 
     async logout() {
-        await this.disconnect();
-    }
-
-    async destroy() {
-        clearInterval(this.backupSync);
-    }
-
-    async disconnect() {
         await this.deleteRemoteSession();
 
         let pathExists = await this.isValidPath(this.userDataDir);
@@ -112,6 +104,18 @@ class RemoteAuth extends BaseAuthStrategy {
                 })
                 .catch(() => {});
         }
+        clearInterval(this.backupSync);
+    }
+
+    async destroy() {
+        clearInterval(this.backupSync);
+    }
+
+    async disconnect() {
+        // A disconnect is transient (restart, conflict, temporary socket
+        // state): only stop backups. Deleting the stored session here
+        // orphaned restores, forcing a QR scan on the next boot. The stored
+        // session and local profile are removed explicitly by logout().
         clearInterval(this.backupSync);
     }
 
