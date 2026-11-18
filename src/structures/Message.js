@@ -911,13 +911,46 @@ class Message extends Base {
         }
         const messageEdit = await this.client.pupPage.evaluate(
             async (msgId, message, options) => {
-                const msg =
+                let msg =
                     window.require('WAWebCollections').Msg.get(msgId) ||
                     (
                         await window
                             .require('WAWebCollections')
                             .Msg.getMessagesById([msgId])
                     )?.messages?.[0];
+                if (!msg) {
+                    // @lid chats: the stored remote can be a stale PN id
+                    // (or vice-versa), so retry with the alternate id.
+                    try {
+                        const remote = msgId.split('_')[1];
+                        const wid = window
+                            .require('WAWebWidFactory')
+                            .createWid(remote);
+                        const alt = wid.isLid()
+                            ? window
+                                  .require('WAWebApiContact')
+                                  .getPhoneNumber(wid)
+                            : window
+                                  .require('WAWebApiContact')
+                                  .getCurrentLid(wid);
+                        const altSerialized =
+                            alt && (alt._serialized || alt.$1);
+                        if (altSerialized) {
+                            const altId = msgId.replace(remote, altSerialized);
+                            msg =
+                                window
+                                    .require('WAWebCollections')
+                                    .Msg.get(altId) ||
+                                (
+                                    await window
+                                        .require('WAWebCollections')
+                                        .Msg.getMessagesById([altId])
+                                )?.messages?.[0];
+                        }
+                    } catch (ignoredError) {
+                        // keep the silent-null behaviour on a true miss
+                    }
+                }
                 if (!msg) return null;
 
                 let canEdit =
