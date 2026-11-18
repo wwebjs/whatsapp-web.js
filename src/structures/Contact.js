@@ -32,7 +32,13 @@ class Contact extends Base {
          * Contact's phone number
          * @type {string}
          */
-        this.number = data.userid;
+        // userid can be missing when the phone mapping is not loaded (e.g.
+        // some business contacts), so fall back to the user part of a
+        // phone-addressed id. LID/group ids are left undefined so an
+        // unrelated identifier is never reported as the number.
+        this.number =
+            data.userid ||
+            (data.id?.server === 'c.us' ? data.id.user : undefined);
 
         /**
          * Indicates if the contact is a business contact
