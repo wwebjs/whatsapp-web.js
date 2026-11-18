@@ -228,7 +228,11 @@ class Message extends Base {
          * Indicates the mentions in the message body.
          * @type {string[]}
          */
-        this.mentionedIds = data.mentionedJidList || [];
+        // mentionedJidList can arrive as serialized Wid objects (e.g. from
+        // quoted messages) instead of strings, so normalize to string IDs.
+        this.mentionedIds = (data.mentionedJidList || [])
+            .map((m) => (typeof m === 'string' ? m : m?._serialized || m?.$1))
+            .filter(Boolean);
 
         /**
          * @typedef {Object} GroupMention
