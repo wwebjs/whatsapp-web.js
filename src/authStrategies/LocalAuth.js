@@ -45,12 +45,37 @@ class LocalAuth extends BaseAuthStrategy {
 
         fs.mkdirSync(dirPath, { recursive: true });
 
+        this.removeStaleChromiumLocks(dirPath);
+
         this.client.options.puppeteer = {
             ...puppeteerOpts,
             userDataDir: dirPath,
         };
 
         this.userDataDir = dirPath;
+    }
+
+    /**
+     * Chromium leaves Singleton lock files behind when the browser is
+     * killed without a clean shutdown (server restart, container kill).
+     * On the next boot Chrome refuses to start with "profile appears to
+     * be in use". Remove those stale locks before launching; the new
+     * browser process recreates them. Only the well-known top-level lock
+     * files are touched, and cleanup failures never block initialization.
+     * @param {string} dirPath
+     */
+    removeStaleChromiumLocks(dirPath) {
+        for (const lockFile of [
+            'SingletonCookie',
+            'SingletonSocket',
+            'SingletonLock',
+        ]) {
+            try {
+                fs.rmSync(path.join(dirPath, lockFile), { force: true });
+            } catch {
+                // ignore: lock cleanup must never block startup
+            }
+        }
     }
 
     async logout() {
