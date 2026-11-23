@@ -261,14 +261,11 @@ class Client extends EventEmitter {
                         // Remove QR listener once authentication succeeds
                         window
                             .require('WAWebBackendEventBus')
-                            .BackendEventBus.on(
-                                'open_socket_stream',
-                                () => {
-                                    window
-                                        .require('WAWebConnModel')
-                                        .Conn.off('change:ref', onRefChange);
-                                },
-                            );
+                            .BackendEventBus.on('open_socket_stream', () => {
+                                window
+                                    .require('WAWebConnModel')
+                                    .Conn.off('change:ref', onRefChange);
+                            });
                     });
                 }
             }
@@ -629,8 +626,7 @@ class Client extends EventEmitter {
                     clearInterval(window.codeInterval); // remove existing interval
                 }
                 window.codeInterval = setInterval(async () => {
-                    const state =
-                        window.require('WAWebBackendEventBus')
+                    const state = window.require('WAWebBackendEventBus')
                         .BackendEventBus.socketState;
                     if (state != 'UNPAIRED' && state != 'UNPAIRED_IDLE') {
                         clearInterval(window.codeInterval);
@@ -1378,7 +1374,8 @@ class Client extends EventEmitter {
      */
     async logout() {
         await this.pupPage.evaluate(() => {
-            return window.require('WAWebBackendEventBus')
+            return window
+                .require('WAWebBackendEventBus')
                 .BackendEventBus.triggerLogout();
         });
         await this.pupBrowser.close();
@@ -2296,7 +2293,8 @@ class Client extends EventEmitter {
      */
     async resetState() {
         await this.pupPage.evaluate(() => {
-            window.require('WAWebBackendEventBus')
+            window
+                .require('WAWebBackendEventBus')
                 .BackendEventBus.triggerReconnectSocket();
         });
     }
