@@ -138,8 +138,7 @@ class Client extends EventEmitter {
 
             const needAuthHandle = await this.pupPage.waitForFunction(
                 () => {
-                    const state =
-                        window.require('WAWebBackendEventBus').BackendEventBus.socketState;
+                    const state = window.require('WAWebBackendEventBus').BackendEventBus.socketState;
                     if (
                         !state ||
                         state === 'OPENING' ||
@@ -254,18 +253,12 @@ class Client extends EventEmitter {
                         window.onQRChangedEvent(
                             getQR(window.require('WAWebConnModel').Conn.ref),
                         ); // initial qr
-                        window
-                            .require('WAWebConnModel')
-                            .Conn.on('change:ref', onRefChange); // future QR changes
+                        window.require('WAWebConnModel').Conn.on('change:ref', onRefChange); // future QR changes
 
                         // Remove QR listener once authentication succeeds
-                        window
-                            .require('WAWebBackendEventBus')
-                            .BackendEventBus.on('app_state_sync_completed', () => {
-                                window
-                                    .require('WAWebConnModel')
-                                    .Conn.off('change:ref', onRefChange);
-                            });
+                        window.require('WAWebBackendEventBus').BackendEventBus.on('app_state_sync_completed', () => {
+                            window.require('WAWebConnModel').Conn.off('change:ref', onRefChange);
+                        });
                     });
                 }
             }
@@ -274,7 +267,6 @@ class Client extends EventEmitter {
                 this.pupPage,
                 'onAuthAppStateChangedEvent',
                 async (state) => {
-                    console.log('onAuthAppStateChangedEvent',state)
                     if (
                         state == 'UNPAIRED_IDLE' &&
                         !pairWithPhoneNumber.phoneNumber
