@@ -420,8 +420,6 @@ class Client extends EventEmitter {
                         },
                     ],
                 ];
-                const loginRoute = window.location.pathname.startsWith('/login');
-                let Socket = null;
                 const loginRoute =
                     window.location.pathname.startsWith('/login');
                 let Socket = null;
