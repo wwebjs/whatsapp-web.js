@@ -71,6 +71,27 @@ client.initialize();
 Take a look at [example.js][examples] for additional examples and use cases.  
 For more details on saving and restoring sessions, check out the [Authentication Strategies][auth-strategies].
 
+## Experimental calling in this fork
+
+This fork provides call controls such as `client.call()`, `getActiveCall()`, and
+`startGroupCall()`. If WhatsApp disables the local Web-calling feature gate for
+your session, you can explicitly opt in to the session override:
+
+```js
+const client = new Client({ forceWebCalling: true });
+```
+
+`forceWebCalling` defaults to `false`. When enabled, the client overrides only the
+`enable_web_calling` lookup in page memory and loads and initializes WhatsApp's
+normal calling engine before emitting `ready`. The option is reapplied after
+authentication on a new page; it does not modify stored login data. Initialization
+failures restore the original getter and report an error. Server-side acceptance
+of a call still depends on WhatsApp.
+
+For PulseAudio or other microphone-based integrations, use
+`client.call(id, { injectAudio: false })` and
+`call.accept({ injectAudio: false })`.
+
 ## Supported features
 
 | Feature                                          | Status                                       |
