@@ -1061,12 +1061,12 @@ exports.LoadUtils = () => {
         res.name = ContactMethods.getName(contact);
         res.shortName = ContactMethods.getShortName(contact);
         res.pushname = ContactMethods.getPushname(contact);
-        res.username = ContactMethods.getUsername(contact);
 
-        const { getIsMyContact } = window.require(
+        const { getIsMyContact, getUsername } = window.require(
             'WAWebFrontendContactGetters',
         );
         res.isMyContact = getIsMyContact(contact);
+        res.username = getUsername(contact);
         res.isEnterprise = ContactMethods.getIsEnterprise(contact);
 
         return res;
