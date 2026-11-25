@@ -2974,7 +2974,7 @@ class Client extends EventEmitter {
         });
 
         return blockedContacts.map((contact) =>
-            ContactFactory.create(this.client, contact),
+            ContactFactory.create(this, contact),
         );
     }
 

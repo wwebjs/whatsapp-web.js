@@ -421,6 +421,7 @@ END:VCARD`;
                 );
                 expect(contact).to.exist;
                 expect(contact).to.be.instanceOf(Contact);
+                expect(contact.client).to.equal(client);
             });
 
             it('can unblock a contact', async function () {
