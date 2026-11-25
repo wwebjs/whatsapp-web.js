@@ -579,6 +579,27 @@ exports.LoadUtils = () => {
             return msg;
         }
 
+        if (options.stickerAudio) {
+            const { data, mimetype, duration } = options.stickerAudio;
+            const audioMediaInfo = await window.WWebJS.processMediaData(
+                { data, mimetype, filename: 'sticker_audio' },
+                { forceVoice: false },
+            );
+            message.stickerAudio = {
+                directPath: audioMediaInfo.directPath,
+                deprecatedMms3Url:
+                    audioMediaInfo.deprecatedMms3Url ||
+                    audioMediaInfo.clientUrl,
+                mediaKey: audioMediaInfo.mediaKey,
+                mediaKeyTimestamp: audioMediaInfo.mediaKeyTimestamp,
+                filehash: audioMediaInfo.filehash,
+                encFilehash: audioMediaInfo.encFilehash,
+                size: audioMediaInfo.size,
+                mimetype,
+                duration,
+            };
+        }
+
         const [msgPromise, sendMsgResultPromise] = window
             .require('WAWebSendMsgChatAction')
             .addAndSendMsgToChat(chat, message);
