@@ -417,14 +417,16 @@ class GroupChat extends Chat {
                 let descId = chat.groupMetadata.descId;
                 let newId = await window.require('WAWebMsgKey').newId();
                 try {
-                    await window
-                        .require('WAWebGroupModifyInfoJob')
-                        .setGroupDescription(
-                            chatWid,
-                            description,
-                            newId,
-                            descId,
-                        );
+                    const job = window.require('WAWebGroupModifyInfoJob');
+                    // WhatsApp Web now expects a single options object.
+                    // Positional arguments make groupWid undefined and throw
+                    // "Cannot read properties of undefined (reading 'toJid')".
+                    await job.setGroupDescription({
+                        desc: description,
+                        groupWid: chatWid,
+                        newDescId: newId,
+                        prevDescId: descId,
+                    });
                     return true;
                 } catch (err) {
                     if (err.name === 'ServerStatusCodeError') return false;
