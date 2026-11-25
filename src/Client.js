@@ -138,20 +138,17 @@ class Client extends EventEmitter {
 
             const needAuthHandle = await this.pupPage.waitForFunction(
                 () => {
-                    const state = window.require('WAWebBackendEventBus')
-                        .BackendEventBus.socketState;
-                    if (
-                        !state ||
-                        state === 'OPENING' ||
-                        state === 'UNLAUNCHED' ||
-                        state === 'PAIRING'
-                    ) {
-                        return false;
+                    const qr = document.querySelector(
+                        '[data-testid="link-device-qr-code"]',
+                    );
+                    const chats = document.querySelector('#pane-side');
+                    if (qr) {
+                        return { need: true, state: 'UNPAIRED' };
                     }
-                    return {
-                        need: state === 'UNPAIRED' || state === 'UNPAIRED_IDLE',
-                        state,
-                    };
+                    if (chats) {
+                        return { need: false, state: 'CONNECTED' };
+                    }
+                    return false;
                 },
                 { timeout: authTimeout },
             );
@@ -257,15 +254,6 @@ class Client extends EventEmitter {
                         window
                             .require('WAWebConnModel')
                             .Conn.on('change:ref', onRefChange); // future QR changes
-
-                        // Remove QR listener once authentication succeeds
-                        window
-                            .require('WAWebBackendEventBus')
-                            .BackendEventBus.on('open_socket_stream', () => {
-                                window
-                                    .require('WAWebConnModel')
-                                    .Conn.off('change:ref', onRefChange);
-                            });
                     });
                 }
             }
@@ -390,7 +378,7 @@ class Client extends EventEmitter {
             await this.pupPage.evaluate(() => {
                 const Cmd = window.require('WAWebCmd').Cmd;
 
-                let listeners = [
+                const listeners = [
                     [
                         Cmd,
                         'offline_progress_update_from_bridge',
@@ -417,45 +405,6 @@ class Client extends EventEmitter {
                         },
                     ],
                 ];
-                const loginRoute =
-                    window.location.pathname.startsWith('/login');
-                let Socket = null;
-                if (loginRoute) {
-                    Socket = window.require(
-                        'WAWebBackendEventBus',
-                    ).BackendEventBus;
-                    Socket.hasSynced = Socket.isMainStreamReadyMd;
-                    listeners.push([
-                        Socket,
-                        'set_socket_state',
-                        (state) => {
-                            window.onAuthAppStateChangedEvent(state);
-                        },
-                    ]);
-                    listeners.push([
-                        Socket,
-                        'open_socket_stream',
-                        () => {
-                            window.onAppStateHasSyncedEvent();
-                        },
-                    ]);
-                } else {
-                    Socket = window.require('WAWebSocketModel').Socket;
-                    listeners.push([
-                        Socket,
-                        'change:state',
-                        (_AppState, state) => {
-                            window.onAuthAppStateChangedEvent(state);
-                        },
-                    ]);
-                    listeners.push([
-                        Socket,
-                        'change:hasSynced',
-                        () => {
-                            window.onAppStateHasSyncedEvent();
-                        },
-                    ]);
-                }
 
                 // Clean up old listeners to prevent accumulation on re-inject
                 if (window._wwjsListeners) {
@@ -469,12 +418,22 @@ class Client extends EventEmitter {
                 }
                 window._wwjsListeners = listeners;
 
-                // Atomic hasSynced check in the same synchronous block as listener registration.
-                // If hasSynced is already true, Backbone won't fire change:hasSynced (no transition).
-                // If hasSynced is false, the listener above will catch the future transition.
-                const storeInjected = typeof window.WWebJS !== 'undefined';
-                if (Socket.hasSynced === true && !storeInjected) {
+                const signalLoggedIn = () => {
+                    if (window.__wwjsLoggedInSignaled) return;
+                    if (!document.querySelector('#pane-side')) return;
+                    window.__wwjsLoggedInSignaled = true;
+                    window.__wwjsLoggedInObserver?.disconnect();
                     window.onAppStateHasSyncedEvent();
+                };
+                signalLoggedIn();
+                if (!window.__wwjsLoggedInSignaled) {
+                    window.__wwjsLoggedInObserver = new MutationObserver(
+                        signalLoggedIn,
+                    );
+                    window.__wwjsLoggedInObserver.observe(
+                        document.documentElement,
+                        { childList: true, subtree: true },
+                    );
                 }
             });
         } catch (err) {
