@@ -68,6 +68,12 @@ class Contact extends Base {
          */
         this.shortName = data.shortName;
 
+        /**
+         * Contact's username, if available.
+         * @type {?string}
+         */
+        this.username = data.username;
+
         this.statusMute = data.statusMute;
         this.type = data.type;
         this.verifiedLevel = data.verifiedLevel;

@@ -1748,6 +1748,8 @@ declare namespace WAWebJS {
         statusMute: boolean;
         /** @todo missing documentation */
         type: string;
+        /** Contact's username, if available */
+        username?: string,
         /** @todo missing documentation */
         verifiedLevel?: undefined;
         /** @todo missing documentation */
