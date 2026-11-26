@@ -506,7 +506,11 @@ class Client extends EventEmitter {
         await this.authStrategy.beforeBrowserInitialized();
 
         const puppeteerOpts = this.options.puppeteer;
-        if (
+        if (puppeteerOpts && puppeteerOpts.browser) {
+            // External browser provided by caller
+            browser = puppeteerOpts.browser;
+            page = puppeteerOpts.page || (await browser.newPage());
+        } else if (
             puppeteerOpts &&
             (puppeteerOpts.browserWSEndpoint || puppeteerOpts.browserURL)
         ) {
@@ -1364,7 +1368,11 @@ class Client extends EventEmitter {
         const browser = this.pupBrowser;
         const isConnected = browser?.isConnected?.();
         if (isConnected) {
-            await browser.close();
+            if (browser.process()) {
+                await browser.close();
+            } else {
+                browser.disconnect();
+            }
         }
         await this.authStrategy.destroy();
     }
@@ -1378,13 +1386,16 @@ class Client extends EventEmitter {
                 .require('WAWebBackendEventBus')
                 .BackendEventBus.triggerLogout();
         });
-        await this.pupBrowser.close();
+        if (this.pupBrowser.process()) {
+            await this.pupBrowser.close();
 
-        let maxDelay = 0;
-        while (this.pupBrowser.isConnected() && maxDelay < 10) {
-            // waits a maximum of 1 second before calling the AuthStrategy
-            await new Promise((resolve) => setTimeout(resolve, 100));
-            maxDelay++;
+            let maxDelay = 0;
+            while (this.pupBrowser.isConnected() && maxDelay < 10) {
+                await new Promise((resolve) => setTimeout(resolve, 100));
+                maxDelay++;
+            }
+        } else {
+            this.pupBrowser.disconnect();
         }
 
         await this.authStrategy.logout();
