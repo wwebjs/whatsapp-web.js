@@ -1198,6 +1198,60 @@ exports.LoadUtils = () => {
         };
     };
 
+    window.WWebJS.downloadStickerAudio = async (msgId) => {
+        const { Msg } = window.require('WAWebCollections');
+        const msg =
+            Msg.get(msgId) ||
+            (await Msg.getMessagesById([msgId]))?.messages?.[0];
+
+        const audio = msg?.stickerAudio;
+        if (
+            !audio?.directPath ||
+            !audio.mediaKey ||
+            !audio.filehash ||
+            !audio.encFilehash ||
+            !audio.mimetype
+        ) {
+            return null;
+        }
+
+        const { downloadManager } = window.require('WAWebDownloadManager');
+        const { startMediaDownloadQpl } = window.require(
+            'WAWebStartMediaDownloadQpl',
+        );
+        const downloadQpl = startMediaDownloadQpl({
+            entryPoint: 'StickerAudioDownload',
+        });
+
+        let buffer;
+        try {
+            buffer = await downloadManager.downloadAndMaybeDecrypt({
+                directPath: audio.directPath,
+                encFilehash: audio.encFilehash,
+                filehash: audio.filehash,
+                mediaKey: audio.mediaKey,
+                mediaKeyTimestamp: audio.mediaKeyTimestamp,
+                type: 'audio',
+                // must be the full stored mimetype, the download manager
+                // rejects it otherwise (e.g. 'audio/ogg; codecs=opus')
+                mimetype: audio.mimetype,
+                signal: new AbortController().signal,
+                downloadQpl,
+                userDownloadAttemptCount: 0,
+            });
+            downloadQpl.endSuccess();
+        } catch (err) {
+            downloadQpl.endFailWithError('download_failed', String(err));
+            throw err;
+        }
+
+        return {
+            data: await window.WWebJS.arrayBufferToBase64Async(buffer),
+            mimetype: audio.mimetype,
+            duration: audio.duration > 0 ? audio.duration : undefined,
+        };
+    };
+
     window.WWebJS.arrayBufferToBase64 = (arrayBuffer) => {
         let binary = '';
         const bytes = new Uint8Array(arrayBuffer);

@@ -1199,6 +1199,8 @@ declare namespace WAWebJS {
         fromMe: boolean;
         /** Indicates if the message has media available for download */
         hasMedia: boolean;
+        /** Indicates if the message is a sticker with an audio clip attached */
+        hasStickerAudio: boolean;
         /** Indicates if the message was sent as a reply to another message */
         hasQuotedMsg: boolean;
         /** Indicates whether there are reactions to the message */
@@ -1307,6 +1309,8 @@ declare namespace WAWebJS {
         delete: (everyone?: boolean, clearMedia?: boolean) => Promise<void>;
         /** Downloads and returns the attached message media */
         downloadMedia: () => Promise<MessageMedia | undefined>;
+        /** Downloads the audio clip attached to a sticker. Can be passed as `stickerAudio` to sendMessage */
+        downloadStickerAudio: () => Promise<StickerAudio | undefined>;
         /** Downloads the attached message media as a Node.js Readable stream */
         downloadMediaStream: (
             options?: MediaStreamOptions,
@@ -1546,7 +1550,6 @@ declare namespace WAWebJS {
         getContact: () => Promise<Contact>;
     }
 
-    /** Options for sending a message */
     /** Audio attached to a sticker */
     export interface StickerAudio {
         /** Base64-encoded audio data */
@@ -1557,6 +1560,7 @@ declare namespace WAWebJS {
         duration?: number;
     }
 
+    /** Options for sending a message */
     export interface MessageSendOptions {
         /** Show links preview. Has no effect on multi-device accounts. */
         linkPreview?: boolean;

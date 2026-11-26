@@ -50,6 +50,13 @@ class Message extends Base {
          * @type {boolean}
          */
         this.hasMedia = Boolean(data.directPath);
+        /**
+         * Indicates if the message is a sticker with an audio clip attached
+         * @type {boolean}
+         */
+        this.hasStickerAudio = Boolean(
+            data.type === MessageTypes.STICKER && data.stickerAudio?.directPath,
+        );
 
         /**
          * Message content
@@ -507,6 +514,22 @@ class Message extends Base {
             this.id._serialized,
             chatId,
         );
+    }
+
+    /**
+     * Downloads the audio clip attached to a sticker.
+     * The result can be passed as `stickerAudio` to `sendMessage` together with `sendMediaAsSticker`.
+     * @returns {Promise<StickerAudio|undefined>} undefined if the message has no sticker audio
+     */
+    async downloadStickerAudio() {
+        if (!this.hasStickerAudio) return undefined;
+
+        const result = await this.client.pupPage.evaluate(
+            (msgId) => window.WWebJS.downloadStickerAudio(msgId),
+            this.id._serialized,
+        );
+
+        return result || undefined;
     }
 
     /**
