@@ -69,6 +69,6 @@
     "optionalDependencies": {
         "archiver": "7.0.1",
         "fs-extra": "11.3.4",
-        "unzipper": "0.12.3"
+        "unzipper": "0.12.5"
     }
 }
