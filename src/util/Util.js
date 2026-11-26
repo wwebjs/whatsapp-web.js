@@ -140,7 +140,81 @@ class Util {
      * @property {string} [name]
      * @property {string} [author]
      * @property {string[]} [categories]
+     * @property {boolean} [withSound]
+     * @property {Object} [stickerAudioMedia]
      */
+
+    /**
+     * Extracts an OGG/Opus audio clip (up to 6s) from a video/audio media for sound stickers
+     * @param {MessageMedia} media
+     * @returns {Promise<{mimetype: string, data: string, duration: number}|null>}
+     */
+    static async extractAudioForSticker(media) {
+        if (
+            !media.mimetype.includes('video') &&
+            !media.mimetype.includes('audio')
+        ) {
+            return null;
+        }
+
+        const inputType = media.mimetype.split('/')[1].split(';')[0] || 'mp4';
+        const uid = Crypto.randomBytes(6).readUIntLE(0, 6).toString(36);
+        const tempIn = path.join(tmpdir(), `${uid}_in.${inputType}`);
+        const tempOut = path.join(tmpdir(), `${uid}.ogg`);
+
+        const buffer = Buffer.from(
+            media.data.replace(`data:${media.mimetype};base64,`, ''),
+            'base64',
+        );
+        await fs.writeFile(tempIn, buffer);
+
+        try {
+            let duration = 5;
+            await new Promise((resolve, reject) => {
+                ffmpeg(tempIn)
+                    .noVideo()
+                    .audioCodec('libopus')
+                    .audioBitrate('64k')
+                    .audioChannels(1)
+                    .addOutputOptions([
+                        '-ss',
+                        '00:00:00.0',
+                        '-t',
+                        '00:00:06.0',
+                    ])
+                    .toFormat('ogg')
+                    .on('codecData', (data) => {
+                        if (data && data.duration) {
+                            const parts = data.duration.split(':').map(Number);
+                            if (parts.length === 3) {
+                                const secs = Math.ceil(
+                                    parts[0] * 3600 + parts[1] * 60 + parts[2],
+                                );
+                                if (secs > 0) duration = Math.min(secs, 6);
+                            }
+                        }
+                    })
+                    .on('error', reject)
+                    .on('end', () => resolve(true))
+                    .save(tempOut);
+            });
+
+            const stat = await fs.stat(tempOut);
+            if (!stat || stat.size === 0) return null;
+
+            const data = await fs.readFile(tempOut, 'base64');
+            return {
+                mimetype: 'audio/ogg; codecs=opus',
+                data,
+                duration,
+            };
+        } catch {
+            return null;
+        } finally {
+            await fs.unlink(tempIn).catch(() => {});
+            await fs.unlink(tempOut).catch(() => {});
+        }
+    }
 
     /**
      * Formats a media to webp
@@ -151,12 +225,16 @@ class Util {
      */
     static async formatToWebpSticker(media, metadata, pupPage) {
         let webpMedia;
+        let stickerAudioMedia = metadata.stickerAudioMedia || null;
 
         if (media.mimetype.includes('image'))
             webpMedia = await this.formatImageToWebpSticker(media, pupPage);
-        else if (media.mimetype.includes('video'))
+        else if (media.mimetype.includes('video')) {
+            if (metadata.withSound && !stickerAudioMedia) {
+                stickerAudioMedia = await this.extractAudioForSticker(media);
+            }
             webpMedia = await this.formatVideoToWebpSticker(media);
-        else throw new Error('Invalid media format');
+        } else throw new Error('Invalid media format');
 
         if (metadata.name || metadata.author) {
             const img = new webp.Image();
@@ -182,6 +260,10 @@ class Util {
             await img.load(Buffer.from(webpMedia.data, 'base64'));
             img.exif = exif;
             webpMedia.data = (await img.save(null)).toString('base64');
+        }
+
+        if (stickerAudioMedia) {
+            webpMedia.stickerAudioMedia = stickerAudioMedia;
         }
 
         return webpMedia;

@@ -110,6 +110,28 @@ exports.LoadUtils = () => {
         },
     );
 
+    window.WWebJS.injectToFunction(
+        {
+            module: 'WAWebSoundStickerGating',
+            function: 'isSoundStickerConsumptionEnabled',
+        },
+        () => true,
+    );
+    window.WWebJS.injectToFunction(
+        {
+            module: 'WAWebSoundStickerGating',
+            function: 'isSoundStickerCreationEnabled',
+        },
+        () => true,
+    );
+    window.WWebJS.injectToFunction(
+        {
+            module: 'WAWebSoundStickerGating',
+            function: 'isSoundStickerPlaybackEnabled',
+        },
+        () => true,
+    );
+
     window.WWebJS.forwardMessage = async (chatId, msgId) => {
         const msg =
             window.require('WAWebCollections').Msg.get(msgId) ||
@@ -656,9 +678,15 @@ exports.LoadUtils = () => {
         if (mediaInfo.mimetype !== 'image/webp')
             throw new Error('Invalid media type');
 
+        const genMediaKey32B64 = () => {
+            const bytes = new Uint8Array(32);
+            window.crypto.getRandomValues(bytes);
+            return window.btoa(String.fromCharCode(...bytes));
+        };
+
         const file = window.WWebJS.mediaInfoToFile(mediaInfo);
         let filehash = await window.WWebJS.getFileHash(file);
-        let mediaKey = await window.WWebJS.generateHash(32);
+        let mediaKey = genMediaKey32B64();
 
         const controller = new AbortController();
         const uploadedInfo = await window
@@ -675,8 +703,24 @@ exports.LoadUtils = () => {
                     }),
             });
 
+        let webpProps = {};
+        try {
+            const parsedWebp = await window
+                .require('WAWebMediaDataUtils')
+                .parseWebpNoOpaque(file);
+            if (parsedWebp) {
+                webpProps = {
+                    isAnimated: Boolean(parsedWebp.animationDuration > 0),
+                    firstFrameLength: parsedWebp.firstFrameLength,
+                };
+            }
+        } catch {
+            // ignore webp metadata parse errors
+        }
+
         const stickerInfo = {
             ...uploadedInfo,
+            ...webpProps,
             clientUrl: uploadedInfo.url,
             deprecatedMms3Url: uploadedInfo.url,
             uploadhash: uploadedInfo.encFilehash,
@@ -684,6 +728,46 @@ exports.LoadUtils = () => {
             type: 'sticker',
             filehash,
         };
+
+        if (mediaInfo.stickerAudioMedia && mediaInfo.stickerAudioMedia.data) {
+            const audioFile = window.WWebJS.mediaInfoToFile({
+                data: mediaInfo.stickerAudioMedia.data,
+                mimetype:
+                    mediaInfo.stickerAudioMedia.mimetype ||
+                    'audio/ogg; codecs=opus',
+                filename: 'sticker-audio.ogg',
+            });
+            const audioFilehash = await window.WWebJS.getFileHash(audioFile);
+            const audioMediaKey = genMediaKey32B64();
+            const audioController = new AbortController();
+            const uploadedAudio = await window
+                .require('WAWebUploadManager')
+                .encryptAndUpload({
+                    blob: audioFile,
+                    type: 'audio',
+                    signal: audioController.signal,
+                    mediaKey: audioMediaKey,
+                    uploadQpl: window
+                        .require('WAWebStartMediaUploadQpl')
+                        .startMediaUploadQpl({
+                            entryPoint: 'MediaUpload',
+                        }),
+                });
+
+            stickerInfo.stickerAudio = {
+                directPath: uploadedAudio.directPath,
+                deprecatedMms3Url: uploadedAudio.url,
+                mediaKey: uploadedAudio.mediaKey || audioMediaKey,
+                mediaKeyTimestamp:
+                    uploadedAudio.mediaKeyTimestamp ||
+                    Math.floor(Date.now() / 1000),
+                filehash: audioFilehash,
+                encFilehash: uploadedAudio.encFilehash,
+                size: audioFile.size,
+                mimetype: 'audio/ogg; codecs=opus',
+                duration: mediaInfo.stickerAudioMedia.duration || 5,
+            };
+        }
 
         return stickerInfo;
     };

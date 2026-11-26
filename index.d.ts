@@ -1556,6 +1556,8 @@ declare namespace WAWebJS {
         sendVideoAsGif?: boolean;
         /** Send media as sticker */
         sendMediaAsSticker?: boolean;
+        /** Send video media as a sticker with sound */
+        sendMediaAsSoundSticker?: boolean;
         /** Send media as document */
         sendMediaAsDocument?: boolean;
         /** Send media as quality HD */

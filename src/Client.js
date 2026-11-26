@@ -1444,6 +1444,7 @@ class Client extends EventEmitter {
      * @property {boolean} [sendAudioAsVoice=false] - Send audio as voice message with a generated waveform
      * @property {boolean} [sendVideoAsGif=false] - Send video as gif
      * @property {boolean} [sendMediaAsSticker=false] - Send media as a sticker
+     * @property {boolean} [sendMediaAsSoundSticker=false] - Send video media as a sticker with sound
      * @property {boolean} [sendMediaAsDocument=false] - Send media as a document
      * @property {boolean} [sendMediaAsHd=false] - Send image as quality HD
      * @property {boolean} [isViewOnce=false] - Send photo/video as a view once message
@@ -1503,6 +1504,7 @@ class Client extends EventEmitter {
                 options.parseVCards,
                 options.isViewOnce,
                 options.sendMediaAsSticker,
+                options.sendMediaAsSoundSticker,
                 content instanceof Location,
                 content instanceof Contact,
                 content instanceof Poll,
@@ -1540,11 +1542,17 @@ class Client extends EventEmitter {
             !Array.isArray(options.groupMentions) &&
             (options.groupMentions = [options.groupMentions]);
 
+        if (options.sendMediaAsSoundSticker) {
+            options.sendMediaAsSticker = true;
+            options.stickerSound = true;
+        }
+
         let internalOptions = {
             linkPreview: options.linkPreview === false ? undefined : true,
             sendAudioAsVoice: options.sendAudioAsVoice,
             sendVideoAsGif: options.sendVideoAsGif,
             sendMediaAsSticker: options.sendMediaAsSticker,
+            stickerAudio: options.stickerAudio,
             sendMediaAsDocument: options.sendMediaAsDocument,
             sendMediaAsHd: options.sendMediaAsHd,
             caption: options.caption,
@@ -1613,6 +1621,8 @@ class Client extends EventEmitter {
                     name: options.stickerName,
                     author: options.stickerAuthor,
                     categories: options.stickerCategories,
+                    withSound: Boolean(options.stickerSound),
+                    stickerAudioMedia: options.stickerAudioMedia,
                 },
                 this.pupPage,
             );
