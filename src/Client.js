@@ -1540,14 +1540,21 @@ class Client extends EventEmitter {
             if (typeof data !== 'string' || !data) {
                 throw new Error('stickerAudio.data must be a base64 string');
             }
-            if (typeof mimetype !== 'string' || !mimetype.startsWith('audio/')) {
-                throw new Error('stickerAudio.mimetype must be an audio mimetype');
+            if (
+                typeof mimetype !== 'string' ||
+                !mimetype.startsWith('audio/')
+            ) {
+                throw new Error(
+                    'stickerAudio.mimetype must be an audio mimetype',
+                );
             }
             if (
                 duration !== undefined &&
                 !(Number.isFinite(duration) && duration > 0)
             ) {
-                throw new Error('stickerAudio.duration must be a positive number');
+                throw new Error(
+                    'stickerAudio.duration must be a positive number',
+                );
             }
         }
 
