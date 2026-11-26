@@ -214,9 +214,16 @@ class Contact extends Base {
     async getAbout() {
         const about = await this.client.pupPage.evaluate(async (contactId) => {
             const wid = window.require('WAWebWidFactory').createWid(contactId);
-            return window
-                .require('WAWebContactStatusBridge')
-                .getStatus({ token: '', wid: wid });
+            const statusBridge = window.require('WAWebContactStatusBridge');
+            if (typeof statusBridge.getStatus === 'function') {
+                return statusBridge.getStatus({ token: '', wid: wid });
+            }
+
+            const about = await window
+                .require('WAWebContactTextStatusBridge')
+                .getTextStatus(wid);
+            if (about.error) throw about.error;
+            return { status: about.text };
         }, this.id._serialized);
 
         if (typeof about.status !== 'string') return null;
