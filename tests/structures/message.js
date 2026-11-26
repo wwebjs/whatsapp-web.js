@@ -3,6 +3,9 @@ const sinon = require('sinon');
 
 const helper = require('../helper');
 const { Contact, Chat } = require('../../src/structures');
+const fs = require('fs');
+const MessageMedia = require('../../src/structures/MessageMedia');
+const { MessageTypes } = require('../../src/util/Constants');
 
 const remoteId = helper.remoteId;
 
@@ -82,6 +85,56 @@ describe('Message', function () {
             // reload and check
             await message.reload();
             expect(message.isStarred).to.equal(false);
+        });
+    });
+
+    describe('Sticker audio', function () {
+        const pngBase64 =
+            'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+
+        it('returns undefined for messages without sticker audio', async function () {
+            expect(message.hasStickerAudio).to.equal(false);
+            expect(await message.downloadStickerAudio()).to.equal(undefined);
+        });
+
+        it('can extract the audio of a sticker and resend it with a new name and author', async function () {
+            // Path to a real Opus-in-Ogg file, the roundtrip test is skipped without it
+            const audioPath = process.env.WWEBJS_TEST_STICKER_AUDIO;
+            if (!audioPath || !fs.existsSync(audioPath)) this.skip();
+            this.timeout(60000);
+
+            const original = await chat.sendMessage(
+                new MessageMedia('image/png', pngBase64),
+                {
+                    sendMediaAsSticker: true,
+                    stickerAudio: {
+                        data: fs.readFileSync(audioPath).toString('base64'),
+                        mimetype: 'audio/ogg; codecs=opus',
+                        duration: 1,
+                    },
+                },
+            );
+            await helper.sleep(1000);
+            expect(original.hasStickerAudio).to.equal(true);
+
+            const audio = await original.downloadStickerAudio();
+            expect(audio).to.be.an('object');
+            expect(audio.mimetype).to.equal('audio/ogg; codecs=opus');
+            expect(
+                Buffer.from(audio.data, 'base64')
+                    .subarray(0, 4)
+                    .toString('latin1'),
+            ).to.equal('OggS');
+
+            const stickerMedia = await original.downloadMedia();
+            const resent = await chat.sendMessage(stickerMedia, {
+                sendMediaAsSticker: true,
+                stickerName: 'Renamed',
+                stickerAuthor: 'Someone else',
+                stickerAudio: audio,
+            });
+            expect(resent.type).to.equal(MessageTypes.STICKER);
+            expect(resent.hasStickerAudio).to.equal(true);
         });
     });
 

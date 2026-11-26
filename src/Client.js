@@ -1438,12 +1438,20 @@ class Client extends EventEmitter {
      */
 
     /**
+     * Audio attached to a sticker.
+     * @typedef {Object} StickerAudio
+     * @property {string} data - Base64-encoded audio data
+     * @property {string} mimetype - Audio mimetype, e.g.: 'audio/ogg; codecs=opus'
+     * @property {number} [duration] - Audio duration in seconds
+     */
+
+    /**
      * Message options.
      * @typedef {Object} MessageSendOptions
      * @property {boolean} [linkPreview=true] - Show links preview. Has no effect on multi-device accounts.
      * @property {boolean} [sendAudioAsVoice=false] - Send audio as voice message with a generated waveform
      * @property {boolean} [sendVideoAsGif=false] - Send video as gif
-     * @property {boolean} [sendMediaAsSticker=false] - Send media as a sticker
+     * @property {boolean} [sendMediaAsSticker=false] - Send media as a sticker. WhatsApp rejects stickers whose resulting webp is about 1 MiB or larger; `sendMessage` then fails with a generic error
      * @property {boolean} [sendMediaAsDocument=false] - Send media as a document
      * @property {boolean} [sendMediaAsHd=false] - Send image as quality HD
      * @property {boolean} [isViewOnce=false] - Send photo/video as a view once message
@@ -1457,6 +1465,7 @@ class Client extends EventEmitter {
      * @property {string} [stickerAuthor=undefined] - Sets the author of the sticker, (if sendMediaAsSticker is true).
      * @property {string} [stickerName=undefined] - Sets the name of the sticker, (if sendMediaAsSticker is true).
      * @property {string[]} [stickerCategories=undefined] - Sets the categories of the sticker, (if sendMediaAsSticker is true). Provide emoji char array, can be null.
+     * @property {StickerAudio} [stickerAudio=undefined] - Audio to attach to the sticker, (if sendMediaAsSticker is true). WhatsApp rejects audio larger than about 16 MiB (`sendMessage` fails with a generic error); no limit on duration or bitrate was observed (tested up to 320 s)
      * @property {boolean} [ignoreQuoteErrors = true] - Should the bot send a quoted message without the quoted message if it fails to get the quote?
      * @property {boolean} [waitUntilMsgSent = false] - Should the bot wait for the message send result?
      * @property {MessageMedia} [media] - Media to be sent
@@ -1482,6 +1491,7 @@ class Client extends EventEmitter {
                 options.quotedMessageId,
                 options.parseVCards,
                 options.isViewOnce,
+                options.stickerAudio,
                 content instanceof Location,
                 content instanceof Contact,
                 content instanceof Buttons,
@@ -1503,6 +1513,7 @@ class Client extends EventEmitter {
                 options.parseVCards,
                 options.isViewOnce,
                 options.sendMediaAsSticker,
+                options.stickerAudio,
                 content instanceof Location,
                 content instanceof Contact,
                 content instanceof Poll,
@@ -1517,6 +1528,34 @@ class Client extends EventEmitter {
                 'The message type is currently not supported for sending in status broadcast,\nthe supported message types are: text, image, gif, audio and video.',
             );
             return null;
+        }
+
+        if (options.stickerAudio) {
+            const { data, mimetype, duration } = options.stickerAudio;
+            if (!options.sendMediaAsSticker) {
+                throw new Error(
+                    'stickerAudio requires sendMediaAsSticker to be true',
+                );
+            }
+            if (typeof data !== 'string' || !data) {
+                throw new Error('stickerAudio.data must be a base64 string');
+            }
+            if (
+                typeof mimetype !== 'string' ||
+                !mimetype.startsWith('audio/')
+            ) {
+                throw new Error(
+                    'stickerAudio.mimetype must be an audio mimetype',
+                );
+            }
+            if (
+                duration !== undefined &&
+                !(Number.isFinite(duration) && duration > 0)
+            ) {
+                throw new Error(
+                    'stickerAudio.duration must be a positive number',
+                );
+            }
         }
 
         if (options.mentions) {
@@ -1545,6 +1584,7 @@ class Client extends EventEmitter {
             sendAudioAsVoice: options.sendAudioAsVoice,
             sendVideoAsGif: options.sendVideoAsGif,
             sendMediaAsSticker: options.sendMediaAsSticker,
+            stickerAudio: options.stickerAudio,
             sendMediaAsDocument: options.sendMediaAsDocument,
             sendMediaAsHd: options.sendMediaAsHd,
             caption: options.caption,
