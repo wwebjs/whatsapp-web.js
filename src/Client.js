@@ -1451,7 +1451,7 @@ class Client extends EventEmitter {
      * @property {boolean} [linkPreview=true] - Show links preview. Has no effect on multi-device accounts.
      * @property {boolean} [sendAudioAsVoice=false] - Send audio as voice message with a generated waveform
      * @property {boolean} [sendVideoAsGif=false] - Send video as gif
-     * @property {boolean} [sendMediaAsSticker=false] - Send media as a sticker
+     * @property {boolean} [sendMediaAsSticker=false] - Send media as a sticker. WhatsApp rejects stickers whose resulting webp is about 1 MiB or larger; `sendMessage` then fails with a generic error
      * @property {boolean} [sendMediaAsDocument=false] - Send media as a document
      * @property {boolean} [sendMediaAsHd=false] - Send image as quality HD
      * @property {boolean} [isViewOnce=false] - Send photo/video as a view once message
@@ -1465,7 +1465,7 @@ class Client extends EventEmitter {
      * @property {string} [stickerAuthor=undefined] - Sets the author of the sticker, (if sendMediaAsSticker is true).
      * @property {string} [stickerName=undefined] - Sets the name of the sticker, (if sendMediaAsSticker is true).
      * @property {string[]} [stickerCategories=undefined] - Sets the categories of the sticker, (if sendMediaAsSticker is true). Provide emoji char array, can be null.
-     * @property {StickerAudio} [stickerAudio=undefined] - Audio to attach to the sticker, (if sendMediaAsSticker is true).
+     * @property {StickerAudio} [stickerAudio=undefined] - Audio to attach to the sticker, (if sendMediaAsSticker is true). WhatsApp rejects audio larger than about 16 MiB (`sendMessage` fails with a generic error); no limit on duration or bitrate was observed (tested up to 320 s)
      * @property {boolean} [ignoreQuoteErrors = true] - Should the bot send a quoted message without the quoted message if it fails to get the quote?
      * @property {boolean} [waitUntilMsgSent = false] - Should the bot wait for the message send result?
      * @property {MessageMedia} [media] - Media to be sent
