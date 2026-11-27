@@ -237,6 +237,9 @@ class Chat extends Base {
                     }
                 }
 
+                // Always sort messages from earliest to latest
+                msgs.sort((a, b) => (a.t > b.t ? 1 : -1));
+
                 return msgs.map((m) => window.WWebJS.getMessageModel(m));
             },
             this.id._serialized,
