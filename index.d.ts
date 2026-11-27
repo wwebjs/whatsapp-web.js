@@ -1278,6 +1278,8 @@ declare namespace WAWebJS {
         pollOptions: string[];
         /** False for a single choice poll, true for a multiple choice poll */
         allowMultipleAnswers: boolean;
+        /** True if the poll hides voter names (anonymous poll) */
+        hideVoterNames: boolean;
         /** The start time of the event in timestamp (10 digits) */
         eventStartTime: number;
         /** The end time of the event in timestamp (10 digits) */
@@ -1419,6 +1421,8 @@ declare namespace WAWebJS {
     export interface PollSendOptions {
         /** False for a single choice poll, true for a multiple choice poll (false by default) */
         allowMultipleAnswers?: boolean;
+        /** True to hide voter names and show only vote counts (anonymous poll), false by default. Only has an effect in group chats */
+        hideVoterNames?: boolean;
         /**
          * The custom message secret, can be used as a poll ID
          * @note It has to be a unique vector with a length of 32

@@ -235,7 +235,7 @@ exports.LoadUtils = () => {
         let pollOptions = {};
         if (options.poll) {
             const { pollName, pollOptions: _pollOptions } = options.poll;
-            const { allowMultipleAnswers, messageSecret } =
+            const { allowMultipleAnswers, hideVoterNames, messageSecret } =
                 options.poll.options;
             pollOptions = {
                 kind: 'pollCreation',
@@ -243,6 +243,7 @@ exports.LoadUtils = () => {
                 pollName: pollName,
                 pollOptions: _pollOptions,
                 pollSelectableOptionsCount: allowMultipleAnswers ? 0 : 1,
+                pollHideVoterNames: hideVoterNames === true ? true : undefined,
                 messageSecret:
                     Array.isArray(messageSecret) && messageSecret.length === 32
                         ? new Uint8Array(messageSecret)
