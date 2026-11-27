@@ -711,7 +711,18 @@ declare namespace WAWebJS {
         evalOnNewDoc?: Function;
         /** Puppeteer launch options. View docs here: https://github.com/puppeteer/puppeteer/ */
         puppeteer?: puppeteer.PuppeteerNodeLaunchOptions &
-            puppeteer.ConnectOptions;
+            puppeteer.ConnectOptions & {
+                /**
+                 * An existing puppeteer Browser to use instead of launching or connecting to one.
+                 * The client will not close it on destroy() or logout().
+                 */
+                browser?: puppeteer.Browser;
+                /**
+                 * An existing page inside `browser` to run WhatsApp Web in.
+                 * The client will not close it. Requires `browser`.
+                 */
+                existingPage?: puppeteer.Page;
+            };
         /** Determines how to save and restore sessions. Will use LegacySessionAuth if options.session is set. Otherwise, NoAuth will be used. */
         authStrategy?: AuthStrategy;
         /** The version of WhatsApp Web to use. Use options.webVersionCache to configure how the version is retrieved. */

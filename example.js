@@ -1,6 +1,25 @@
 const fs = require('fs');
 const { Client, Location, Poll, List, Buttons, LocalAuth } = require('./index');
 
+/**
+ * To run WhatsApp Web inside a browser you already control
+ * (e.g. a WebView2 host, Electron, or an existing Chrome),
+ * connect to it yourself and pass the Browser (and optionally a Page).
+ * The client will NOT close a browser or page you pass in.
+ *
+ * const puppeteer = require('puppeteer');
+ * const browser = await puppeteer.connect({
+ *     browserURL: 'http://127.0.0.1:9222',
+ *     defaultViewport: null, // keep the host window's own size
+ * });
+ * const client = new Client({
+ *     puppeteer: {
+ *         browser,
+ *         existingPage: (await browser.pages())[0], // optional
+ *     },
+ * });
+ */
+
 const client = new Client({
     authStrategy: new LocalAuth(),
     // proxyAuthentication: { username: 'username', password: 'password' },
