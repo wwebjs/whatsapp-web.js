@@ -32,7 +32,8 @@ class Contact extends Base {
          * Contact's phone number
          * @type {string}
          */
-        this.number = data.userid;
+        // Fall back to id.user when userid is missing
+        this.number = data.userid || (this.id && this.id.user);
 
         /**
          * Indicates if the contact is a business contact
