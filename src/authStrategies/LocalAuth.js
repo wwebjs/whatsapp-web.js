@@ -5,6 +5,24 @@ const fs = require('fs');
 const BaseAuthStrategy = require('./BaseAuthStrategy');
 
 /**
+ * Removes stale Chromium lock files from the user data directory
+ * @param {string} userDataDir - Path to the user data directory
+ */
+async function removeStaleLocks(userDataDir) {
+    const lockFiles = ['SingletonLock', 'SingletonCookie', 'SingletonSocket'];
+
+    for (const lockFile of lockFiles) {
+        const lockPath = path.join(userDataDir, lockFile);
+        try {
+            await fs.promises.access(lockPath);
+            await fs.promises.unlink(lockPath);
+        } catch {
+            // Lock file doesn't exist, continue
+        }
+    }
+}
+
+/**
  * Local directory-based authentication
  * @param {object} options - options
  * @param {string} options.clientId - Client id to distinguish instances if you are using multiple, otherwise keep null if you are using only one instance
@@ -44,6 +62,9 @@ class LocalAuth extends BaseAuthStrategy {
         }
 
         fs.mkdirSync(dirPath, { recursive: true });
+
+        // Remove stale Chromium locks on startup
+        await removeStaleLocks(dirPath);
 
         this.client.options.puppeteer = {
             ...puppeteerOpts,

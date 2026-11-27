@@ -100,7 +100,8 @@ class RemoteAuth extends BaseAuthStrategy {
     }
 
     async disconnect() {
-        await this.deleteRemoteSession();
+        // Don't delete remote session on disconnect to keep session
+        // await this.deleteRemoteSession();
 
         let pathExists = await this.isValidPath(this.userDataDir);
         if (pathExists) {
