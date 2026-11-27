@@ -437,6 +437,12 @@ client.on('message', async (msg) => {
                 allowMultipleAnswers: true,
             }),
         );
+        /** In group chats you can hide the voter names (anonymous poll): */
+        await msg.reply(
+            new Poll('Cats or Dogs?', ['Cats', 'Dogs'], {
+                hideVoterNames: true,
+            }),
+        );
         /**
          * You can provide a custom message secret, it can be used as a poll ID:
          * @note It has to be a unique vector with a length of 32

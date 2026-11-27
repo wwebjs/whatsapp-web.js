@@ -4,6 +4,7 @@
  * Poll send options
  * @typedef {Object} PollSendOptions
  * @property {boolean} [allowMultipleAnswers=false] If false it is a single choice poll, otherwise it is a multiple choice poll (false by default)
+ * @property {boolean} [hideVoterNames=false] If true, voter names are hidden and only the vote counts are shown (anonymous poll). Only has an effect in group chats
  * @property {?Array<number>} messageSecret The custom message secret, can be used as a poll ID. NOTE: it has to be a unique vector with a length of 32
  */
 
@@ -36,6 +37,7 @@ class Poll {
          */
         this.options = {
             allowMultipleAnswers: options.allowMultipleAnswers === true,
+            hideVoterNames: options.hideVoterNames === true,
             messageSecret: options.messageSecret,
         };
     }
