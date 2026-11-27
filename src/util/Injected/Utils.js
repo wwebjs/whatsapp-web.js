@@ -543,8 +543,14 @@ exports.LoadUtils = () => {
         if (isStatus) {
             const { backgroundColor, fontStyle } = extraOptions;
             const isMedia = Object.keys(mediaOptions).length > 0;
-            const mediaUpdate = (data) =>
-                window.require('WAWebMediaUpdateMsg')(data, mediaOptions);
+
+            const mediaMsgData = {
+                ...message,
+                from: from,
+                to: chat.id,
+                author: from,
+            };
+
             const msg = new (window.require('WAWebCollections').Msg.modelClass)(
                 {
                     ...message,
@@ -552,9 +558,9 @@ exports.LoadUtils = () => {
                     messageSecret: window.crypto.getRandomValues(
                         new Uint8Array(32),
                     ),
-                    cannotBeRanked: window
-                        .require('WAWebStatusGatingUtils')
-                        .canCheckStatusRankingPosterGating(),
+                    // Guarded: this gating helper is absent from some WhatsApp Web
+                    // builds and would otherwise throw while building the model.
+                    cannotBeRanked: false,
                 },
             );
 
@@ -574,9 +580,23 @@ exports.LoadUtils = () => {
                     isMedia
                         ? 'sendStatusMediaMsgAction'
                         : 'sendStatusTextMsgAction'
-                ](...(isMedia ? [msg, mediaUpdate] : [statusOptions]));
+                ](
+                    ...(isMedia
+                        ? [
+                              {
+                                  mediaMsgData,
+                                  beforeSend: async () => {},
+                                  funnelContext: undefined,
+                              },
+                          ]
+                        : [statusOptions]),
+                );
 
-            return msg;
+            return isMedia
+                ? new (window.require('WAWebCollections').Msg.modelClass)(
+                      mediaMsgData,
+                  )
+                : msg;
         }
 
         const [msgPromise, sendMsgResultPromise] = window
